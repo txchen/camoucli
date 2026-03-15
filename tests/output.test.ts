@@ -69,4 +69,49 @@ describe('CLI output', () => {
     expect(output).toContain('Compatibility warning: launch check failed with Playwright 1.51.1');
     expect(output).toContain("Reason: browserType.launchPersistentContext: Protocol error (Browser.setContrast): ERROR: method 'Browser.setContrast' is not supported");
   });
+
+  it('prints use compatibility success hints', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'use',
+        {
+          version: '135.0.1-beta.24',
+          playwrightCoreVersion: '1.51.1',
+          launchCheck: {
+            attempted: true,
+            success: true,
+          },
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Using Camoufox 135.0.1-beta.24');
+    expect(output).toContain('Compatibility: launch check passed with Playwright 1.51.1');
+  });
+
+  it('prints use compatibility warnings', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'use',
+        {
+          version: '135.0.1-beta.23',
+          playwrightCoreVersion: '1.51.1',
+          launchCheck: {
+            attempted: true,
+            success: false,
+            error: {
+              message:
+                "browserType.launchPersistentContext: Protocol error (Browser.setContrast): ERROR: method 'Browser.setContrast' is not supported",
+            },
+          },
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Using Camoufox 135.0.1-beta.23');
+    expect(output).toContain('Compatibility warning: launch check failed with Playwright 1.51.1');
+    expect(output).toContain("Reason: browserType.launchPersistentContext: Protocol error (Browser.setContrast): ERROR: method 'Browser.setContrast' is not supported");
+  });
 });

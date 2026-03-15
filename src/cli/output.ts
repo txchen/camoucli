@@ -19,9 +19,9 @@ function printInstalledVersions(data: Record<string, unknown>): void {
   }
 }
 
-function printInstallResult(data: Record<string, unknown>): void {
+function printBrowserCompatibilityResult(prefix: string, data: Record<string, unknown>): void {
   const version = String(data.version ?? 'unknown');
-  process.stdout.write(`Installed Camoufox ${version}\n`);
+  process.stdout.write(`${prefix} Camoufox ${version}\n`);
 
   const playwrightCoreVersion =
     typeof data.playwrightCoreVersion === 'string' ? data.playwrightCoreVersion : undefined;
@@ -58,7 +58,7 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
 
   switch (action) {
     case 'install':
-      printInstallResult(data as Record<string, unknown>);
+      printBrowserCompatibilityResult('Installed', data as Record<string, unknown>);
       return;
     case 'path':
       process.stdout.write(`${String((data as Record<string, unknown>).path)}\n`);
@@ -67,7 +67,7 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       process.stdout.write(`${String((data as Record<string, unknown>).version)}\n`);
       return;
     case 'use':
-      process.stdout.write(`Using Camoufox ${String((data as Record<string, unknown>).version)}\n`);
+      printBrowserCompatibilityResult('Using', data as Record<string, unknown>);
       return;
     case 'versions':
       printInstalledVersions(data as Record<string, unknown>);

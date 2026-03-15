@@ -57,11 +57,22 @@ async function main(): Promise<void> {
     },
     onUse: async (version: string, options: OutputOptions) => {
         const paths = getCamoucliPaths();
+        const logger = getLogger(options.verbose);
         await ensureBasePaths(paths);
         const registry = await setCurrentBrowser(paths, version);
         const selectedVersion = registry.currentVersion ?? version;
         const selected = await requireInstalledBrowser(paths, selectedVersion);
-        printOutput('use', { version: selected.version, path: selected.executablePath }, options.json ?? false);
+        const inspection = await inspectCamoufoxInstall(paths, selected.version, logger);
+        printOutput(
+          'use',
+          {
+            version: selected.version,
+            path: selected.executablePath,
+            playwrightCoreVersion: inspection.playwrightCoreVersion,
+            launchCheck: inspection.launchCheck,
+          },
+          options.json ?? false,
+        );
     },
     onVersions: async (options: OutputOptions) => {
         const paths = getCamoucliPaths();

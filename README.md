@@ -38,6 +38,7 @@ npm run dev -- install
 ```
 
 `install` runs a quick launch probe after download so it can warn if the installed browser does not work with the current `playwright-core` version.
+`use` runs the same check when you switch versions.
 
 Open a page and capture refs:
 
@@ -158,7 +159,7 @@ This lets Camoucli reuse compatible Camoufox installs from the Python ecosystem 
 - The CLI is intentionally thin; the daemon owns browser lifecycle and persistent state.
 - `snapshot` creates per-tab `@eN` refs, and refs are cleared after navigation or a new snapshot.
 - Browser installation is explicit; the package does not download Camoufox during `npm install`.
-- `install` includes a quick compatibility hint based on a real headless launch probe of the installed version.
+- `install` and `use` include a quick compatibility hint based on a real headless launch probe of the selected version.
 - `doctor` reports installed versions, the active version, and whether the current browser can launch with the bundled Playwright runtime.
 
 ## Development
