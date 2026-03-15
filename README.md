@@ -1,6 +1,6 @@
 # Camoucli
 
-Camoucli is a local-first CLI and background daemon for driving Camoufox through Playwright, without depending on the Camoufox Python SDK.
+Camoucli is a local-first CLI and background daemon for driving [Camoufox](https://github.com/daijro/camoufox) through Playwright, without depending on the Camoufox Python SDK.
 
 - npm package: `camou`
 - installed command: `camou`
@@ -13,6 +13,8 @@ Camou is built for agent-style browser workflows:
 - operate named tabs in parallel without ref collisions
 - interact through stable `@eN` refs from text snapshots
 - install, switch, and diagnose Camoufox browser versions from the CLI
+
+Camou takes strong inspiration from [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) and [BUNotesAI/agent-browser-session](https://github.com/BUNotesAI/agent-browser-session), but is built for the Camoufox + Playwright Firefox path and persistent local daemon workflows.
 
 ## Why Camou
 
@@ -59,6 +61,28 @@ Notes:
 - Browser download is explicit. Installing the npm package does not download Camoufox.
 - `camou install` runs a quick headless launch probe after download.
 - `camou use <version>` runs the same compatibility check when you switch versions.
+
+## Install The Skill
+
+Camou also ships an agent skill that can be installed through the open skills ecosystem at [skills.sh](https://skills.sh).
+
+Install it from this repo:
+
+```bash
+npx skills add txchen/camoucli --skill camou
+```
+
+Useful variants:
+
+```bash
+# Preview available skills in the repo
+npx skills add txchen/camoucli --list
+
+# Install globally for a specific agent
+npx skills add txchen/camoucli --skill camou -g -a opencode
+```
+
+The skill teaches agents the recommended Camou workflow: `open -> snapshot -i -> interact with @refs -> re-snapshot`, plus session/tab/version troubleshooting guidance.
 
 ## Quick Start
 
@@ -356,3 +380,10 @@ Local development commands:
 npm run dev -- --help
 npm run dev:daemon
 ```
+
+## Acknowledgements
+
+Camoucli learned a lot from these projects:
+
+- [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) for the agent-oriented command workflow and skill ecosystem patterns
+- [BUNotesAI/agent-browser-session](https://github.com/BUNotesAI/agent-browser-session) for persistent-session and named-tab ergonomics
