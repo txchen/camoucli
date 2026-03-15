@@ -1,6 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { chmod, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
-import os from 'node:os';
+import { chmod, cp, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 
@@ -179,6 +178,19 @@ async function makeExecutable(filePath: string): Promise<void> {
   }
 }
 
+async function moveDirectory(sourceDir: string, targetDir: string): Promise<void> {
+  try {
+    await rename(sourceDir, targetDir);
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'EXDEV') {
+      throw error;
+    }
+
+    await cp(sourceDir, targetDir, { recursive: true });
+    await rm(sourceDir, { recursive: true, force: true });
+  }
+}
+
 export async function installCamoufox(
   paths: CamoucliPaths,
   options?: { version?: string | undefined; force?: boolean | undefined; logger?: Logger | undefined },
@@ -193,7 +205,7 @@ export async function installCamoufox(
   }
 
   await ensureDir(path.join(paths.browsersDir, 'official'));
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'camoucli-install-'));
+  const tempRoot = await mkdtemp(path.join(paths.camoufoxCacheDir, 'install-'));
   const archivePath = path.join(tempRoot, release.assetName);
   const extractDir = path.join(tempRoot, 'extract');
   const finalDir = path.join(paths.browsersDir, 'official', release.version);
@@ -210,7 +222,7 @@ export async function installCamoufox(
       await rm(finalDir, { recursive: true, force: true });
     }
 
-    await rename(extractDir, finalDir);
+    await moveDirectory(extractDir, finalDir);
     await writeVersionMetadata(finalDir, release);
 
     const finalExecutablePath = path.join(finalDir, path.relative(extractDir, executablePath));
