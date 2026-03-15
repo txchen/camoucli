@@ -114,4 +114,233 @@ describe('CLI output', () => {
     expect(output).toContain('Compatibility warning: launch check failed with Playwright 1.51.1');
     expect(output).toContain("Reason: browserType.launchPersistentContext: Protocol error (Browser.setContrast): ERROR: method 'Browser.setContrast' is not supported");
   });
+
+  it('prints session list in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'session.list',
+        [
+          {
+            sessionName: 'work',
+            status: 'running',
+            browserVersion: '135.0.1-beta.24',
+            headless: false,
+            tabs: [
+              {
+                tabName: 'main',
+                url: 'https://example.com/',
+              },
+            ],
+          },
+        ],
+        false,
+      );
+    });
+
+    expect(output).toContain('work running 135.0.1-beta.24 headed');
+    expect(output).toContain('  - main https://example.com/');
+  });
+
+  it('prints tab list in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'tab.list',
+        [
+          {
+            index: 0,
+            tabName: 'main',
+            title: 'Example Domain',
+            url: 'https://example.com/',
+          },
+          {
+            index: 1,
+            tabName: 'docs',
+            url: 'https://docs.example.com/',
+          },
+        ],
+        false,
+      );
+    });
+
+    expect(output).toContain('0 main "Example Domain" https://example.com/');
+    expect(output).toContain('1 docs https://docs.example.com/');
+  });
+
+  it('prints common browser actions in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'open',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          title: 'Example Domain',
+          url: 'https://example.com/',
+        },
+        false,
+      );
+      printOutput(
+        'click',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '@e1',
+          url: 'https://www.iana.org/domains/example',
+        },
+        false,
+      );
+      printOutput(
+        'fill',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '@e2',
+          valueLength: 12,
+        },
+        false,
+      );
+      printOutput(
+        'press',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          key: 'Enter',
+        },
+        false,
+      );
+      printOutput(
+        'wait',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '#ready',
+          url: 'https://example.com/dashboard',
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Opened work/main "Example Domain" https://example.com/');
+    expect(output).toContain('Clicked work/main @e1 https://www.iana.org/domains/example');
+    expect(output).toContain('Filled work/main @e2 (12 chars)');
+    expect(output).toContain('Pressed work/main Enter');
+    expect(output).toContain('Ready work/main #ready https://example.com/dashboard');
+  });
+
+  it('prints session, tab, and remove actions in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput('remove', { removed: '135.0.1-beta.24' }, false);
+      printOutput('session.stop', { stopped: true, sessionName: 'work' }, false);
+      printOutput('session.stop', { stopped: false, sessionName: 'missing' }, false);
+      printOutput(
+        'tab.new',
+        {
+          sessionName: 'work',
+          tabName: 'docs',
+          url: 'https://docs.example.com/',
+        },
+        false,
+      );
+      printOutput('tab.close', { closed: true, tabName: 'docs', target: 'docs' }, false);
+      printOutput('tab.close', { closed: false, target: 'ghost' }, false);
+    });
+
+    expect(output).toContain('Removed Camoufox 135.0.1-beta.24');
+    expect(output).toContain('Stopped session work');
+    expect(output).toContain('Session missing is not running');
+    expect(output).toContain('Created tab work/docs https://docs.example.com/');
+    expect(output).toContain('Closed tab docs');
+    expect(output).toContain('Tab ghost was not found');
+  });
+
+  it('prints doctor in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'doctor',
+        {
+          platform: {
+            os: 'lin',
+            arch: 'x86_64',
+          },
+          playwrightCoreVersion: '1.51.1',
+          installed: true,
+          healthy: false,
+          currentVersion: '135.0.1-beta.24',
+          executablePath: '/tmp/camoufox-bin',
+          camoufoxCacheDir: '/tmp/camoufox-cache',
+          runtimeDir: '/tmp/runtime',
+          socketPath: '/tmp/runtime/daemon.sock',
+          installedVersions: [
+            {
+              version: '135.0.1-beta.24',
+              current: true,
+              sourceRepo: 'official',
+              launchable: true,
+            },
+            {
+              version: '135.0.1-beta.23',
+              current: false,
+              sourceRepo: 'official',
+              launchable: false,
+              error: 'Browser.setContrast is not supported',
+            },
+          ],
+          bundleCheck: {
+            missingRequiredFiles: [],
+            missingOptionalFiles: ['/tmp/camoufox-cache/browsers/official/135/glxtest'],
+          },
+          sharedLibraryCheck: {
+            supported: true,
+            missingLibraries: [],
+            notes: [],
+          },
+          hints: ['Switch to a newer build if launch fails.'],
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Doctor: issues detected');
+    expect(output).toContain('Platform: lin.x86_64');
+    expect(output).toContain('Playwright: 1.51.1');
+    expect(output).toContain('Current: 135.0.1-beta.24');
+    expect(output).toContain('Installed versions:');
+    expect(output).toContain('* 135.0.1-beta.24 launches official');
+    expect(output).toContain('135.0.1-beta.23 not launchable official');
+    expect(output).toContain('reason: Browser.setContrast is not supported');
+    expect(output).toContain('Bundle: ok (optional files missing)');
+    expect(output).toContain('Shared libraries: ok');
+    expect(output).toContain('Hints:');
+    expect(output).toContain('Switch to a newer build if launch fails.');
+  });
+
+  it('prints doctor when no browsers are installed', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'doctor',
+        {
+          platform: {
+            os: 'mac',
+            arch: 'arm64',
+          },
+          installed: false,
+          healthy: false,
+          installedVersions: [],
+          sharedLibraryCheck: {
+            supported: false,
+            missingLibraries: [],
+            notes: ['Shared library inspection is currently implemented for Linux only.'],
+          },
+          hints: ['Run `camou install` to download a compatible Camoufox build.'],
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Doctor: not installed');
+    expect(output).toContain('Platform: mac.arm64');
+    expect(output).toContain('Installed versions: none');
+    expect(output).toContain('Shared libraries: not checked');
+    expect(output).toContain('note: Shared library inspection is currently implemented for Linux only.');
+    expect(output).toContain('Run `camou install` to download a compatible Camoufox build.');
+  });
 });

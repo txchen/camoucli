@@ -43,16 +43,16 @@ export class BrowserManager {
     }));
   }
 
-  async stopSession(sessionName: string): Promise<{ stopped: boolean }> {
+  async stopSession(sessionName: string): Promise<{ stopped: boolean; sessionName: string }> {
     const session = this.sessions.get(sessionName);
     if (!session) {
-      return { stopped: false };
+      return { stopped: false, sessionName };
     }
 
     await session.context.close();
     this.sessions.delete(sessionName);
     this.logger.info('Stopped browser session', { sessionName });
-    return { stopped: true };
+    return { stopped: true, sessionName };
   }
 
   async stopAllSessions(): Promise<void> {
@@ -207,15 +207,15 @@ export class BrowserManager {
     };
   }
 
-  async closeTab(sessionName: string, target: string): Promise<{ closed: boolean; tabName?: string }> {
+  async closeTab(sessionName: string, target: string): Promise<{ closed: boolean; tabName?: string; target: string }> {
     const session = this.sessions.get(sessionName);
     if (!session) {
-      return { closed: false };
+      return { closed: false, target };
     }
 
     const tab = this.findTab(session, target);
     if (!tab) {
-      return { closed: false };
+      return { closed: false, target };
     }
 
     await tab.page.close();
@@ -223,6 +223,7 @@ export class BrowserManager {
     return {
       closed: true,
       tabName: tab.name,
+      target,
     };
   }
 
