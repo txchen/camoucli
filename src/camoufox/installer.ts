@@ -11,7 +11,7 @@ import { ensureDir } from '../state/store.js';
 import { InstallError } from '../util/errors.js';
 import { buildExpectedAssetName, getPlatformTarget, normalizeReleaseVersion } from '../util/platform.js';
 import type { Logger } from '../util/log.js';
-import { probeCamoufoxLaunch } from './launcher.js';
+import { probeCamoufoxLaunch, type BrowserLaunchProbe } from './launcher.js';
 import { listInstalledBrowsers, removeInstalledBrowser, resolveInstalledBrowser, setInstalledBrowser } from './registry.js';
 
 const DEFAULT_RELEASE_REPOS = ['daijro/camoufox', 'camoufox/camoufox'] as const;
@@ -283,19 +283,49 @@ function getPlaywrightCoreVersion(): string | undefined {
   }
 }
 
+export interface CamoufoxInstallInspection {
+  playwrightCoreVersion?: string | undefined;
+  launchCheck: BrowserLaunchProbe;
+}
+
+export async function inspectCamoufoxInstall(
+  paths: CamoucliPaths,
+  version?: string,
+  logger?: Logger,
+): Promise<CamoufoxInstallInspection> {
+  try {
+    return {
+      playwrightCoreVersion: getPlaywrightCoreVersion(),
+      launchCheck: await probeCamoufoxLaunch(paths, version, logger),
+    };
+  } catch (error) {
+    return {
+      playwrightCoreVersion: getPlaywrightCoreVersion(),
+      launchCheck: {
+        attempted: false,
+        success: false,
+        version,
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+        },
+      },
+    };
+  }
+}
+
 export async function doctorCamoufox(paths: CamoucliPaths, logger?: Logger): Promise<Record<string, unknown>> {
   const installedBrowsers = await listInstalledBrowsers(paths);
   const currentBrowser = installedBrowsers.currentVersion
     ? installedBrowsers.installs.find((install) => install.version === installedBrowsers.currentVersion)
     : undefined;
-  const launchCheck = await probeCamoufoxLaunch(paths, installedBrowsers.currentVersion, logger);
+  const inspection = await inspectCamoufoxInstall(paths, installedBrowsers.currentVersion, logger);
 
   return {
     platform: getPlatformTarget(),
-    playwrightCoreVersion: getPlaywrightCoreVersion(),
+    playwrightCoreVersion: inspection.playwrightCoreVersion,
     camoufoxCacheDir: paths.camoufoxCacheDir,
     installed: installedBrowsers.installs.length > 0,
-    healthy: installedBrowsers.installs.length > 0 && launchCheck.success,
+    healthy: installedBrowsers.installs.length > 0 && inspection.launchCheck.success,
     currentVersion: currentBrowser?.version,
     executablePath: currentBrowser?.executablePath,
     installedVersions: installedBrowsers.installs.map((install) => ({
@@ -304,7 +334,7 @@ export async function doctorCamoufox(paths: CamoucliPaths, logger?: Logger): Pro
       sourceRepo: install.sourceRepo,
       path: install.executablePath,
     })),
-    launchCheck,
+    launchCheck: inspection.launchCheck,
     runtimeDir: paths.runtimeDir,
     socketPath: paths.daemonSocketPath,
     host: paths.daemonHost,

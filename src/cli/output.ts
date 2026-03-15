@@ -19,6 +19,37 @@ function printInstalledVersions(data: Record<string, unknown>): void {
   }
 }
 
+function printInstallResult(data: Record<string, unknown>): void {
+  const version = String(data.version ?? 'unknown');
+  process.stdout.write(`Installed Camoufox ${version}\n`);
+
+  const playwrightCoreVersion =
+    typeof data.playwrightCoreVersion === 'string' ? data.playwrightCoreVersion : undefined;
+  const launchCheck =
+    typeof data.launchCheck === 'object' && data.launchCheck ? (data.launchCheck as Record<string, unknown>) : undefined;
+
+  if (!launchCheck) {
+    return;
+  }
+
+  const versionSuffix = playwrightCoreVersion ? ` with Playwright ${playwrightCoreVersion}` : '';
+  const success = launchCheck.success === true;
+
+  if (success) {
+    process.stdout.write(`Compatibility: launch check passed${versionSuffix}\n`);
+    return;
+  }
+
+  process.stdout.write(`Compatibility warning: launch check failed${versionSuffix}\n`);
+  const error =
+    typeof launchCheck.error === 'object' && launchCheck.error
+      ? (launchCheck.error as Record<string, unknown>)
+      : undefined;
+  if (typeof error?.message === 'string' && error.message.length > 0) {
+    process.stdout.write(`Reason: ${error.message}\n`);
+  }
+}
+
 export function printOutput(action: string, data: unknown, asJson: boolean): void {
   if (asJson) {
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
@@ -27,7 +58,7 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
 
   switch (action) {
     case 'install':
-      process.stdout.write(`Installed Camoufox ${String((data as Record<string, unknown>).version)}\n`);
+      printInstallResult(data as Record<string, unknown>);
       return;
     case 'path':
       process.stdout.write(`${String((data as Record<string, unknown>).path)}\n`);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { doctorCamoufox, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
+import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
 import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, getExitCode, type CamoucliError } from '../util/errors.js';
@@ -33,7 +33,17 @@ async function main(): Promise<void> {
           logger,
         };
         const release = await installCamoufox(paths, installOptions);
-        printOutput('install', { version: release.version, tag: release.tag }, options.json ?? false);
+        const inspection = await inspectCamoufoxInstall(paths, release.version, logger);
+        printOutput(
+          'install',
+          {
+            version: release.version,
+            tag: release.tag,
+            playwrightCoreVersion: inspection.playwrightCoreVersion,
+            launchCheck: inspection.launchCheck,
+          },
+          options.json ?? false,
+        );
     },
     onRemove: async (version: string | undefined, options: OutputOptions) => {
         const paths = getCamoucliPaths();
