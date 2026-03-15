@@ -61,6 +61,7 @@ The daemon auto-starts on demand, so later commands reuse the same session and p
 - `camoucli install [version]`
 - `camoucli remove [version]`
 - `camoucli use <version>`
+- `camoucli versions`
 - `camoucli version`
 - `camoucli path`
 - `camoucli doctor`
@@ -118,8 +119,15 @@ Install and switch versions:
 ```bash
 npm run dev -- install 135.0.1-beta.24
 npm run dev -- install 134.0.0-beta.20
+npm run dev -- versions
 npm run dev -- use 134.0.0-beta.20
 npm run dev -- version
+```
+
+Check the current install inventory and launch compatibility:
+
+```bash
+npm run dev -- doctor --json
 ```
 
 Save a screenshot to the session artifacts directory:
@@ -148,6 +156,7 @@ This lets Camoucli reuse compatible Camoufox installs from the Python ecosystem 
 - The CLI is intentionally thin; the daemon owns browser lifecycle and persistent state.
 - `snapshot` creates per-tab `@eN` refs, and refs are cleared after navigation or a new snapshot.
 - Browser installation is explicit; the package does not download Camoufox during `npm install`.
+- `doctor` reports installed versions, the active version, and whether the current browser can launch with the bundled Playwright runtime.
 
 ## Development
 

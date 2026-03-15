@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { doctorCamoufox, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
-import { requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
+import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, getExitCode, type CamoucliError } from '../util/errors.js';
 import { Logger } from '../util/log.js';
@@ -53,6 +53,24 @@ async function main(): Promise<void> {
         const selected = await requireInstalledBrowser(paths, selectedVersion);
         printOutput('use', { version: selected.version, path: selected.executablePath }, options.json ?? false);
     },
+    onVersions: async (options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        await ensureBasePaths(paths);
+        const installedBrowsers = await listInstalledBrowsers(paths);
+        printOutput(
+          'versions',
+          {
+            currentVersion: installedBrowsers.currentVersion,
+            installedVersions: installedBrowsers.installs.map((install) => ({
+              version: install.version,
+              current: install.version === installedBrowsers.currentVersion,
+              sourceRepo: install.sourceRepo,
+              path: install.executablePath,
+            })),
+          },
+          options.json ?? false,
+        );
+    },
     onPath: async (options: OutputOptions) => {
         const browser = await requireInstalledBrowser(getCamoucliPaths());
         printOutput('path', { path: browser.executablePath }, options.json ?? false);
@@ -62,7 +80,10 @@ async function main(): Promise<void> {
         printOutput('version', { version: browser.version }, options.json ?? false);
     },
     onDoctor: async (options: OutputOptions) => {
-        const data = await doctorCamoufox(getCamoucliPaths());
+        const paths = getCamoucliPaths();
+        const logger = getLogger(options.verbose);
+        await ensureBasePaths(paths);
+        const data = await doctorCamoufox(paths, logger);
         printOutput('doctor', data, options.json ?? false);
     },
     onDaemonAction: runDaemonAction,

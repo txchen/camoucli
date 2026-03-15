@@ -31,6 +31,7 @@ export interface CliHandlers {
   onInstall: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onRemove: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onUse: (version: string, options: OutputOptions) => Promise<void>;
+  onVersions: (options: OutputOptions) => Promise<void>;
   onPath: (options: OutputOptions) => Promise<void>;
   onVersion: (options: OutputOptions) => Promise<void>;
   onDoctor: (options: OutputOptions) => Promise<void>;
@@ -110,6 +111,15 @@ export function createProgram(handlers: CliHandlers): Command {
       .description('Select the active Camoufox version')
       .action(async (version: string, options: OutputOptions) => {
         await handlers.onUse(version, options);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('versions')
+      .description('List installed Camoufox versions')
+      .action(async (options: OutputOptions) => {
+        await handlers.onVersions(options);
       }),
   );
 

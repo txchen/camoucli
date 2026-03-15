@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { CamoucliPaths } from '../src/state/paths.js';
 import {
+  listInstalledBrowsers,
   loadBrowserRegistry,
   removeInstalledBrowser,
   resolveInstalledBrowser,
@@ -65,6 +66,46 @@ describe('browser registry', () => {
 
     expect(installed?.version).toBe('135.0.1-beta.24');
     expect(installed?.sourceRepo).toBe('daijro/camoufox');
+  });
+
+  it('lists installed browsers in descending version order', async () => {
+    const firstInstallRoot = path.join(paths.browsersDir, 'official', '134.0.0-beta.20');
+    const secondInstallRoot = path.join(paths.browsersDir, 'official', '135.0.1-beta.24');
+
+    await setInstalledBrowser(paths, {
+      version: '134.0.0-beta.20',
+      tag: 'v134.0.0-beta.20',
+      sourceRepo: 'daijro/camoufox',
+      assetName: 'a.zip',
+      assetUrl: 'https://example.com/a.zip',
+      rootDir: firstInstallRoot,
+      executablePath: path.join(firstInstallRoot, 'camoufox-bin'),
+      installedAt: new Date().toISOString(),
+      platform: 'lin',
+      arch: 'x86_64',
+    });
+    await setInstalledBrowser(paths, {
+      version: '135.0.1-beta.24',
+      tag: 'v135.0.1-beta.24',
+      sourceRepo: 'daijro/camoufox',
+      assetName: 'b.zip',
+      assetUrl: 'https://example.com/b.zip',
+      rootDir: secondInstallRoot,
+      executablePath: path.join(secondInstallRoot, 'camoufox-bin'),
+      installedAt: new Date().toISOString(),
+      platform: 'lin',
+      arch: 'x86_64',
+    });
+
+    await setCurrentBrowser(paths, '134.0.0-beta.20');
+
+    const listing = await listInstalledBrowsers(paths);
+
+    expect(listing.currentVersion).toBe('134.0.0-beta.20');
+    expect(listing.installs.map((install) => install.version)).toEqual([
+      '135.0.1-beta.24',
+      '134.0.0-beta.20',
+    ]);
   });
 
   it('updates the current version and removes installs', async () => {

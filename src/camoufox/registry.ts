@@ -24,6 +24,11 @@ export interface BrowserRegistry {
   installs: Record<string, BrowserInstallRecord>;
 }
 
+export interface BrowserInstallListing {
+  currentVersion?: string | undefined;
+  installs: BrowserInstallRecord[];
+}
+
 function createEmptyRegistry(): BrowserRegistry {
   return {
     installs: {},
@@ -151,6 +156,12 @@ function pickLatestVersion(versions: string[]): string | undefined {
   return versions.sort((left, right) => left.localeCompare(right, undefined, { numeric: true })).at(-1);
 }
 
+function listSortedInstalls(installs: Record<string, BrowserInstallRecord>): BrowserInstallRecord[] {
+  return Object.values(installs).sort((left, right) =>
+    right.version.localeCompare(left.version, undefined, { numeric: true }),
+  );
+}
+
 function toSharedActiveVersion(paths: CamoucliPaths, rootDir: string): string | undefined {
   const relativePath = path.relative(paths.camoufoxCacheDir, rootDir);
   if (!relativePath || relativePath.startsWith('..')) {
@@ -242,6 +253,14 @@ export async function resolveInstalledBrowser(
     return undefined;
   }
   return registry.installs[selectedVersion];
+}
+
+export async function listInstalledBrowsers(paths: CamoucliPaths): Promise<BrowserInstallListing> {
+  const registry = await loadEffectiveBrowserRegistry(paths);
+  return {
+    currentVersion: registry.currentVersion,
+    installs: listSortedInstalls(registry.installs),
+  };
 }
 
 export async function requireInstalledBrowser(

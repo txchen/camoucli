@@ -9,6 +9,7 @@ describe('CLI program parsing', () => {
       onInstall: async () => undefined,
       onRemove: async () => undefined,
       onUse: async () => undefined,
+      onVersions: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -61,6 +62,7 @@ describe('CLI program parsing', () => {
       onInstall: async () => undefined,
       onRemove: async () => undefined,
       onUse: async () => undefined,
+      onVersions: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -86,6 +88,7 @@ describe('CLI program parsing', () => {
       onInstall: async () => undefined,
       onRemove: async () => undefined,
       onUse: async () => undefined,
+      onVersions: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -107,6 +110,7 @@ describe('CLI program parsing', () => {
       onInstall: async () => undefined,
       onRemove: async () => undefined,
       onUse,
+      onVersions: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -116,5 +120,23 @@ describe('CLI program parsing', () => {
     await program.parseAsync(['node', 'camoucli', 'use', '135.0.1-beta.24', '--json'], { from: 'node' });
 
     expect(onUse).toHaveBeenCalledWith('135.0.1-beta.24', expect.objectContaining({ json: true }));
+  });
+
+  it('routes versions to the listing handler', async () => {
+    const onVersions = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camoucli', 'versions', '--json'], { from: 'node' });
+
+    expect(onVersions).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 });

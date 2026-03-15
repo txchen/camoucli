@@ -1,5 +1,6 @@
 import { createWriteStream } from 'node:fs';
 import { chmod, cp, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Writable } from 'node:stream';
 
@@ -10,9 +11,11 @@ import { ensureDir } from '../state/store.js';
 import { InstallError } from '../util/errors.js';
 import { buildExpectedAssetName, getPlatformTarget, normalizeReleaseVersion } from '../util/platform.js';
 import type { Logger } from '../util/log.js';
-import { removeInstalledBrowser, resolveInstalledBrowser, setInstalledBrowser } from './registry.js';
+import { probeCamoufoxLaunch } from './launcher.js';
+import { listInstalledBrowsers, removeInstalledBrowser, resolveInstalledBrowser, setInstalledBrowser } from './registry.js';
 
 const DEFAULT_RELEASE_REPOS = ['daijro/camoufox', 'camoufox/camoufox'] as const;
+const require = createRequire(import.meta.url);
 
 interface GitHubAsset {
   name: string;
@@ -271,14 +274,37 @@ export async function removeCamoufox(
   logger?.info('Removed Camoufox release', { version });
 }
 
-export async function doctorCamoufox(paths: CamoucliPaths): Promise<Record<string, unknown>> {
-  const registry = await resolveInstalledBrowser(paths);
+function getPlaywrightCoreVersion(): string | undefined {
+  try {
+    const playwrightPackage = require('playwright-core/package.json') as { version?: string };
+    return playwrightPackage.version;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function doctorCamoufox(paths: CamoucliPaths, logger?: Logger): Promise<Record<string, unknown>> {
+  const installedBrowsers = await listInstalledBrowsers(paths);
+  const currentBrowser = installedBrowsers.currentVersion
+    ? installedBrowsers.installs.find((install) => install.version === installedBrowsers.currentVersion)
+    : undefined;
+  const launchCheck = await probeCamoufoxLaunch(paths, installedBrowsers.currentVersion, logger);
+
   return {
     platform: getPlatformTarget(),
+    playwrightCoreVersion: getPlaywrightCoreVersion(),
     camoufoxCacheDir: paths.camoufoxCacheDir,
-    installed: Boolean(registry),
-    currentVersion: registry?.version,
-    executablePath: registry?.executablePath,
+    installed: installedBrowsers.installs.length > 0,
+    healthy: installedBrowsers.installs.length > 0 && launchCheck.success,
+    currentVersion: currentBrowser?.version,
+    executablePath: currentBrowser?.executablePath,
+    installedVersions: installedBrowsers.installs.map((install) => ({
+      version: install.version,
+      current: install.version === installedBrowsers.currentVersion,
+      sourceRepo: install.sourceRepo,
+      path: install.executablePath,
+    })),
+    launchCheck,
     runtimeDir: paths.runtimeDir,
     socketPath: paths.daemonSocketPath,
     host: paths.daemonHost,
