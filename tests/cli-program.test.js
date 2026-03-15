@@ -1,0 +1,76 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createProgram } from '../src/cli/program.js';
+describe('CLI program parsing', () => {
+    it('maps open command flags into a daemon payload', async () => {
+        const onDaemonAction = vi.fn(async () => undefined);
+        const program = createProgram({
+            onInstall: async () => undefined,
+            onRemove: async () => undefined,
+            onPath: async () => undefined,
+            onVersion: async () => undefined,
+            onDoctor: async () => undefined,
+            onDaemonAction,
+        });
+        await program.parseAsync([
+            'node',
+            'camoucli',
+            'open',
+            'https://example.com',
+            '--session',
+            'work',
+            '--tabname',
+            'docs',
+            '--headless',
+            '--config-json',
+            '{"foo":1}',
+            '--prefs-json',
+            '{"bar":true}',
+            '--json',
+        ], { from: 'node' });
+        expect(onDaemonAction).toHaveBeenCalledTimes(1);
+        expect(onDaemonAction).toHaveBeenCalledWith('open', expect.objectContaining({
+            action: 'open',
+            url: 'https://example.com',
+            session: 'work',
+            tabName: 'docs',
+            headless: true,
+            configJson: '{"foo":1}',
+            prefsJson: '{"bar":true}',
+        }), expect.objectContaining({
+            session: 'work',
+            tabname: 'docs',
+            json: true,
+        }));
+    });
+    it('parses wait timeout as a number', async () => {
+        const onDaemonAction = vi.fn(async () => undefined);
+        const program = createProgram({
+            onInstall: async () => undefined,
+            onRemove: async () => undefined,
+            onPath: async () => undefined,
+            onVersion: async () => undefined,
+            onDoctor: async () => undefined,
+            onDaemonAction,
+        });
+        await program.parseAsync(['node', 'camoucli', 'wait', '#app', '--timeout', '2500'], { from: 'node' });
+        expect(onDaemonAction).toHaveBeenCalledWith('wait', expect.objectContaining({
+            action: 'wait',
+            target: '#app',
+            timeoutMs: 2500,
+        }), expect.any(Object));
+    });
+    it('defaults session stop to the default session name', async () => {
+        const onDaemonAction = vi.fn(async () => undefined);
+        const program = createProgram({
+            onInstall: async () => undefined,
+            onRemove: async () => undefined,
+            onPath: async () => undefined,
+            onVersion: async () => undefined,
+            onDoctor: async () => undefined,
+            onDaemonAction,
+        });
+        await program.parseAsync(['node', 'camoucli', 'session', 'stop'], { from: 'node' });
+        expect(onDaemonAction).toHaveBeenCalledWith('session.stop', { action: 'session.stop', session: 'default' }, expect.objectContaining({ session: 'default', tabname: 'main' }));
+    });
+});
+//# sourceMappingURL=cli-program.test.js.map

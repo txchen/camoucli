@@ -1,0 +1,160 @@
+import { randomUUID } from 'node:crypto';
+
+import { z } from 'zod';
+
+import { launchInputSchema } from '../camoufox/config.js';
+import type { ErrorPayload } from '../util/errors.js';
+
+const browserRequestBase = launchInputSchema.extend({
+  id: z.string(),
+  session: z.string().min(1),
+  tabName: z.string().min(1),
+});
+
+const pingRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('ping'),
+});
+
+const openRequestSchema = browserRequestBase.extend({
+  action: z.literal('open'),
+  url: z.string().min(1),
+});
+
+const snapshotRequestSchema = browserRequestBase.extend({
+  action: z.literal('snapshot'),
+  interactive: z.boolean().default(false),
+});
+
+const clickRequestSchema = browserRequestBase.extend({
+  action: z.literal('click'),
+  target: z.string().min(1),
+});
+
+const fillRequestSchema = browserRequestBase.extend({
+  action: z.literal('fill'),
+  target: z.string().min(1),
+  text: z.string(),
+});
+
+const pressRequestSchema = browserRequestBase.extend({
+  action: z.literal('press'),
+  key: z.string().min(1),
+});
+
+const screenshotRequestSchema = browserRequestBase.extend({
+  action: z.literal('screenshot'),
+  path: z.string().optional(),
+});
+
+const getUrlRequestSchema = browserRequestBase.extend({
+  action: z.literal('get.url'),
+});
+
+const getTitleRequestSchema = browserRequestBase.extend({
+  action: z.literal('get.title'),
+});
+
+const getTextRequestSchema = browserRequestBase.extend({
+  action: z.literal('get.text'),
+  target: z.string().min(1),
+});
+
+const waitRequestSchema = browserRequestBase.extend({
+  action: z.literal('wait'),
+  target: z.string().min(1),
+  timeoutMs: z.number().int().positive().optional(),
+});
+
+const sessionListRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('session.list'),
+});
+
+const sessionStopRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('session.stop'),
+  session: z.string().min(1),
+});
+
+const tabListRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('tab.list'),
+  session: z.string().min(1),
+});
+
+const tabNewRequestSchema = browserRequestBase.extend({
+  action: z.literal('tab.new'),
+  url: z.string().min(1).optional(),
+});
+
+const tabCloseRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('tab.close'),
+  session: z.string().min(1),
+  target: z.string().min(1),
+});
+
+export const daemonRequestSchema = z.discriminatedUnion('action', [
+  pingRequestSchema,
+  openRequestSchema,
+  snapshotRequestSchema,
+  clickRequestSchema,
+  fillRequestSchema,
+  pressRequestSchema,
+  screenshotRequestSchema,
+  getUrlRequestSchema,
+  getTitleRequestSchema,
+  getTextRequestSchema,
+  waitRequestSchema,
+  sessionListRequestSchema,
+  sessionStopRequestSchema,
+  tabListRequestSchema,
+  tabNewRequestSchema,
+  tabCloseRequestSchema,
+]);
+
+const successResponseSchema = z.object({
+  id: z.string(),
+  success: z.literal(true),
+  data: z.unknown(),
+});
+
+const errorPayloadSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  details: z.unknown().optional(),
+});
+
+const failureResponseSchema = z.object({
+  id: z.string(),
+  success: z.literal(false),
+  error: errorPayloadSchema,
+});
+
+export const daemonResponseSchema = z.union([successResponseSchema, failureResponseSchema]);
+
+export type DaemonRequest = z.infer<typeof daemonRequestSchema>;
+export type DaemonResponse = z.infer<typeof daemonResponseSchema>;
+export type DaemonSuccessResponse = z.infer<typeof successResponseSchema>;
+export type DaemonFailureResponse = z.infer<typeof failureResponseSchema>;
+
+export function createRequestId(): string {
+  return `req_${randomUUID()}`;
+}
+
+export function successResponse(id: string, data: unknown): DaemonSuccessResponse {
+  return {
+    id,
+    success: true,
+    data,
+  };
+}
+
+export function failureResponse(id: string, error: ErrorPayload): DaemonFailureResponse {
+  return {
+    id,
+    success: false,
+    error,
+  };
+}

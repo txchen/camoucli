@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+import { doctorCamoufox, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
+import { requireInstalledBrowser, resolveInstalledBrowser } from '../camoufox/registry.js';
+import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
+import { BrowserNotInstalledError, getExitCode, type CamoucliError } from '../util/errors.js';
+import { Logger } from '../util/log.js';
+import { sendDaemonRequest } from '../ipc/client.js';
+import { ensureDaemonRunning } from './daemon.js';
+import { printOutput } from './output.js';
+import { createProgram, toLaunchInput, type OutputOptions, type SharedOptions } from './program.js';
+
+function getLogger(verbose = false): Logger {
+  return new Logger({ name: 'cli', verbose, mirrorToStderr: verbose });
+}
+
+async function runDaemonAction(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<void> {
+  const paths = getCamoucliPaths();
+  await ensureBasePaths(paths);
+  await ensureDaemonRunning(paths, options.verbose ?? false);
+  const data = await sendDaemonRequest(paths, payload as never);
+  printOutput(action, data, options.json ?? false);
+}
+
+async function main(): Promise<void> {
+  const program = createProgram({
+    onInstall: async (version: string | undefined, options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        const logger = getLogger(options.verbose);
+        await ensureBasePaths(paths);
+        const installOptions = {
+          ...(version ? { version } : {}),
+          ...(options.force !== undefined ? { force: options.force } : {}),
+          logger,
+        };
+        const release = await installCamoufox(paths, installOptions);
+        printOutput('install', { version: release.version, tag: release.tag }, options.json ?? false);
+    },
+    onRemove: async (version: string | undefined, options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        const logger = getLogger(options.verbose);
+        const installed = version ? await resolveInstalledBrowser(paths, version) : await resolveInstalledBrowser(paths);
+        if (!installed) {
+          throw new BrowserNotInstalledError('No installed Camoufox version found to remove.');
+        }
+        await removeCamoufox(paths, installed.version, logger);
+        printOutput('remove', { removed: installed.version }, options.json ?? false);
+    },
+    onPath: async (options: OutputOptions) => {
+        const browser = await requireInstalledBrowser(getCamoucliPaths());
+        printOutput('path', { path: browser.executablePath }, options.json ?? false);
+    },
+    onVersion: async (options: OutputOptions) => {
+        const browser = await requireInstalledBrowser(getCamoucliPaths());
+        printOutput('version', { version: browser.version }, options.json ?? false);
+    },
+    onDoctor: async (options: OutputOptions) => {
+        const data = await doctorCamoufox(getCamoucliPaths());
+        printOutput('doctor', data, options.json ?? false);
+    },
+    onDaemonAction: runDaemonAction,
+  });
+
+  await program.parseAsync(process.argv);
+}
+
+main().catch((error: CamoucliError | Error | unknown) => {
+  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.exit(getExitCode(error));
+});
