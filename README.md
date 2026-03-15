@@ -1,107 +1,242 @@
 # Camoucli
 
-Camoucli is a Node.js-first CLI and local daemon for driving Camoufox through Playwright.
+Camoucli is a local-first CLI and background daemon for driving Camoufox through Playwright, without depending on the Camoufox Python SDK.
 
-The published npm package is `camou`, and the installed command is `camou`.
+- npm package: `camou`
+- installed command: `camou`
+- project/repo name: Camoucli
 
-It is built for local agent-style workflows:
+Camou is built for agent-style browser workflows:
 
-- keep a browser session alive across CLI invocations
+- keep a browser session alive across separate CLI invocations
 - preserve login state with persistent profiles
-- target named tabs and sessions
-- work with stable `@eN` refs from text snapshots
-- install and switch Camoufox versions without the Python SDK
+- operate named tabs in parallel without ref collisions
+- interact through stable `@eN` refs from text snapshots
+- install, switch, and diagnose Camoufox browser versions from the CLI
 
-## Requirements
+## Why Camou
 
-- Node.js `>=20`
-- a supported OS for Camoufox releases
+| Feature | Why it matters |
+| --- | --- |
+| Persistent profiles | Login once and reuse the same authenticated browser state later |
+| Named sessions | Keep separate workspaces like `work`, `shopping`, or `github` isolated |
+| Named tabs | Run multiple agents against the same browser session without fighting over one active page |
+| Snapshot refs | Use `@e1`, `@e2`, ... from `snapshot` instead of brittle selectors when driving pages |
+| Version manager | Install and switch Camoufox builds without bundling the browser into the npm package |
+| Doctor diagnostics | Check launch compatibility, bundle health, and Linux shared-library issues quickly |
 
 ## Install
 
-End users:
+Requirements:
+
+- Node.js `>=20`
+- a supported Camoufox release for your OS
+
+Global install (recommended):
 
 ```bash
 npm install -g camou
+camou install
 ```
 
-Contributors / local development:
+One-off usage with `npx`:
+
+```bash
+npx camou install
+npx camou open https://example.com
+```
+
+From this repo:
 
 ```bash
 npm install
 npm run build
-```
-
-For local development:
-
-```bash
 npm run dev -- --help
-npm run dev:daemon
 ```
+
+Notes:
+
+- Browser download is explicit. Installing the npm package does not download Camoufox.
+- `camou install` runs a quick headless launch probe after download.
+- `camou use <version>` runs the same compatibility check when you switch versions.
 
 ## Quick Start
 
-Install a browser build:
-
 ```bash
 camou install
-```
-
-`install` runs a quick launch probe after download so it can warn if the installed browser does not work with the current `playwright-core` version.
-`use` runs the same check when you switch versions.
-
-Open a page and capture refs:
-
-```bash
 camou open https://example.com
 camou snapshot -i
-```
-
-Use refs in later commands:
-
-```bash
+# @e1 a "Learn more"
 camou click @e1
-camou fill @e2 "hello"
 camou get title
 ```
 
-When working from this repo without a global install, prefix commands with `npm run dev --`.
+What happens behind the scenes:
 
-The daemon auto-starts on demand, so later commands reuse the same session and profile.
+1. `camou open` auto-starts the local daemon if needed.
+2. Camoufox launches with a persistent profile for the default session.
+3. `snapshot -i` returns interactive elements with refs like `@e1`.
+4. Later commands reuse the same browser session and profile.
 
-## What Works Today
+Important ref rule:
+
+- Re-run `snapshot` after navigation or major page changes. Refs are per tab and are invalidated on navigation or a new snapshot.
+
+## Recommended Agent Workflow
+
+For agents and automation loops, this is the happy path:
+
+```bash
+camou open https://target.site
+camou snapshot -i --json
+camou click @e3
+camou fill @e5 "hello"
+camou snapshot -i --json
+```
+
+Why this works well:
+
+- `snapshot` gives a stable text representation of the page
+- refs are deterministic within the current tab snapshot
+- `--json` gives machine-readable success and error payloads
+- the daemon keeps browser state alive between commands
+
+## Core Concepts
+
+### Session
+
+A session is a named browser workspace selected with `--session <name>`.
+
+- sessions have separate persistent profile directories
+- different sessions isolate cookies, storage, downloads, and artifacts
+- reuse the same session name to keep login state across runs
+
+Example:
+
+```bash
+camou open https://github.com --session work
+camou open https://mail.google.com --session personal
+```
+
+### Tab
+
+A tab is a named page binding inside a session selected with `--tabname <name>`.
+
+- tabs in the same session share browser profile state
+- tabs keep separate page bindings and separate ref maps
+- named tabs make concurrent agent workflows much safer
+
+Example:
+
+```bash
+camou open https://reddit.com --session work --tabname reddit
+camou open https://news.ycombinator.com --session work --tabname hn
+```
+
+### Ref
+
+A ref is a snapshot-generated handle like `@e1` or `@e2`.
+
+- refs come from `camou snapshot` or `camou snapshot -i`
+- refs are only valid for the tab that created them
+- refs are cleared when the page navigates or you take a new snapshot
+
+### Browser version
+
+Camou keeps an active Camoufox version, but you can also pick a version per command.
+
+- `camou use <version>` changes the active default version
+- `camou <command> ... --browser <version>` runs a command against a specific installed version without changing the default
+
+## Common Workflows
+
+### Persistent login session
+
+```bash
+camou open https://github.com/login --session work --tabname github
+# log in once in the browser
+camou open https://github.com/settings/profile --session work --tabname github
+```
+
+Use the same `--session` name later and the login state is still there.
+
+### Multi-tab parallel-safe browsing
+
+```bash
+camou open https://reddit.com --session research --tabname reddit
+camou open https://news.ycombinator.com --session research --tabname hn
+
+camou snapshot -i --session research --tabname reddit
+camou snapshot -i --session research --tabname hn
+```
+
+Both tabs share the same browser profile, but each tab has its own page and ref map.
+
+### Install and switch versions
+
+```bash
+camou install 135.0.1-beta.24
+camou install 135.0.1-beta.23
+camou versions
+camou use 135.0.1-beta.24
+camou doctor --json
+```
+
+### Use a specific browser version for one session
+
+```bash
+camou open https://example.com --session canary --browser 135.0.1-beta.24
+```
+
+### JSON output for automation
+
+```bash
+camou snapshot -i --json
+camou get title --json
+camou doctor --json
+```
+
+Errors are also structured when `--json` is enabled.
+
+## Command Reference
 
 ### Browser management
 
-- `camou install [version]`
-- `camou remove [version]`
-- `camou use <version>`
-- `camou versions`
-- `camou presets`
-- `camou version`
-- `camou path`
-- `camou doctor`
+```bash
+camou install [version]
+camou remove [version]
+camou use <version>
+camou versions
+camou presets
+camou version
+camou path
+camou doctor
+```
 
 ### Page automation
 
-- `camou open <url>`
-- `camou snapshot [-i]`
-- `camou click <selectorOrRef>`
-- `camou fill <selectorOrRef> <text>`
-- `camou press <key>`
-- `camou wait <selectorOrRef>`
-- `camou screenshot [path]`
-- `camou get url`
-- `camou get title`
-- `camou get text <selectorOrRef>`
+```bash
+camou open <url>
+camou snapshot [-i]
+camou click <selectorOrRef>
+camou fill <selectorOrRef> <text>
+camou press <key>
+camou wait <selectorOrRef>
+camou screenshot [path]
+camou get url
+camou get title
+camou get text <selectorOrRef>
+```
 
-### Session and tab management
+### Sessions and tabs
 
-- `camou session list`
-- `camou session stop [name]`
-- `camou tab list`
-- `camou tab new [url]`
-- `camou tab close [nameOrIndex]`
+```bash
+camou session list
+camou session stop [name]
+camou tab list
+camou tab new [url]
+camou tab close [nameOrIndex]
+```
 
 ## Common Flags
 
@@ -119,84 +254,67 @@ Most browser commands support:
 - `--proxy <url>`
 - `--locale <locale>`
 - `--timezone <timezone>`
-- `--width <px>` / `--height <px>`
+- `--width <px>`
+- `--height <px>`
 - `--json`
 - `--verbose`
 
-## Example Flows
-
-Use a named session and tab:
-
-```bash
-camou open https://github.com --session work --tabname github
-camou snapshot -i --session work --tabname github
-```
-
-Install and switch versions:
-
-```bash
-camou install 135.0.1-beta.24
-camou install 134.0.0-beta.20
-camou versions
-camou use 134.0.0-beta.20
-camou version
-```
-
-Check the current install inventory and launch compatibility:
-
-```bash
-camou doctor --json
-```
-
-Launch a session with an explicit installed browser version without changing the global default:
-
-```bash
-camou open https://example.com --session canary --browser 135.0.1-beta.24
-```
-
-Save a screenshot to the session artifacts directory:
-
-```bash
-camou screenshot --session work --tabname github
-```
-
-## Storage Layout
-
-Camoucli uses platform-specific app directories for its own state and profiles.
-
-- session profiles live under `profiles/<session>/{user-data,downloads,artifacts}`
-- daemon state and logs live under the platform state/runtime dirs
-
-Camoufox binaries are stored in the shared cache layout used by the Python library when possible:
-
-- Linux: `~/.cache/camoufox/browsers/official/<version>/`
-- macOS: `~/Library/Caches/camoufox/browsers/official/<version>/`
-- Windows: `%LOCALAPPDATA%\camoufox\Cache\browsers\official\<version>\`
-
-This lets Camoucli reuse compatible Camoufox installs from the Python ecosystem and vice versa.
-
 ## Presets
 
-Built-in presets give you a small layer of tested ergonomics on top of raw config and prefs JSON:
+Built-in presets give you a small layer of tested ergonomics on top of raw config and prefs JSON.
 
-- `default` - baseline launch with no additional overrides
-- `cache` - enables the Firefox cache/session prefs used by the Python library
-- `low-bandwidth` - blocks images and speculative requests for lighter automation sessions
-- `disable-coop` - relaxes Cross-Origin-Opener-Policy isolation for troublesome embedded flows
+| Preset | What it does |
+| --- | --- |
+| `default` | Baseline launch with no extra overrides |
+| `cache` | Enables the Firefox cache/session prefs used by the Python library |
+| `low-bandwidth` | Blocks images and speculative requests for lighter automation sessions |
+| `disable-coop` | Relaxes Cross-Origin-Opener-Policy isolation for troublesome embedded flows |
 
-List them from the CLI:
+List them:
 
 ```bash
 camou presets
 ```
 
-Apply one or more presets to a browser command:
+Apply one or more:
 
 ```bash
 camou open https://example.com --preset cache --preset low-bandwidth
 ```
 
-## Compatibility Matrix
+## Doctor And Troubleshooting
+
+`camou doctor --json` reports:
+
+- installed Camoufox versions
+- which version is active
+- whether each version can launch with the current `playwright-core`
+- bundle file checks
+- Linux shared-library diagnostics
+- remediation hints
+
+Useful commands:
+
+```bash
+camou versions
+camou use 135.0.1-beta.24
+camou doctor --json
+```
+
+Common fixes:
+
+- `Browser.setContrast is not supported`
+  - the selected Camoufox build is older than the bundled Playwright runtime
+  - switch to a newer browser version with `camou use <version>`
+- profile/session locked
+  - another browser process is using that session profile
+  - stop the other browser or use a different `--session`
+- executable missing or damaged
+  - reinstall with `camou install --force`
+- Linux launch failures
+  - run `camou doctor --json` and install the missing shared libraries it reports
+
+## Current Compatibility
 
 Current local verification with `playwright-core` `1.51.1`:
 
@@ -205,14 +323,18 @@ Current local verification with `playwright-core` `1.51.1`:
 | `135.0.1-beta.24` | launches | smoke-tested successfully |
 | `135.0.1-beta.23` | incompatible | `Browser.setContrast` is not supported |
 
-## Notes
+## Storage Layout
 
-- The CLI is intentionally thin; the daemon owns browser lifecycle and persistent state.
-- `snapshot` creates per-tab `@eN` refs, and refs are cleared after navigation or a new snapshot.
-- Browser installation is explicit; the package does not download Camoufox during `npm install`.
-- `install` and `use` include a quick compatibility hint based on a real headless launch probe of the selected version.
-- `doctor` reports installed versions, a per-version launch compatibility matrix, shared-library diagnostics, and remediation hints.
-- Passing `--json` returns structured machine-readable errors for both top-level CLI failures and daemon responses.
+Camou keeps its own runtime state and profiles, but stores browser binaries in the shared Camoufox cache layout when possible.
+
+- session data lives under `profiles/<session>/{user-data,downloads,artifacts}`
+- daemon state and logs live under platform runtime/state directories
+- Camoufox binaries live in the shared cache used by the Python library:
+  - Linux: `~/.cache/camoufox/browsers/official/<version>/`
+  - macOS: `~/Library/Caches/camoufox/browsers/official/<version>/`
+  - Windows: `%LOCALAPPDATA%\camoufox\Cache\browsers\official\<version>\`
+
+This lets Camou reuse compatible Camoufox installs from the Python ecosystem and vice versa.
 
 ## Development
 
@@ -226,4 +348,11 @@ Optional targeted integration suite:
 
 ```bash
 npm run test:integration
+```
+
+Local development commands:
+
+```bash
+npm run dev -- --help
+npm run dev:daemon
 ```
