@@ -10,6 +10,7 @@ describe('CLI program parsing', () => {
       onRemove: async () => undefined,
       onUse: async () => undefined,
       onVersions: async () => undefined,
+      onPresets: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -27,6 +28,10 @@ describe('CLI program parsing', () => {
         '--tabname',
         'docs',
         '--headless',
+        '--browser',
+        '135.0.1-beta.24',
+        '--preset',
+        'cache,low-bandwidth',
         '--config-json',
         '{"foo":1}',
         '--prefs-json',
@@ -45,6 +50,8 @@ describe('CLI program parsing', () => {
         session: 'work',
         tabName: 'docs',
         headless: true,
+        browser: '135.0.1-beta.24',
+        preset: ['cache', 'low-bandwidth'],
         configJson: '{"foo":1}',
         prefsJson: '{"bar":true}',
       }),
@@ -63,6 +70,7 @@ describe('CLI program parsing', () => {
       onRemove: async () => undefined,
       onUse: async () => undefined,
       onVersions: async () => undefined,
+      onPresets: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -89,6 +97,7 @@ describe('CLI program parsing', () => {
       onRemove: async () => undefined,
       onUse: async () => undefined,
       onVersions: async () => undefined,
+      onPresets: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -111,6 +120,7 @@ describe('CLI program parsing', () => {
       onRemove: async () => undefined,
       onUse,
       onVersions: async () => undefined,
+      onPresets: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -129,6 +139,7 @@ describe('CLI program parsing', () => {
       onRemove: async () => undefined,
       onUse: async () => undefined,
       onVersions,
+      onPresets: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -138,5 +149,24 @@ describe('CLI program parsing', () => {
     await program.parseAsync(['node', 'camoucli', 'versions', '--json'], { from: 'node' });
 
     expect(onVersions).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
+  });
+
+  it('routes presets to the listing handler', async () => {
+    const onPresets = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camoucli', 'presets', '--json'], { from: 'node' });
+
+    expect(onPresets).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 });

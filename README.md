@@ -65,6 +65,7 @@ The daemon auto-starts on demand, so later commands reuse the same session and p
 - `camoucli remove [version]`
 - `camoucli use <version>`
 - `camoucli versions`
+- `camoucli presets`
 - `camoucli version`
 - `camoucli path`
 - `camoucli doctor`
@@ -97,10 +98,12 @@ Most browser commands support:
 - `--session <name>`
 - `--tabname <name>`
 - `--headless`
+- `--browser <version>`
 - `--config <path>`
 - `--config-json <json>`
 - `--prefs <path>`
 - `--prefs-json <json>`
+- `--preset <name>`
 - `--proxy <url>`
 - `--locale <locale>`
 - `--timezone <timezone>`
@@ -133,6 +136,12 @@ Check the current install inventory and launch compatibility:
 npm run dev -- doctor --json
 ```
 
+Launch a session with an explicit installed browser version without changing the global default:
+
+```bash
+npm run dev -- open https://example.com --session canary --browser 135.0.1-beta.24
+```
+
 Save a screenshot to the session artifacts directory:
 
 ```bash
@@ -154,13 +163,44 @@ Camoufox binaries are stored in the shared cache layout used by the Python libra
 
 This lets Camoucli reuse compatible Camoufox installs from the Python ecosystem and vice versa.
 
+## Presets
+
+Built-in presets give you a small layer of tested ergonomics on top of raw config and prefs JSON:
+
+- `default` - baseline launch with no additional overrides
+- `cache` - enables the Firefox cache/session prefs used by the Python library
+- `low-bandwidth` - blocks images and speculative requests for lighter automation sessions
+- `disable-coop` - relaxes Cross-Origin-Opener-Policy isolation for troublesome embedded flows
+
+List them from the CLI:
+
+```bash
+npm run dev -- presets
+```
+
+Apply one or more presets to a browser command:
+
+```bash
+npm run dev -- open https://example.com --preset cache --preset low-bandwidth
+```
+
+## Compatibility Matrix
+
+Current local verification with `playwright-core` `1.51.1`:
+
+| Camoufox | Status | Notes |
+| --- | --- | --- |
+| `135.0.1-beta.24` | launches | smoke-tested successfully |
+| `135.0.1-beta.23` | incompatible | `Browser.setContrast` is not supported |
+
 ## Notes
 
 - The CLI is intentionally thin; the daemon owns browser lifecycle and persistent state.
 - `snapshot` creates per-tab `@eN` refs, and refs are cleared after navigation or a new snapshot.
 - Browser installation is explicit; the package does not download Camoufox during `npm install`.
 - `install` and `use` include a quick compatibility hint based on a real headless launch probe of the selected version.
-- `doctor` reports installed versions, the active version, and whether the current browser can launch with the bundled Playwright runtime.
+- `doctor` reports installed versions, a per-version launch compatibility matrix, shared-library diagnostics, and remediation hints.
+- Passing `--json` returns structured machine-readable errors for both top-level CLI failures and daemon responses.
 
 ## Development
 
@@ -168,4 +208,10 @@ This lets Camoucli reuse compatible Camoufox installs from the Python ecosystem 
 npm install
 npm run build
 npm test
+```
+
+Optional targeted integration suite:
+
+```bash
+npm run test:integration
 ```

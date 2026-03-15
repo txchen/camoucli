@@ -7,6 +7,7 @@ import { Writable } from 'node:stream';
 import extract from 'extract-zip';
 
 import type { CamoucliPaths } from '../state/paths.js';
+import { buildDoctorHints, buildDoctorVersionChecks, inspectBrowserBundle, inspectSharedLibraries } from '../doctor/diagnostics.js';
 import { ensureDir } from '../state/store.js';
 import { InstallError } from '../util/errors.js';
 import { buildExpectedAssetName, getPlatformTarget, normalizeReleaseVersion } from '../util/platform.js';
@@ -315,26 +316,63 @@ export async function inspectCamoufoxInstall(
 
 export async function doctorCamoufox(paths: CamoucliPaths, logger?: Logger): Promise<Record<string, unknown>> {
   const installedBrowsers = await listInstalledBrowsers(paths);
+  const platform = getPlatformTarget();
+  const inspections = new Map<string, CamoufoxInstallInspection>();
+
+  for (const install of installedBrowsers.installs) {
+    inspections.set(install.version, await inspectCamoufoxInstall(paths, install.version, logger));
+  }
+
   const currentBrowser = installedBrowsers.currentVersion
     ? installedBrowsers.installs.find((install) => install.version === installedBrowsers.currentVersion)
     : undefined;
-  const inspection = await inspectCamoufoxInstall(paths, installedBrowsers.currentVersion, logger);
+  const currentInspection = currentBrowser
+    ? inspections.get(currentBrowser.version)
+    : {
+        playwrightCoreVersion: getPlaywrightCoreVersion(),
+        launchCheck: {
+          attempted: false,
+          success: false,
+          error: {
+            message: 'No active Camoufox version selected.',
+          },
+        },
+      };
+  const bundleCheck = await inspectBrowserBundle(currentBrowser, platform);
+  const sharedLibraryCheck = await inspectSharedLibraries(currentBrowser, platform);
+  const installedVersions = buildDoctorVersionChecks({
+    installedVersions: installedBrowsers.installs,
+    currentVersion: installedBrowsers.currentVersion,
+    probes: new Map(
+      Array.from(inspections.entries()).map(([version, inspection]) => [version, inspection.launchCheck]),
+    ),
+  });
+  const hints = buildDoctorHints({
+    platform,
+    installed: installedBrowsers.installs.length > 0,
+    currentVersion: currentBrowser?.version,
+    launchCheck: currentInspection?.launchCheck,
+    bundleCheck,
+    sharedLibraryCheck,
+  });
 
   return {
-    platform: getPlatformTarget(),
-    playwrightCoreVersion: inspection.playwrightCoreVersion,
+    platform,
+    playwrightCoreVersion: currentInspection?.playwrightCoreVersion,
     camoufoxCacheDir: paths.camoufoxCacheDir,
     installed: installedBrowsers.installs.length > 0,
-    healthy: installedBrowsers.installs.length > 0 && inspection.launchCheck.success,
+    healthy:
+      installedBrowsers.installs.length > 0 &&
+      Boolean(currentInspection?.launchCheck.success) &&
+      bundleCheck.missingRequiredFiles.length === 0 &&
+      sharedLibraryCheck.missingLibraries.length === 0,
     currentVersion: currentBrowser?.version,
     executablePath: currentBrowser?.executablePath,
-    installedVersions: installedBrowsers.installs.map((install) => ({
-      version: install.version,
-      current: install.version === installedBrowsers.currentVersion,
-      sourceRepo: install.sourceRepo,
-      path: install.executablePath,
-    })),
-    launchCheck: inspection.launchCheck,
+    installedVersions,
+    launchCheck: currentInspection?.launchCheck,
+    bundleCheck,
+    sharedLibraryCheck,
+    hints,
     runtimeDir: paths.runtimeDir,
     socketPath: paths.daemonSocketPath,
     host: paths.daemonHost,

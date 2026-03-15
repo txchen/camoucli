@@ -1,0 +1,82 @@
+import os from 'node:os';
+import path from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { installCamoufox } from '../src/camoufox/installer.js';
+import { resolveInstalledBrowser } from '../src/camoufox/registry.js';
+import { ensureBasePaths } from '../src/state/paths.js';
+import { createTestPaths } from './helpers/temp-paths.js';
+
+vi.mock('extract-zip', () => ({
+  default: async (_archivePath: string, options: { dir: string }) => {
+    await mkdir(options.dir, { recursive: true });
+    await Promise.all([
+      writeFile(path.join(options.dir, 'camoufox-bin'), '#!/bin/sh\n', 'utf8'),
+      writeFile(
+        path.join(options.dir, 'properties.json'),
+        JSON.stringify([{ property: 'navigator.language', type: 'str' }], null, 2),
+        'utf8',
+      ),
+    ]);
+  },
+}));
+
+describe('installer integration', () => {
+  let rootDir: string;
+
+  beforeEach(async () => {
+    rootDir = await mkdtemp(path.join(os.tmpdir(), 'camoucli-install-int-'));
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    await rm(rootDir, { recursive: true, force: true });
+  });
+
+  it('installs a mocked release into the shared cache layout and updates the registry', async () => {
+    const paths = createTestPaths(rootDir);
+    await ensureBasePaths(paths);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/releases')) {
+        return new Response(
+          JSON.stringify([
+            {
+              tag_name: 'v135.0.1-beta.24',
+              prerelease: false,
+              assets: [
+                {
+                  name: 'camoufox-135.0.1-beta.24-lin.x86_64.zip',
+                  browser_download_url: 'https://example.com/camoufox-135.0.1-beta.24-lin.x86_64.zip',
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      return new Response('archive-data', { status: 200 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const release = await installCamoufox(paths, { version: '135.0.1-beta.24', force: true });
+    const installed = await resolveInstalledBrowser(paths, release.version);
+
+    expect(release.version).toBe('135.0.1-beta.24');
+    expect(installed?.executablePath).toBe(
+      path.join(paths.browsersDir, 'official', '135.0.1-beta.24', 'camoufox-bin'),
+    );
+
+    const versionJson = JSON.parse(
+      await readFile(path.join(paths.browsersDir, 'official', '135.0.1-beta.24', 'version.json'), 'utf8'),
+    ) as { version?: string; build?: string };
+
+    expect(versionJson).toMatchObject({ version: '135.0.1', build: 'beta.24' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});

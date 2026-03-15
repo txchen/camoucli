@@ -248,6 +248,7 @@ export class BrowserManager {
         installPath: launched.installPath,
         paths: launched.sessionPaths,
         resolvedConfig: launched.resolvedConfig,
+        launchInput: input,
         startedAt: new Date().toISOString(),
       };
 
@@ -296,6 +297,50 @@ export class BrowserManager {
 
     const page = await session.context.newPage();
     return this.trackPage(session, tabName, page);
+  }
+
+  private assertSessionCompatible(session: SessionRuntime, input: LaunchInput): void {
+    if (input.configPath || input.configJson || input.prefsPath || input.prefsJson || input.preset?.length) {
+      throw new SessionError(
+        `Session ${session.name} is already running. Stop it before changing config, prefs, or presets for that session.`,
+      );
+    }
+
+    if (input.browser && input.browser !== session.browserVersion) {
+      throw new SessionError(
+        `Session ${session.name} is already running with browser ${session.browserVersion}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.headless !== undefined && input.headless !== session.resolvedConfig.headless) {
+      throw new SessionError(
+        `Session ${session.name} is already running with headless=${String(session.resolvedConfig.headless)}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.proxy && input.proxy !== session.resolvedConfig.proxy?.server) {
+      throw new SessionError(
+        `Session ${session.name} is already running with proxy ${session.resolvedConfig.proxy?.server ?? 'none'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.locale && input.locale !== session.resolvedConfig.locale) {
+      throw new SessionError(
+        `Session ${session.name} is already running with locale ${session.resolvedConfig.locale ?? 'default'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.timezone && input.timezone !== session.resolvedConfig.timezoneId) {
+      throw new SessionError(
+        `Session ${session.name} is already running with timezone ${session.resolvedConfig.timezoneId ?? 'default'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if ((input.width || input.height) && (!session.resolvedConfig.viewport || session.resolvedConfig.viewport.width !== input.width || session.resolvedConfig.viewport.height !== input.height)) {
+      throw new SessionError(
+        `Session ${session.name} is already running with a different window size. Use a different session name or stop the existing session first.`,
+      );
+    }
   }
 
   private trackPage(session: SessionRuntime, tabName: string, page: Page): TabRuntime {

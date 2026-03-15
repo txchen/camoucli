@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { ValidationError } from '../util/errors.js';
 import { parseFirefoxUserPrefs, type FirefoxUserPrefs } from './prefs.js';
+import { resolveCamoufoxPresets } from './presets.js';
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
@@ -13,11 +14,13 @@ export const launchInputSchema = z.object({
   configJson: z.string().optional(),
   prefsPath: z.string().optional(),
   prefsJson: z.string().optional(),
+  preset: z.array(z.string()).optional(),
   proxy: z.string().optional(),
   locale: z.string().optional(),
   timezone: z.string().optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
+  browser: z.string().optional(),
 });
 
 export type LaunchInput = z.infer<typeof launchInputSchema>;
@@ -28,6 +31,8 @@ export interface ProxySettings {
 
 export interface ResolvedLaunchConfig {
   headless: boolean;
+  browser?: string | undefined;
+  presetNames: string[];
   camouConfig: Record<string, unknown>;
   firefoxUserPrefs: FirefoxUserPrefs;
   proxy?: ProxySettings | undefined;
@@ -71,6 +76,10 @@ export async function resolveJsonObjectInput(
   jsonValue: string | undefined,
   label: string,
 ): Promise<Record<string, unknown>> {
+  if (pathValue && jsonValue) {
+    throw new ValidationError(`Pass either ${label} path or ${label} JSON, not both.`);
+  }
+
   if (pathValue) {
     return loadJsonObjectFile(pathValue, label);
   }
@@ -98,10 +107,44 @@ export function parseProxyString(proxy?: string): ProxySettings | undefined {
   }
 }
 
+export function validateLocale(locale?: string): string | undefined {
+  if (!locale) {
+    return undefined;
+  }
+
+  if (Intl.DateTimeFormat.supportedLocalesOf([locale]).length === 0) {
+    throw new ValidationError(`Invalid locale: ${locale}`);
+  }
+
+  return locale;
+}
+
+export function validateTimezone(timezone?: string): string | undefined {
+  if (!timezone) {
+    return undefined;
+  }
+
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+  } catch (error) {
+    throw new ValidationError(`Invalid timezone: ${timezone}`, undefined, error);
+  }
+
+  return timezone;
+}
+
 export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedLaunchConfig> {
-  const camouConfig = await resolveJsonObjectInput(input.configPath, input.configJson, 'config');
+  const presets = resolveCamoufoxPresets(input.preset);
+  const rawConfig = await resolveJsonObjectInput(input.configPath, input.configJson, 'config');
   const rawPrefs = await resolveJsonObjectInput(input.prefsPath, input.prefsJson, 'prefs');
-  const firefoxUserPrefs = parseFirefoxUserPrefs(rawPrefs);
+  const camouConfig = {
+    ...presets.camouConfig,
+    ...rawConfig,
+  };
+  const firefoxUserPrefs = parseFirefoxUserPrefs({
+    ...presets.firefoxUserPrefs,
+    ...rawPrefs,
+  });
   const viewport = input.width && input.height ? { width: input.width, height: input.height } : undefined;
 
   if ((input.width && !input.height) || (!input.width && input.height)) {
@@ -110,11 +153,13 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
 
   return {
     headless: input.headless ?? false,
+    browser: input.browser,
+    presetNames: presets.presetNames,
     camouConfig,
     firefoxUserPrefs,
     proxy: parseProxyString(input.proxy),
-    locale: input.locale,
-    timezoneId: input.timezone,
+    locale: validateLocale(input.locale),
+    timezoneId: validateTimezone(input.timezone),
     viewport,
   };
 }

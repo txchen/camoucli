@@ -1,7 +1,7 @@
 import type { BrowserContext, Page } from 'playwright-core';
 
 import type { SessionPaths } from '../state/paths.js';
-import type { ResolvedLaunchConfig } from '../camoufox/config.js';
+import type { LaunchInput, ResolvedLaunchConfig } from '../camoufox/config.js';
 import type { SnapshotResult } from './snapshot.js';
 
 export type SessionStatus = 'stopped' | 'starting' | 'running' | 'error';
@@ -22,6 +22,7 @@ export interface SessionRuntime {
   installPath: string;
   paths: SessionPaths;
   resolvedConfig: ResolvedLaunchConfig;
+  launchInput: LaunchInput;
   startedAt: string;
 }
 

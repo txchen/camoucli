@@ -1,8 +1,11 @@
 #!/usr/bin/env node
+import { CommanderError } from 'commander';
+
 import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
+import { listCamoufoxPresets } from '../camoufox/presets.js';
 import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
-import { BrowserNotInstalledError, getExitCode, type CamoucliError } from '../util/errors.js';
+import { BrowserNotInstalledError, ValidationError, getExitCode, toErrorPayload, type CamoucliError } from '../util/errors.js';
 import { Logger } from '../util/log.js';
 import { sendDaemonRequest } from '../ipc/client.js';
 import { ensureDaemonRunning } from './daemon.js';
@@ -21,7 +24,40 @@ async function runDaemonAction(action: string, payload: Record<string, unknown>,
   printOutput(action, data, options.json ?? false);
 }
 
-async function main(): Promise<void> {
+function wantsJsonOutput(argv: string[]): boolean {
+  return argv.includes('--json');
+}
+
+function normalizeCliError(error: unknown): unknown {
+  if (error instanceof CommanderError) {
+    return new ValidationError(error.message.replace(/^error:\s*/i, '').trim() || 'Invalid command input.');
+  }
+
+  return error;
+}
+
+function printCliError(error: unknown, asJson: boolean): void {
+  const normalized = normalizeCliError(error);
+  if (asJson) {
+    process.stderr.write(
+      `${JSON.stringify(
+        {
+          success: false,
+          error: toErrorPayload(normalized),
+          exitCode: getExitCode(normalized),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return;
+  }
+
+  process.stderr.write(`${normalized instanceof Error ? normalized.message : String(normalized)}\n`);
+}
+
+async function main(argv: string[] = process.argv): Promise<number> {
+  const asJson = wantsJsonOutput(argv);
   const program = createProgram({
     onInstall: async (version: string | undefined, options: OutputOptions) => {
         const paths = getCamoucliPaths();
@@ -92,6 +128,18 @@ async function main(): Promise<void> {
           options.json ?? false,
         );
     },
+    onPresets: async (options: OutputOptions) => {
+        printOutput(
+          'presets',
+          {
+            presets: listCamoufoxPresets().map((preset) => ({
+              name: preset.name,
+              description: preset.description,
+            })),
+          },
+          options.json ?? false,
+        );
+    },
     onPath: async (options: OutputOptions) => {
         const browser = await requireInstalledBrowser(getCamoucliPaths());
         printOutput('path', { path: browser.executablePath }, options.json ?? false);
@@ -108,12 +156,24 @@ async function main(): Promise<void> {
         printOutput('doctor', data, options.json ?? false);
     },
     onDaemonAction: runDaemonAction,
-  });
+  }, { quietErrors: asJson });
 
-  await program.parseAsync(process.argv);
+  try {
+    await program.parseAsync(argv);
+    return 0;
+  } catch (error) {
+    if (error instanceof CommanderError && (error.code === 'commander.helpDisplayed' || error.code === 'commander.version')) {
+      return 0;
+    }
+
+    printCliError(error, asJson);
+    return getExitCode(normalizeCliError(error));
+  }
 }
 
-main().catch((error: CamoucliError | Error | unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exit(getExitCode(error));
+main().then((exitCode) => {
+  process.exit(exitCode);
+}).catch((error: CamoucliError | Error | unknown) => {
+  printCliError(error, wantsJsonOutput(process.argv));
+  process.exit(getExitCode(normalizeCliError(error)));
 });

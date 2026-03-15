@@ -19,9 +19,18 @@
     "clean": "rm -rf dist",
     "dev": "tsx src/cli/main.ts",
     "dev:daemon": "tsx src/daemon/main.ts",
+    "prepack": "npm run build",
     "test": "vitest run",
+    "test:integration": "vitest run tests/*.integration.test.ts",
     "test:watch": "vitest"
   },
+  "keywords": [
+    "camoufox",
+    "playwright",
+    "firefox",
+    "cli",
+    "browser-automation"
+  ],
   "dependencies": {
     "commander": "^14.0.0",
     "extract-zip": "^2.0.1",

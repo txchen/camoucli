@@ -19,6 +19,24 @@ function printInstalledVersions(data: Record<string, unknown>): void {
   }
 }
 
+function printPresets(data: Record<string, unknown>): void {
+  const presets = Array.isArray(data.presets) ? data.presets : [];
+
+  if (presets.length === 0) {
+    process.stdout.write('No built-in presets available\n');
+    return;
+  }
+
+  for (const preset of presets) {
+    if (!preset || typeof preset !== 'object') {
+      continue;
+    }
+
+    const record = preset as Record<string, unknown>;
+    process.stdout.write(`${String(record.name ?? 'unknown')} ${String(record.description ?? '')}\n`);
+  }
+}
+
 function printBrowserCompatibilityResult(prefix: string, data: Record<string, unknown>): void {
   const version = String(data.version ?? 'unknown');
   process.stdout.write(`${prefix} Camoufox ${version}\n`);
@@ -71,6 +89,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'versions':
       printInstalledVersions(data as Record<string, unknown>);
+      return;
+    case 'presets':
+      printPresets(data as Record<string, unknown>);
       return;
     case 'doctor':
       process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);

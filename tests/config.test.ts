@@ -15,6 +15,7 @@ describe('launch config parsing', () => {
   it('resolves inline config and prefs JSON', async () => {
     const config = await resolveLaunchConfig({
       headless: true,
+      preset: ['cache'],
       configJson: '{"navigator.language":"en-US"}',
       prefsJson: '{"network.http.speculative-parallel-limit":0}',
       width: 1280,
@@ -22,12 +23,20 @@ describe('launch config parsing', () => {
     });
 
     expect(config.headless).toBe(true);
+    expect(config.presetNames).toEqual(['cache']);
     expect(config.camouConfig['navigator.language']).toBe('en-US');
+    expect(config.firefoxUserPrefs['browser.cache.memory.enable']).toBe(true);
     expect(config.firefoxUserPrefs['network.http.speculative-parallel-limit']).toBe(0);
     expect(config.viewport).toEqual({ width: 1280, height: 720 });
   });
 
   it('requires width and height together', async () => {
     await expect(resolveLaunchConfig({ width: 1280 })).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects conflicting config sources and invalid locale/timezone', async () => {
+    await expect(resolveLaunchConfig({ configPath: '/tmp/config.json', configJson: '{}' })).rejects.toThrow(ValidationError);
+    await expect(resolveLaunchConfig({ locale: 'not-a-real-locale' })).rejects.toThrow(ValidationError);
+    await expect(resolveLaunchConfig({ timezone: 'Mars/OlympusMons' })).rejects.toThrow(ValidationError);
   });
 });

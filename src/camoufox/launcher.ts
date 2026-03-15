@@ -5,10 +5,12 @@ import { firefox, type BrowserContext } from 'playwright-core';
 
 import type { CamoucliPaths, SessionPaths } from '../state/paths.js';
 import { ensureSessionPaths } from '../state/paths.js';
+import { SessionError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { requireInstalledBrowser, resolveInstalledBrowser } from './registry.js';
 import { buildCamouConfigEnv } from './env.js';
 import { resolveLaunchConfig, type LaunchInput, type ResolvedLaunchConfig } from './config.js';
+import { validateCamouConfig } from './validation.js';
 
 export interface LaunchedSession {
   context: BrowserContext;
@@ -48,9 +50,10 @@ export async function launchPersistentCamoufox(
   input: LaunchInput,
   logger?: Logger,
 ): Promise<LaunchedSession> {
-  const browser = await requireInstalledBrowser(paths);
+  const browser = await requireInstalledBrowser(paths, input.browser);
   const sessionPaths = await ensureSessionPaths(paths, sessionName);
   const resolvedConfig = await resolveLaunchConfig(input);
+  await validateCamouConfig(resolvedConfig.camouConfig, browser.rootDir);
 
   const options: Parameters<typeof firefox.launchPersistentContext>[1] = {
     executablePath: browser.executablePath,
@@ -70,15 +73,28 @@ export async function launchPersistentCamoufox(
     headless: resolvedConfig.headless,
   });
 
-  const context = await firefox.launchPersistentContext(sessionPaths.profileDir, options);
+  try {
+    const context = await firefox.launchPersistentContext(sessionPaths.profileDir, options);
 
-  return {
-    context,
-    browserVersion: browser.version,
-    installPath: browser.executablePath,
-    sessionPaths,
-    resolvedConfig,
-  };
+    return {
+      context,
+      browserVersion: browser.version,
+      installPath: browser.executablePath,
+      sessionPaths,
+      resolvedConfig,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/profile|lock|in use|access denied/i.test(message)) {
+      throw new SessionError(
+        `Browser profile for session ${sessionName} appears to be locked by another process. Stop the other browser or use a different session name.`,
+        { sessionName, profileDir: sessionPaths.profileDir },
+        error,
+      );
+    }
+
+    throw error;
+  }
 }
 
 export async function probeCamoufoxLaunch(

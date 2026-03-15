@@ -8,10 +8,12 @@ export interface SharedOptions {
   session: string;
   tabname: string;
   headless?: boolean | undefined;
+  browser?: string | undefined;
   config?: string | undefined;
   configJson?: string | undefined;
   prefs?: string | undefined;
   prefsJson?: string | undefined;
+  preset?: string[] | undefined;
   proxy?: string | undefined;
   locale?: string | undefined;
   timezone?: string | undefined;
@@ -32,10 +34,19 @@ export interface CliHandlers {
   onRemove: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onUse: (version: string, options: OutputOptions) => Promise<void>;
   onVersions: (options: OutputOptions) => Promise<void>;
+  onPresets: (options: OutputOptions) => Promise<void>;
   onPath: (options: OutputOptions) => Promise<void>;
   onVersion: (options: OutputOptions) => Promise<void>;
   onDoctor: (options: OutputOptions) => Promise<void>;
   onDaemonAction: (action: string, payload: Record<string, unknown>, options: SharedOptions) => Promise<void>;
+}
+
+export interface ProgramOptions {
+  quietErrors?: boolean | undefined;
+}
+
+function collectValues(value: string, previous: string[] = []): string[] {
+  return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
 
 function addSharedBrowserOptions(command: Command): Command {
@@ -43,10 +54,12 @@ function addSharedBrowserOptions(command: Command): Command {
     .option('--session <name>', 'session name', 'default')
     .option('--tabname <name>', 'tab name', 'main')
     .option('--headless', 'launch headless')
+    .option('--browser <version>', 'specific installed browser version')
     .option('--config <path>', 'Camoufox config file path')
     .option('--config-json <json>', 'inline Camoufox config JSON')
     .option('--prefs <path>', 'Firefox prefs file path')
     .option('--prefs-json <json>', 'inline Firefox prefs JSON')
+    .option('--preset <name>', 'apply a built-in preset (repeat or use comma-separated values)', collectValues, [])
     .option('--proxy <url>', 'proxy URL')
     .option('--locale <locale>', 'locale override')
     .option('--timezone <timezone>', 'timezone override')
@@ -67,10 +80,12 @@ export function parseInteger(value: string): number {
 export function toLaunchInput(options: SharedOptions): LaunchInput {
   return {
     headless: options.headless,
+    browser: options.browser,
     configPath: options.config,
     configJson: options.configJson,
     prefsPath: options.prefs,
     prefsJson: options.prefsJson,
+    preset: options.preset,
     proxy: options.proxy,
     locale: options.locale,
     timezone: options.timezone,
@@ -79,8 +94,21 @@ export function toLaunchInput(options: SharedOptions): LaunchInput {
   };
 }
 
-export function createProgram(handlers: CliHandlers): Command {
+export function createProgram(handlers: CliHandlers, options?: ProgramOptions): Command {
   const program = new Command();
+  program.exitOverride();
+  program.configureOutput({
+    writeErr: (str) => {
+      if (!options?.quietErrors) {
+        process.stderr.write(str);
+      }
+    },
+    outputError: (str, write) => {
+      if (!options?.quietErrors) {
+        write(str);
+      }
+    },
+  });
   program
     .name('camoucli')
     .description('CLI and local daemon for Camoufox via Playwright')
@@ -120,6 +148,15 @@ export function createProgram(handlers: CliHandlers): Command {
       .description('List installed Camoufox versions')
       .action(async (options: OutputOptions) => {
         await handlers.onVersions(options);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('presets')
+      .description('List built-in launch presets')
+      .action(async (options: OutputOptions) => {
+        await handlers.onPresets(options);
       }),
   );
 

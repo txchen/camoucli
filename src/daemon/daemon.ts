@@ -4,6 +4,7 @@ import { BrowserManager } from '../browser/manager.js';
 import { createIpcServer, type IpcServerHandle } from '../ipc/server.js';
 import { ensureBasePaths, type CamoucliPaths } from '../state/paths.js';
 import type { Logger } from '../util/log.js';
+import { cleanupStaleDaemonArtifacts, removeDaemonArtifacts } from './runtime.js';
 import { DaemonRouter } from './router.js';
 
 export class CamoucliDaemon {
@@ -21,8 +22,9 @@ export class CamoucliDaemon {
 
   async start(): Promise<void> {
     await ensureBasePaths(this.paths);
-    await writeFile(this.paths.daemonPidFile, `${process.pid}\n`, 'utf8');
+    await cleanupStaleDaemonArtifacts(this.paths);
     this.serverHandle = await createIpcServer(this.paths, (request) => this.router.handle(request), this.logger);
+    await writeFile(this.paths.daemonPidFile, `${process.pid}\n`, 'utf8');
   }
 
   async stop(): Promise<void> {
@@ -31,6 +33,7 @@ export class CamoucliDaemon {
       await this.serverHandle.close();
       this.serverHandle = undefined;
     }
+    await removeDaemonArtifacts(this.paths);
     this.logger.info('Daemon shutdown complete');
     await this.logger.close();
   }
