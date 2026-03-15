@@ -2,14 +2,23 @@
   "name": "camou",
   "version": "0.1.0",
   "description": "CLI and local daemon for driving Camoufox through Playwright",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/txchen/camoucli.git"
+  },
+  "homepage": "https://github.com/txchen/camoucli#readme",
+  "bugs": {
+    "url": "https://github.com/txchen/camoucli/issues"
+  },
   "type": "module",
   "bin": {
-    "camou": "./dist/cli/main.js",
-    "camou-daemon": "./dist/daemon/main.js"
+    "camou": "dist/cli/main.js",
+    "camou-daemon": "dist/daemon/main.js"
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE*"
   ],
   "engines": {
     "node": ">=20"
@@ -31,6 +40,9 @@
     "cli",
     "browser-automation"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "commander": "^14.0.0",
     "extract-zip": "^2.0.1",
