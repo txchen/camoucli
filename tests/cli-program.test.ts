@@ -20,7 +20,7 @@ describe('CLI program parsing', () => {
     await program.parseAsync(
       [
         'node',
-        'camoucli',
+        'camou',
         'open',
         'https://example.com',
         '--session',
@@ -77,7 +77,7 @@ describe('CLI program parsing', () => {
       onDaemonAction,
     });
 
-    await program.parseAsync(['node', 'camoucli', 'wait', '#app', '--timeout', '2500'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'wait', '#app', '--timeout', '2500'], { from: 'node' });
 
     expect(onDaemonAction).toHaveBeenCalledWith(
       'wait',
@@ -104,7 +104,7 @@ describe('CLI program parsing', () => {
       onDaemonAction,
     });
 
-    await program.parseAsync(['node', 'camoucli', 'session', 'stop'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'session', 'stop'], { from: 'node' });
 
     expect(onDaemonAction).toHaveBeenCalledWith(
       'session.stop',
@@ -127,7 +127,7 @@ describe('CLI program parsing', () => {
       onDaemonAction: async () => undefined,
     });
 
-    await program.parseAsync(['node', 'camoucli', 'use', '135.0.1-beta.24', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'use', '135.0.1-beta.24', '--json'], { from: 'node' });
 
     expect(onUse).toHaveBeenCalledWith('135.0.1-beta.24', expect.objectContaining({ json: true }));
   });
@@ -146,7 +146,7 @@ describe('CLI program parsing', () => {
       onDaemonAction: async () => undefined,
     });
 
-    await program.parseAsync(['node', 'camoucli', 'versions', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'versions', '--json'], { from: 'node' });
 
     expect(onVersions).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
@@ -165,7 +165,7 @@ describe('CLI program parsing', () => {
       onDaemonAction: async () => undefined,
     });
 
-    await program.parseAsync(['node', 'camoucli', 'presets', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'presets', '--json'], { from: 'node' });
 
     expect(onPresets).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });

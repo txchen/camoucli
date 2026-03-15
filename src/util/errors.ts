@@ -39,7 +39,7 @@ export class UnsupportedPlatformError extends CamoucliError {
 }
 
 export class BrowserNotInstalledError extends CamoucliError {
-  constructor(message = 'Camoufox is not installed. Run `camoucli install`.') {
+  constructor(message = 'Camoufox is not installed. Run `camou install`.') {
     super({ code: 'browser_not_installed', message, exitCode: 3 });
   }
 }

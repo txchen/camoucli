@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 
-  logger.info('Starting camoucli daemon', { version: packageJson.version, pid: process.pid });
+  logger.info('Starting camou daemon', { version: packageJson.version, pid: process.pid });
   await daemon.start();
 }
 

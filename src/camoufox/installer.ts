@@ -45,7 +45,7 @@ interface CamoufoxVersionMetadata {
 
 async function fetchJson<T>(url: string): Promise<T> {
   const headers: HeadersInit = {
-    'user-agent': 'camoucli',
+    'user-agent': 'camou',
     accept: 'application/vnd.github+json',
   };
   if (process.env.GITHUB_TOKEN) {
@@ -129,7 +129,7 @@ async function writeVersionMetadata(rootDir: string, release: ResolvedRelease): 
 }
 
 async function downloadAsset(url: string, targetFile: string, logger?: Logger): Promise<void> {
-  const headers: HeadersInit = { 'user-agent': 'camoucli' };
+  const headers: HeadersInit = { 'user-agent': 'camou' };
   if (process.env.GITHUB_TOKEN) {
     headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }

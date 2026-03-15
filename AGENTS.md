@@ -3,7 +3,7 @@
 - Purpose: Camoucli is a Node.js-first ESM CLI plus local daemon for driving Camoufox through Playwright, without depending on the Camoufox Python SDK.
 - Runtime: target Node `>=20`; publish plain JavaScript from `dist/`; keep the runtime Node-compatible and avoid Bun-specific or Python-dependent behavior in core code.
 - Main commands: `npm run build`, `npm test`, `npm run dev`, `npm run dev:daemon`.
-- Entrypoints: `src/cli/main.ts` powers `camoucli`; `src/daemon/main.ts` powers `camoucli-daemon`.
+- Entrypoints: `src/cli/main.ts` powers `camou`; `src/daemon/main.ts` powers `camou-daemon`.
 - Architecture: the CLI should stay thin; the daemon owns browser lifecycle, sessions, tabs, refs, and persistent state. IPC is newline-delimited JSON with schemas in `src/ipc/protocol.ts`.
 - Browser launch: use `playwright-core` on the Firefox path with `launchPersistentContext` and an installed Camoufox `executablePath` from the registry.
 - Camoufox config: launch config is chunked into `CAMOU_CONFIG_N` env vars in `src/camoufox/env.ts`; installer and registry logic live in `src/camoufox/installer.ts` and `src/camoufox/registry.ts`.

@@ -169,12 +169,12 @@ export function buildDoctorHints(input: {
   const hints: string[] = [];
 
   if (!input.installed) {
-    hints.push('Run `camoucli install` to download a compatible Camoufox build.');
+    hints.push('Run `camou install` to download a compatible Camoufox build.');
     return hints;
   }
 
   if (input.bundleCheck.missingRequiredFiles.length > 0) {
-    hints.push('The current browser bundle is incomplete. Reinstall the selected Camoufox version with `camoucli install --force`.');
+    hints.push('The current browser bundle is incomplete. Reinstall the selected Camoufox version with `camou install --force`.');
   }
 
   if (input.sharedLibraryCheck.missingLibraries.length > 0) {

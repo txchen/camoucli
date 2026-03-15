@@ -67,7 +67,7 @@ export async function createIpcServer(
 
         if (isHttpTraffic(trimmed)) {
           logger.warn('Rejected accidental HTTP traffic');
-          socket.end('camoucli-daemon only accepts newline-delimited JSON\n');
+          socket.end('camou-daemon only accepts newline-delimited JSON\n');
           return;
         }
 

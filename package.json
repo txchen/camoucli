@@ -1,11 +1,11 @@
 {
-  "name": "camoucli",
+  "name": "camou",
   "version": "0.1.0",
   "description": "CLI and local daemon for driving Camoufox through Playwright",
   "type": "module",
   "bin": {
-    "camoucli": "./dist/cli/main.js",
-    "camoucli-daemon": "./dist/daemon/main.js"
+    "camou": "./dist/cli/main.js",
+    "camou-daemon": "./dist/daemon/main.js"
   },
   "files": [
     "dist",

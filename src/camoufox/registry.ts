@@ -276,7 +276,7 @@ export async function requireInstalledBrowser(
     await stat(record.executablePath);
   } catch {
     throw new BrowserNotInstalledError(
-      `Camoufox is registered at ${record.executablePath}, but the executable is missing. Run \`camoucli install ${record.version}\` again.`,
+      `Camoufox is registered at ${record.executablePath}, but the executable is missing. Run \`camou install ${record.version}\` again.`,
     );
   }
 

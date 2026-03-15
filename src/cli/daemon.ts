@@ -68,7 +68,7 @@ export async function ensureDaemonRunning(paths: CamoucliPaths, verbose: boolean
 
   throw new DaemonStartError(
     pid
-      ? `Failed to start the camoucli daemon. See ${paths.daemonLogFile} and stop process ${pid} if it is stuck.`
-      : `Failed to start the camoucli daemon. See ${paths.daemonLogFile} for details.`,
+      ? `Failed to start the camou daemon. See ${paths.daemonLogFile} and stop process ${pid} if it is stuck.`
+      : `Failed to start the camou daemon. See ${paths.daemonLogFile} for details.`,
   );
 }

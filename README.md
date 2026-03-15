@@ -2,6 +2,8 @@
 
 Camoucli is a Node.js-first CLI and local daemon for driving Camoufox through Playwright.
 
+The published npm package is `camou`, and the installed command is `camou`.
+
 It is built for local agent-style workflows:
 
 - keep a browser session alive across CLI invocations
@@ -16,6 +18,14 @@ It is built for local agent-style workflows:
 - a supported OS for Camoufox releases
 
 ## Install
+
+End users:
+
+```bash
+npm install -g camou
+```
+
+Contributors / local development:
 
 ```bash
 npm install
@@ -34,7 +44,7 @@ npm run dev:daemon
 Install a browser build:
 
 ```bash
-npm run dev -- install
+camou install
 ```
 
 `install` runs a quick launch probe after download so it can warn if the installed browser does not work with the current `playwright-core` version.
@@ -43,17 +53,19 @@ npm run dev -- install
 Open a page and capture refs:
 
 ```bash
-npm run dev -- open https://example.com
-npm run dev -- snapshot -i
+camou open https://example.com
+camou snapshot -i
 ```
 
 Use refs in later commands:
 
 ```bash
-npm run dev -- click @e1
-npm run dev -- fill @e2 "hello"
-npm run dev -- get title
+camou click @e1
+camou fill @e2 "hello"
+camou get title
 ```
+
+When working from this repo without a global install, prefix commands with `npm run dev --`.
 
 The daemon auto-starts on demand, so later commands reuse the same session and profile.
 
@@ -61,35 +73,35 @@ The daemon auto-starts on demand, so later commands reuse the same session and p
 
 ### Browser management
 
-- `camoucli install [version]`
-- `camoucli remove [version]`
-- `camoucli use <version>`
-- `camoucli versions`
-- `camoucli presets`
-- `camoucli version`
-- `camoucli path`
-- `camoucli doctor`
+- `camou install [version]`
+- `camou remove [version]`
+- `camou use <version>`
+- `camou versions`
+- `camou presets`
+- `camou version`
+- `camou path`
+- `camou doctor`
 
 ### Page automation
 
-- `camoucli open <url>`
-- `camoucli snapshot [-i]`
-- `camoucli click <selectorOrRef>`
-- `camoucli fill <selectorOrRef> <text>`
-- `camoucli press <key>`
-- `camoucli wait <selectorOrRef>`
-- `camoucli screenshot [path]`
-- `camoucli get url`
-- `camoucli get title`
-- `camoucli get text <selectorOrRef>`
+- `camou open <url>`
+- `camou snapshot [-i]`
+- `camou click <selectorOrRef>`
+- `camou fill <selectorOrRef> <text>`
+- `camou press <key>`
+- `camou wait <selectorOrRef>`
+- `camou screenshot [path]`
+- `camou get url`
+- `camou get title`
+- `camou get text <selectorOrRef>`
 
 ### Session and tab management
 
-- `camoucli session list`
-- `camoucli session stop [name]`
-- `camoucli tab list`
-- `camoucli tab new [url]`
-- `camoucli tab close [nameOrIndex]`
+- `camou session list`
+- `camou session stop [name]`
+- `camou tab list`
+- `camou tab new [url]`
+- `camou tab close [nameOrIndex]`
 
 ## Common Flags
 
@@ -116,36 +128,36 @@ Most browser commands support:
 Use a named session and tab:
 
 ```bash
-npm run dev -- open https://github.com --session work --tabname github
-npm run dev -- snapshot -i --session work --tabname github
+camou open https://github.com --session work --tabname github
+camou snapshot -i --session work --tabname github
 ```
 
 Install and switch versions:
 
 ```bash
-npm run dev -- install 135.0.1-beta.24
-npm run dev -- install 134.0.0-beta.20
-npm run dev -- versions
-npm run dev -- use 134.0.0-beta.20
-npm run dev -- version
+camou install 135.0.1-beta.24
+camou install 134.0.0-beta.20
+camou versions
+camou use 134.0.0-beta.20
+camou version
 ```
 
 Check the current install inventory and launch compatibility:
 
 ```bash
-npm run dev -- doctor --json
+camou doctor --json
 ```
 
 Launch a session with an explicit installed browser version without changing the global default:
 
 ```bash
-npm run dev -- open https://example.com --session canary --browser 135.0.1-beta.24
+camou open https://example.com --session canary --browser 135.0.1-beta.24
 ```
 
 Save a screenshot to the session artifacts directory:
 
 ```bash
-npm run dev -- screenshot --session work --tabname github
+camou screenshot --session work --tabname github
 ```
 
 ## Storage Layout
@@ -175,13 +187,13 @@ Built-in presets give you a small layer of tested ergonomics on top of raw confi
 List them from the CLI:
 
 ```bash
-npm run dev -- presets
+camou presets
 ```
 
 Apply one or more presets to a browser command:
 
 ```bash
-npm run dev -- open https://example.com --preset cache --preset low-bandwidth
+camou open https://example.com --preset cache --preset low-bandwidth
 ```
 
 ## Compatibility Matrix

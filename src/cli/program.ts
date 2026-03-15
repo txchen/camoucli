@@ -110,7 +110,7 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     },
   });
   program
-    .name('camoucli')
+    .name('camou')
     .description('CLI and local daemon for Camoufox via Playwright')
     .version(packageJson.version);
 

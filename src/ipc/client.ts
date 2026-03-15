@@ -38,7 +38,7 @@ export async function sendDaemonRequest(
 
     socket.once('error', (error) => {
       cleanup();
-      reject(new IpcError('Unable to connect to the camoucli daemon.', undefined, error));
+      reject(new IpcError('Unable to connect to the camou daemon.', undefined, error));
     });
 
     socket.on('data', (chunk) => {
