@@ -55,6 +55,28 @@ For one-off testing without changing the default:
 camou open https://example.com --browser <version>
 ```
 
+## CLI vs Node API
+
+### Prefer the CLI when
+
+- the user wants quick one-off browser interactions
+- the workflow is naturally step-by-step in the shell
+- `snapshot -i` and `@eN` refs are the easiest control surface
+
+### Prefer the Node API when
+
+- the user explicitly wants a script, test, or reusable module
+- the workflow needs loops, branching, retries, or composition with other Node code
+- the user wants direct Playwright access after launch
+
+Core programmatic helpers:
+
+```ts
+import { launchCamoufox, withCamoufox } from 'camou';
+```
+
+The Node API returns a real Playwright `BrowserContext`, so standard Playwright methods work after launch.
+
 ## Common Failure Patterns
 
 ### Launch compatibility failure
@@ -96,9 +118,10 @@ Action:
 When the user says "use the browser" or "test the site":
 
 1. if needed, run `camou doctor --json` or `camou versions`
-2. `camou open <url> --json`
+2. if they want shell-driven automation, `camou open <url> --json`
 3. `camou snapshot -i --json`
 4. choose refs from the snapshot
 5. interact with `click`, `fill`, `press`, `wait`
 6. re-snapshot after page changes
 7. keep the same `--session` if the workflow depends on login state
+8. if they want a reusable Node script instead, switch to the package API and use `launchCamoufox()` or `withCamoufox()`

@@ -1,6 +1,6 @@
 {
   "name": "camou",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "CLI and local daemon for driving Camoufox through Playwright",
   "repository": {
     "type": "git",
@@ -11,6 +11,15 @@
     "url": "https://github.com/txchen/camoucli/issues"
   },
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "camou": "dist/cli/main.js",
     "camou-daemon": "dist/daemon/main.js"

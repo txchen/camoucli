@@ -106,6 +106,55 @@ Important ref rule:
 
 - Re-run `snapshot` after navigation or major page changes. Refs are per tab and are invalidated on navigation or a new snapshot.
 
+## Use From Node Scripts
+
+Camou can also be used as a Node library, not just a CLI.
+
+The programmatic API is Playwright-based: it launches Camoufox for you and gives you a real Playwright `BrowserContext`, similar in spirit to the Camoufox Python wrapper.
+
+```ts
+import { launchCamoufox } from 'camou';
+
+const camou = await launchCamoufox({
+  session: 'script',
+  headless: false,
+});
+
+const page = await camou.context.newPage();
+await page.goto('https://example.com');
+console.log(await page.title());
+
+await camou.close();
+```
+
+If you prefer a scoped helper:
+
+```ts
+import { withCamoufox } from 'camou';
+
+await withCamoufox({ session: 'script' }, async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto('https://example.com');
+  console.log(await page.title());
+});
+```
+
+Useful exported helpers include:
+
+- `launchCamoufox()`
+- `launchCamoufoxContext()`
+- `withCamoufox()`
+- `installCamoufox()`
+- `listInstalledBrowsers()`
+- `setCurrentBrowser()`
+- `doctorCamoufox()`
+
+Notes:
+
+- install a browser first with `camou install` or `installCamoufox()`
+- use a dedicated `session` name in scripts if you do not want to share the default CLI profile
+- the returned context is a normal Playwright context, so you can use standard Playwright APIs from there
+
 ## Recommended Agent Workflow
 
 For agents and automation loops, this is the happy path:

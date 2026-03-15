@@ -1,7 +1,7 @@
 ---
 name: camou
-description: Local Camoufox browser automation CLI for AI agents. Use when the user needs to open websites, preserve login state, interact with pages, take snapshots/screenshots, drive multiple tabs, switch Camoufox versions, or troubleshoot browser compatibility.
-allowed-tools: Bash(camou:*), Bash(npx camou:*)
+description: Local Camoufox browser automation for AI agents. Use when the user needs to drive websites with the `camou` CLI, preserve login state, interact with pages, switch Camoufox versions, troubleshoot compatibility, or write Node scripts against Camou's Playwright-based API.
+allowed-tools: Bash(camou:*), Bash(npx camou:*), Bash(node:*), Bash(npm:*)
 ---
 
 # Browser Automation with Camou
@@ -15,9 +15,12 @@ Use it when you need:
 - stable `@eN` refs from page snapshots
 - machine-readable browser automation via `--json`
 - Camoufox version install/switch/diagnostics
+- programmatic control from Node scripts using a real Playwright `BrowserContext`
 
 If `camou` is not installed globally, use `npx camou ...`.
 If you are working inside the Camoucli repo itself, use `npm run dev -- ...`.
+
+If the user wants a reusable Node script, test, or automation module, prefer importing from the `camou` package instead of shelling out to the CLI for every step.
 
 ## Core Workflow
 
@@ -100,6 +103,46 @@ camou doctor --json
 - Linux shared-library issues
 - version mismatch hints
 
+### Use the Node API for scripts and test code
+
+If the user wants code instead of one-off shell commands, use the package API.
+
+```ts
+import { launchCamoufox } from 'camou';
+
+const camou = await launchCamoufox({
+  session: 'script',
+  headless: false,
+});
+
+const page = await camou.context.newPage();
+await page.goto('https://example.com');
+console.log(await page.title());
+
+await camou.close();
+```
+
+Scoped helper:
+
+```ts
+import { withCamoufox } from 'camou';
+
+await withCamoufox({ session: 'script' }, async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto('https://example.com');
+});
+```
+
+Useful script exports:
+
+- `launchCamoufox()`
+- `launchCamoufoxContext()`
+- `withCamoufox()`
+- `installCamoufox()`
+- `listInstalledBrowsers()`
+- `setCurrentBrowser()`
+- `doctorCamoufox()`
+
 ## Essential Commands
 
 ### Browser management
@@ -170,6 +213,18 @@ camou click @e2 --json
 camou snapshot -i --json
 ```
 
+### Programmatic Node automation
+
+```ts
+import { withCamoufox } from 'camou';
+
+await withCamoufox({ session: 'agent-script', headless: true }, async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto('https://example.com');
+  console.log(await page.title());
+});
+```
+
 ### Diagnose compatibility
 
 ```bash
@@ -202,5 +257,6 @@ Available presets in the current CLI:
 - use different `--tabname` values when multiple pages should stay isolated
 - use `--browser <version>` for canary testing or compatibility checks
 - use `doctor --json` before guessing at launch failures
+- if the user wants a reusable script, import `camou` and use the Node API instead of spawning the CLI repeatedly
 
 See `references/workflows.md` for more concrete workflow guidance and troubleshooting patterns.

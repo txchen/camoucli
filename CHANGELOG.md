@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.2.0] - 2026-03-15
+
+### Added
+
+- Added a public Node API so `camou` can be used from scripts, not just the CLI.
+- Added `launchCamoufox()`, `launchCamoufoxContext()`, and `withCamoufox()` for Playwright-based programmatic control.
+- Exported browser management helpers from the package root for script usage.
+
+### Changed
+
+- Documented the new Node script workflow in `README.md`.
+- Updated the `camou` skill to explain when to use the CLI vs the Node API and how to drive Camou from scripts.
+
 ## [0.1.1] - 2026-03-15
 
 ### Added
