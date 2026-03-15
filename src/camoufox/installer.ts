@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { chmod, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -22,6 +22,7 @@ interface GitHubAsset {
 
 interface GitHubRelease {
   tag_name: string;
+  prerelease?: boolean;
   assets: GitHubAsset[];
 }
 
@@ -31,6 +32,12 @@ export interface ResolvedRelease {
   version: string;
   assetName: string;
   assetUrl: string;
+  prerelease: boolean;
+}
+
+interface CamoufoxVersionMetadata {
+  version: string;
+  build: string;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -81,6 +88,7 @@ export async function resolveRelease(version?: string): Promise<ResolvedRelease>
         version: releaseVersion,
         assetName: asset.name,
         assetUrl: asset.browser_download_url,
+        prerelease: release.prerelease ?? false,
       };
     }
   }
@@ -89,6 +97,31 @@ export async function resolveRelease(version?: string): Promise<ResolvedRelease>
     version
       ? `Unable to find Camoufox release ${version} for this platform.`
       : 'Unable to find a compatible Camoufox release for this platform.',
+  );
+}
+
+function splitReleaseVersion(version: string): CamoufoxVersionMetadata {
+  const separatorIndex = version.lastIndexOf('-');
+  if (separatorIndex <= 0 || separatorIndex === version.length - 1) {
+    throw new InstallError(`Unable to split Camoufox release version: ${version}`);
+  }
+
+  return {
+    version: version.slice(0, separatorIndex),
+    build: version.slice(separatorIndex + 1),
+  };
+}
+
+async function writeVersionMetadata(rootDir: string, release: ResolvedRelease): Promise<void> {
+  const parsed = splitReleaseVersion(release.version);
+  await writeFile(
+    path.join(rootDir, 'version.json'),
+    `${JSON.stringify({
+      version: parsed.version,
+      build: parsed.build,
+      prerelease: release.prerelease,
+    }, null, 2)}\n`,
+    'utf8',
   );
 }
 
@@ -178,6 +211,7 @@ export async function installCamoufox(
     }
 
     await rename(extractDir, finalDir);
+    await writeVersionMetadata(finalDir, release);
 
     const finalExecutablePath = path.join(finalDir, path.relative(extractDir, executablePath));
     await makeExecutable(finalExecutablePath);
@@ -229,6 +263,7 @@ export async function doctorCamoufox(paths: CamoucliPaths): Promise<Record<strin
   const registry = await resolveInstalledBrowser(paths);
   return {
     platform: getPlatformTarget(),
+    camoufoxCacheDir: paths.camoufoxCacheDir,
     installed: Boolean(registry),
     currentVersion: registry?.version,
     executablePath: registry?.executablePath,

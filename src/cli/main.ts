@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import { doctorCamoufox, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
-import { requireInstalledBrowser, resolveInstalledBrowser } from '../camoufox/registry.js';
+import { requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, getExitCode, type CamoucliError } from '../util/errors.js';
 import { Logger } from '../util/log.js';
 import { sendDaemonRequest } from '../ipc/client.js';
 import { ensureDaemonRunning } from './daemon.js';
 import { printOutput } from './output.js';
-import { createProgram, toLaunchInput, type OutputOptions, type SharedOptions } from './program.js';
+import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
 
 function getLogger(verbose = false): Logger {
   return new Logger({ name: 'cli', verbose, mirrorToStderr: verbose });
@@ -44,6 +44,14 @@ async function main(): Promise<void> {
         }
         await removeCamoufox(paths, installed.version, logger);
         printOutput('remove', { removed: installed.version }, options.json ?? false);
+    },
+    onUse: async (version: string, options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        await ensureBasePaths(paths);
+        const registry = await setCurrentBrowser(paths, version);
+        const selectedVersion = registry.currentVersion ?? version;
+        const selected = await requireInstalledBrowser(paths, selectedVersion);
+        printOutput('use', { version: selected.version, path: selected.executablePath }, options.json ?? false);
     },
     onPath: async (options: OutputOptions) => {
         const browser = await requireInstalledBrowser(getCamoucliPaths());

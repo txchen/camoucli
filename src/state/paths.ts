@@ -9,6 +9,8 @@ export interface CamoucliPaths {
   dataDir: string;
   stateDir: string;
   cacheDir: string;
+  camoufoxCacheDir: string;
+  camoufoxConfigFile: string;
   runtimeDir: string;
   logsDir: string;
   browsersDir: string;
@@ -81,13 +83,17 @@ export function sanitizeName(value: string): string {
 export function getCamoucliPaths(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): CamoucliPaths {
   const home = os.homedir();
   let bases: Pick<CamoucliPaths, 'dataDir' | 'stateDir' | 'cacheDir' | 'runtimeDir'>;
+  let camoufoxCacheDir: string;
 
   if (platform === 'linux') {
     bases = linuxBaseDirs(env, home);
+    camoufoxCacheDir = path.join(env.XDG_CACHE_HOME ?? path.join(home, '.cache'), 'camoufox');
   } else if (platform === 'darwin') {
     bases = darwinBaseDirs(home);
+    camoufoxCacheDir = path.join(home, 'Library', 'Caches', 'camoufox');
   } else if (platform === 'win32') {
     bases = windowsBaseDirs(env, home);
+    camoufoxCacheDir = path.join(env.LOCALAPPDATA ?? path.join(home, 'AppData', 'Local'), 'camoufox', 'Cache');
   } else {
     throw new UnsupportedPlatformError(`Unsupported platform: ${platform}`);
   }
@@ -100,9 +106,11 @@ export function getCamoucliPaths(env: NodeJS.ProcessEnv = process.env, platform:
     dataDir: bases.dataDir,
     stateDir: bases.stateDir,
     cacheDir: bases.cacheDir,
+    camoufoxCacheDir,
+    camoufoxConfigFile: path.join(camoufoxCacheDir, 'config.json'),
     runtimeDir,
     logsDir,
-    browsersDir: path.join(bases.dataDir, 'browsers'),
+    browsersDir: path.join(camoufoxCacheDir, 'browsers'),
     browserRegistryFile: path.join(bases.dataDir, 'browsers', 'registry.json'),
     profilesDir: path.join(bases.dataDir, 'profiles'),
     presetsDir: path.join(bases.dataDir, 'presets'),
@@ -119,6 +127,7 @@ export async function ensureBasePaths(paths: CamoucliPaths): Promise<void> {
     ensureDir(paths.dataDir),
     ensureDir(paths.stateDir),
     ensureDir(paths.cacheDir),
+    ensureDir(paths.camoufoxCacheDir),
     ensureDir(paths.runtimeDir),
     ensureDir(paths.logsDir),
     ensureDir(paths.browsersDir),

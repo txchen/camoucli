@@ -8,6 +8,7 @@ describe('CLI program parsing', () => {
     const program = createProgram({
       onInstall: async () => undefined,
       onRemove: async () => undefined,
+      onUse: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -59,6 +60,7 @@ describe('CLI program parsing', () => {
     const program = createProgram({
       onInstall: async () => undefined,
       onRemove: async () => undefined,
+      onUse: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -83,6 +85,7 @@ describe('CLI program parsing', () => {
     const program = createProgram({
       onInstall: async () => undefined,
       onRemove: async () => undefined,
+      onUse: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -96,5 +99,22 @@ describe('CLI program parsing', () => {
       { action: 'session.stop', session: 'default' },
       expect.objectContaining({ session: 'default', tabname: 'main' }),
     );
+  });
+
+  it('routes use to the version selection handler', async () => {
+    const onUse = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camoucli', 'use', '135.0.1-beta.24', '--json'], { from: 'node' });
+
+    expect(onUse).toHaveBeenCalledWith('135.0.1-beta.24', expect.objectContaining({ json: true }));
   });
 });

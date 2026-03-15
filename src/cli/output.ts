@@ -14,6 +14,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'version':
       process.stdout.write(`${String((data as Record<string, unknown>).version)}\n`);
       return;
+    case 'use':
+      process.stdout.write(`Using Camoufox ${String((data as Record<string, unknown>).version)}\n`);
+      return;
     case 'doctor':
       process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
       return;

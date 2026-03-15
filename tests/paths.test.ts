@@ -17,6 +17,8 @@ describe('path resolution', () => {
     expect(paths.dataDir).toBe('/tmp/data-home/camoucli');
     expect(paths.stateDir).toBe('/tmp/state-home/camoucli');
     expect(paths.cacheDir).toBe('/tmp/cache-home/camoucli');
+    expect(paths.camoufoxCacheDir).toBe('/tmp/cache-home/camoufox');
+    expect(paths.browsersDir).toBe('/tmp/cache-home/camoufox/browsers');
     expect(paths.runtimeDir).toBe('/tmp/runtime-home/camoucli');
     expect(paths.daemonSocketPath).toBe('/tmp/runtime-home/camoucli/daemon.sock');
   });
@@ -33,7 +35,8 @@ describe('path resolution', () => {
     expect(paths.daemonSocketPath).toBeUndefined();
     expect(paths.daemonHost).toBe('127.0.0.1');
     expect(paths.daemonPort).toBe(43133);
-    expect(paths.browsersDir).toContain('camoucli');
+    expect(paths.camoufoxCacheDir).toBe('C:/Users/test/AppData/Local/camoufox/Cache');
+    expect(paths.browsersDir).toBe('C:/Users/test/AppData/Local/camoufox/Cache/browsers');
   });
 
   it('sanitizes session names for filesystem use', () => {
