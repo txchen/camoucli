@@ -1,10 +1,10 @@
-# Camoucli
+# Camou
 
-Camoucli is a local-first CLI and background daemon for driving [Camoufox](https://github.com/daijro/camoufox) through Playwright, without depending on the Camoufox Python SDK.
+Camou is a local-first CLI and background daemon for driving [Camoufox](https://github.com/daijro/camoufox) through Playwright, without depending on the Camoufox Python SDK.
 
 - npm package: `camou`
 - installed command: `camou`
-- project/repo name: Camoucli
+- project/repo name: camoucli
 
 Camou is built for agent-style browser workflows:
 
@@ -432,7 +432,7 @@ npm run dev:daemon
 
 ## Acknowledgements
 
-Camoucli learned a lot from these projects:
+Camou learned a lot from these projects:
 
 - [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) for the agent-oriented command workflow and skill ecosystem patterns
 - [BUNotesAI/agent-browser-session](https://github.com/BUNotesAI/agent-browser-session) for persistent-session and named-tab ergonomics
