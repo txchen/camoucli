@@ -11,6 +11,7 @@ import { BrowserNotInstalledError, ValidationError, getExitCode, toErrorPayload,
 import { Logger } from '../util/log.js';
 import { sendDaemonRequest } from '../ipc/client.js';
 import { ensureDaemonRunning } from './daemon.js';
+import { applyCliDefaultsToPayload, resolveSharedOptions } from './defaults.js';
 import { printOutput } from './output.js';
 import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
 
@@ -22,7 +23,9 @@ async function runDaemonAction(action: string, payload: Record<string, unknown>,
   const paths = getCamoucliPaths();
   await ensureBasePaths(paths);
   await ensureDaemonRunning(paths, options.verbose ?? false);
-  const data = await sendDaemonRequest(paths, payload as never);
+  const resolvedOptions = await resolveSharedOptions(options);
+  const normalizedPayload = applyCliDefaultsToPayload(action, payload, resolvedOptions);
+  const data = await sendDaemonRequest(paths, normalizedPayload as never);
   printOutput(action, data, options.json ?? false);
 }
 

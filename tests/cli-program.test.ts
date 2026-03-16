@@ -183,7 +183,7 @@ describe('CLI program parsing', () => {
     );
   });
 
-  it('defaults session stop to the default session name', async () => {
+  it('leaves session stop unresolved so env/config defaults can apply later', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({
       onInstall: async () => undefined,
@@ -201,8 +201,8 @@ describe('CLI program parsing', () => {
 
     expect(onDaemonAction).toHaveBeenCalledWith(
       'session.stop',
-      { action: 'session.stop', session: 'default' },
-      expect.objectContaining({ session: 'default', tabname: 'main' }),
+      { action: 'session.stop' },
+      expect.objectContaining({ json: undefined, verbose: undefined }),
     );
   });
 

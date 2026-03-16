@@ -106,6 +106,60 @@ Important ref rule:
 
 - Re-run `snapshot` after navigation or major page changes. Refs are per tab and are invalidated on navigation or a new snapshot.
 
+## Project Defaults
+
+If you use Camou inside a coding project, you do not need to repeat `--session` and `--tabname` on every command.
+
+Camou resolves defaults in this order:
+
+1. explicit CLI flags
+2. environment variables
+3. nearest project config file in the current directory or any parent directory
+4. built-in defaults: `session=default`, `tabname=main`
+
+Supported environment variables:
+
+```bash
+export CAMOU_SESSION=my-project
+export CAMOU_TAB=main
+export CAMOU_BROWSER=135.0.1-beta.24
+export CAMOU_HEADLESS=true
+export CAMOU_PRESET=cache,low-bandwidth
+```
+
+Also supported:
+
+- `CAMOU_TABNAME`
+- `CAMOU_PRESETS`
+- legacy aliases: `CAMOUCLI_SESSION`, `CAMOUCLI_TAB`, `CAMOUCLI_TABNAME`, `CAMOUCLI_BROWSER`, `CAMOUCLI_HEADLESS`, `CAMOUCLI_PRESET`, `CAMOUCLI_PRESETS`
+
+Supported project config file names:
+
+- `.camou.json`
+- `camou.json`
+
+Example `.camou.json`:
+
+```json
+{
+  "session": "my-project",
+  "tabname": "main",
+  "browser": "135.0.1-beta.24",
+  "headless": true,
+  "preset": ["cache", "low-bandwidth"]
+}
+```
+
+Then you can run commands like:
+
+```bash
+camou open https://example.com
+camou snapshot -i
+camou click @e1
+```
+
+and they automatically use the configured session, tab, browser version, headless mode, and presets unless you override them with flags.
+
 ## Use From Node Scripts
 
 Camou can also be used as a Node library, not just a CLI.

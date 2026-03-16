@@ -69,6 +69,46 @@ camou snapshot -i --session research --tabname reddit
 camou snapshot -i --session research --tabname hn
 ```
 
+### Prefer project defaults when a repo should always use the same session/tab
+
+If the user is working inside one coding project, Camou can resolve defaults automatically.
+
+Precedence is:
+
+1. explicit flags
+2. environment variables
+3. nearest project config file
+4. built-in defaults
+
+Environment variables:
+
+```bash
+export CAMOU_SESSION=my-project
+export CAMOU_TAB=main
+export CAMOU_BROWSER=135.0.1-beta.24
+export CAMOU_HEADLESS=true
+export CAMOU_PRESET=cache,low-bandwidth
+```
+
+Project config files:
+
+- `.camou.json`
+- `camou.json`
+
+Example:
+
+```json
+{
+  "session": "my-project",
+  "tabname": "main",
+  "browser": "135.0.1-beta.24",
+  "headless": true,
+  "preset": ["cache", "low-bandwidth"]
+}
+```
+
+Then agents can just run `camou open ...`, `camou snapshot ...`, and so on without repeating `--session`, `--tabname`, `--browser`, `--headless`, or `--preset` every time.
+
 ### Use `--json` when output will be parsed
 
 ```bash

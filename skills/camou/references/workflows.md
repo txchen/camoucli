@@ -39,6 +39,17 @@ Use `--tabname <name>` when the user wants:
 
 Tabs in the same session share profile state but keep separate pages and refs.
 
+## Project Defaults
+
+If one repo should always use the same session or tab, set defaults once instead of repeating flags everywhere.
+
+Camou checks, in order:
+
+1. explicit CLI flags
+2. environment variables like `CAMOU_SESSION`, `CAMOU_TAB`, `CAMOU_BROWSER`, `CAMOU_HEADLESS`, and `CAMOU_PRESET`
+3. the nearest `.camou.json` or `camou.json` in the current directory tree
+4. built-in defaults (`default` session and `main` tab)
+
 ## Version Selection
 
 Use these commands when browser compatibility matters:

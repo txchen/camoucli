@@ -5,8 +5,8 @@ import packageJson from '../../package.json' with { type: 'json' };
 import type { LaunchInput } from '../camoufox/config.js';
 
 export interface SharedOptions {
-  session: string;
-  tabname: string;
+  session?: string | undefined;
+  tabname?: string | undefined;
   headless?: boolean | undefined;
   browser?: string | undefined;
   config?: string | undefined;
@@ -51,15 +51,15 @@ function collectValues(value: string, previous: string[] = []): string[] {
 
 function addSharedBrowserOptions(command: Command): Command {
   return command
-    .option('--session <name>', 'session name', 'default')
-    .option('--tabname <name>', 'tab name', 'main')
+    .option('--session <name>', 'session name')
+    .option('--tabname <name>', 'tab name')
     .option('--headless', 'launch headless')
     .option('--browser <version>', 'specific installed browser version')
     .option('--config <path>', 'Camoufox config file path')
     .option('--config-json <json>', 'inline Camoufox config JSON')
     .option('--prefs <path>', 'Firefox prefs file path')
     .option('--prefs-json <json>', 'inline Firefox prefs JSON')
-    .option('--preset <name>', 'apply a built-in preset (repeat or use comma-separated values)', collectValues, [])
+    .option('--preset <name>', 'apply a built-in preset (repeat or use comma-separated values)', collectValues)
     .option('--proxy <url>', 'proxy URL')
     .option('--locale <locale>', 'locale override')
     .option('--timezone <timezone>', 'timezone override')
@@ -417,7 +417,7 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .command('list')
       .description('List running sessions')
       .action(async (options: OutputOptions) => {
-        const shared: SharedOptions = { session: 'default', tabname: 'main', json: options.json, verbose: options.verbose };
+        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
         await handlers.onDaemonAction('session.list', { action: 'session.list' }, shared);
       }),
   );
@@ -427,8 +427,8 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .command('stop [name]')
       .description('Stop a running session')
       .action(async (name: string | undefined, options: OutputOptions) => {
-        const shared: SharedOptions = { session: name ?? 'default', tabname: 'main', json: options.json, verbose: options.verbose };
-        await handlers.onDaemonAction('session.stop', { action: 'session.stop', session: name ?? 'default' }, shared);
+        const shared: SharedOptions = { ...(name ? { session: name } : {}), json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('session.stop', { action: 'session.stop', ...(name ? { session: name } : {}) }, shared);
       }),
   );
 

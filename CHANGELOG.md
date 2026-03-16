@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.4.0] - 2026-03-16
+
+### Added
+
+- Added project-level CLI defaults via environment variables and local config files.
+- Added support for default browser version, headless mode, and presets in `.camou.json` / `camou.json` and `CAMOU_*` environment variables.
+
+### Changed
+
+- Updated `README.md` and skill docs to document project defaults for vibe-coding workflows.
+- Expanded default resolution precedence to explicit flags -> environment -> project config -> built-in defaults.
+
+### Fixed
+
+- Preserved explicit CLI overrides while applying session, tab, browser, headless, and preset defaults automatically.
+
 ## [0.3.1] - 2026-03-16
 
 ### Fixed
