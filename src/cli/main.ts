@@ -164,7 +164,10 @@ export async function main(argv: string[] = process.argv): Promise<number> {
     await program.parseAsync(argv);
     return 0;
   } catch (error) {
-    if (error instanceof CommanderError && (error.code === 'commander.helpDisplayed' || error.code === 'commander.version')) {
+    if (
+      error instanceof CommanderError &&
+      (error.code === 'commander.helpDisplayed' || error.code === 'commander.help' || error.code === 'commander.version')
+    ) {
       return 0;
     }
 

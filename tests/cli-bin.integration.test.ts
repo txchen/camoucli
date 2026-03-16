@@ -35,6 +35,18 @@ describe('CLI bin execution', () => {
     expect(result.stdout.trim()).toBe(packageJson.version);
     expect(result.stderr.trim()).toBe('');
   }, 15000);
+
+  it('shows help without leaking commander internals when no args are passed', async () => {
+    const linkPath = path.join(rootDir, 'camou');
+    await symlink(cliEntrypoint, linkPath);
+
+    const result = await runCommand(process.execPath, ['--import', 'tsx', linkPath]);
+
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe('');
+    expect(result.stderr).toContain('Usage: camou');
+    expect(result.stderr).not.toContain('(outputHelp)');
+  }, 15000);
 });
 
 async function runCommand(command: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
