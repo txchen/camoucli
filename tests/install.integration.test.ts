@@ -7,13 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installCamoufox } from '../src/camoufox/installer.js';
 import { resolveInstalledBrowser } from '../src/camoufox/registry.js';
 import { ensureBasePaths } from '../src/state/paths.js';
+import { buildExpectedAssetName, getPlatformTarget } from '../src/util/platform.js';
 import { createTestPaths } from './helpers/temp-paths.js';
 
 vi.mock('extract-zip', () => ({
   default: async (_archivePath: string, options: { dir: string }) => {
-    await mkdir(options.dir, { recursive: true });
+    const target = getPlatformTarget();
+    const executablePath = path.join(options.dir, target.executableRelativePath);
+    await mkdir(path.dirname(executablePath), { recursive: true });
     await Promise.all([
-      writeFile(path.join(options.dir, 'camoufox-bin'), '#!/bin/sh\n', 'utf8'),
+      writeFile(executablePath, '#!/bin/sh\n', 'utf8'),
       writeFile(
         path.join(options.dir, 'properties.json'),
         JSON.stringify([{ property: 'navigator.language', type: 'str' }], null, 2),
@@ -39,6 +42,14 @@ describe('installer integration', () => {
   it('installs a mocked release into the shared cache layout and updates the registry', async () => {
     const paths = createTestPaths(rootDir);
     await ensureBasePaths(paths);
+    const target = getPlatformTarget();
+    const expectedAssetName = buildExpectedAssetName('135.0.1-beta.24', target);
+    const expectedExecutablePath = path.join(
+      paths.browsersDir,
+      'official',
+      '135.0.1-beta.24',
+      target.executableRelativePath,
+    );
 
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/releases')) {
@@ -49,8 +60,8 @@ describe('installer integration', () => {
               prerelease: false,
               assets: [
                 {
-                  name: 'camoufox-135.0.1-beta.24-lin.x86_64.zip',
-                  browser_download_url: 'https://example.com/camoufox-135.0.1-beta.24-lin.x86_64.zip',
+                  name: expectedAssetName,
+                  browser_download_url: `https://example.com/${expectedAssetName}`,
                 },
               ],
             },
@@ -68,9 +79,7 @@ describe('installer integration', () => {
     const installed = await resolveInstalledBrowser(paths, release.version);
 
     expect(release.version).toBe('135.0.1-beta.24');
-    expect(installed?.executablePath).toBe(
-      path.join(paths.browsersDir, 'official', '135.0.1-beta.24', 'camoufox-bin'),
-    );
+    expect(installed?.executablePath).toBe(expectedExecutablePath);
 
     const versionJson = JSON.parse(
       await readFile(path.join(paths.browsersDir, 'official', '135.0.1-beta.24', 'version.json'), 'utf8'),
