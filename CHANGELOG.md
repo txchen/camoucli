@@ -10,11 +10,13 @@ The format is loosely based on Keep a Changelog and uses semantic versioning.
 
 - Added higher-level fingerprint helpers for CLI and Node usage, including multi-locale handling, screen/window profiles, helper JSON inputs, and Python-style toggle helpers.
 - Added built-in screen profiles (`laptop-hd`, `desktop-fhd`, `desktop-qhd`, `retina-mac`) and window profiles (`laptop`, `desktop`, `desktop-large`, `retina`).
+- Added `camou fingerprint-profiles` plus curated region profiles for locale/timezone/geolocation helper bundles.
 
 ### Changed
 
 - Made `locale`-style launches keep `navigator.language`, `navigator.languages`, and `Accept-Language` aligned through the new helper layer.
 - Extended CLI defaults so project config files and `CAMOU_*` environment variables can preconfigure fingerprint helper settings.
+- Expanded the helper layer with region-aware defaults as a first step toward fuller geo-aware fingerprint helpers.
 
 ## [0.4.0] - 2026-03-16
 

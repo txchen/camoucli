@@ -402,6 +402,7 @@ Most browser commands support:
 - `--proxy <url>`
 - `--locale <locale>`
 - `--locales <locale[,locale...]>`
+- `--region <code>`
 - `--timezone <timezone>`
 - `--screen-profile <name>`
 - `--window-profile <name>`
@@ -436,6 +437,12 @@ List them:
 camou presets
 ```
 
+List built-in fingerprint profiles:
+
+```bash
+camou fingerprint-profiles
+```
+
 Apply one or more:
 
 ```bash
@@ -451,6 +458,7 @@ CLI shortcuts:
 ```bash
 camou open https://example.com \
   --locales en-US,fr-FR \
+  --region US \
   --screen-profile desktop-fhd \
   --window-profile desktop \
   --block-images
@@ -469,7 +477,8 @@ import { Camoufox } from 'camou';
 
 const camou = await Camoufox.launch({
   fingerprint: {
-    locales: ['en-US', 'fr-FR'],
+    region: 'CA',
+    locales: ['en-CA', 'fr-CA'],
     screenProfile: 'desktop-fhd',
     windowProfile: 'desktop',
     blockImages: true,
@@ -480,10 +489,13 @@ const camou = await Camoufox.launch({
 Supported helper fields include:
 
 - `locales` to keep `navigator.language`, `navigator.languages`, and `Accept-Language` aligned
+- `region` to apply a curated locale, timezone, and geolocation bundle for a target country or territory
 - `screenProfile` / `windowProfile` for curated screen and window templates
 - `screen` / `window` in the Node API for direct helper objects
 - `blockImages`, `blockWebRtc`, `blockWebGl`, and `disableCoop` as Python-style toggle helpers
 - `fonts` and `fontSpacingSeed` in the Node API for higher-level font config
+
+Current region helpers seed representative locale, timezone, and geolocation values for supported regions. Direct IP-based GeoIP lookup is not bundled yet.
 
 Built-in screen profiles:
 

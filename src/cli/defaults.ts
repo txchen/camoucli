@@ -20,6 +20,7 @@ const configDefaultsSchema = z.object({
   fingerprint: z.string().min(1).optional(),
   fingerprintJson: z.string().min(1).optional(),
   locales: fingerprintLocalesValueSchema.optional(),
+  region: z.string().min(1).optional(),
   screenProfile: z.string().min(1).optional(),
   windowProfile: z.string().min(1).optional(),
   blockImages: z.boolean().optional(),
@@ -37,6 +38,7 @@ const configDefaultsSchema = z.object({
     fingerprint: z.string().min(1).optional(),
     fingerprintJson: z.string().min(1).optional(),
     locales: fingerprintLocalesValueSchema.optional(),
+    region: z.string().min(1).optional(),
     screenProfile: z.string().min(1).optional(),
     windowProfile: z.string().min(1).optional(),
     blockImages: z.boolean().optional(),
@@ -57,6 +59,7 @@ export interface ResolvedCliDefaults {
   fingerprint?: string | undefined;
   fingerprintJson?: string | undefined;
   locales?: string[] | undefined;
+  region?: string | undefined;
   screenProfile?: string | undefined;
   windowProfile?: string | undefined;
   blockImages?: boolean | undefined;
@@ -151,6 +154,7 @@ async function loadConfigDefaults(cwd: string): Promise<{
   fingerprint?: string;
   fingerprintJson?: string;
   locales?: string[];
+  region?: string;
   screenProfile?: string;
   windowProfile?: string;
   blockImages?: boolean;
@@ -186,6 +190,7 @@ async function loadConfigDefaults(cwd: string): Promise<{
   const fingerprint = trimValue(result.data.fingerprint ?? result.data.defaults?.fingerprint);
   const fingerprintJson = trimValue(result.data.fingerprintJson ?? result.data.defaults?.fingerprintJson);
   const locales = normalizeLocalesValue(result.data.locales ?? result.data.defaults?.locales);
+  const region = trimValue(result.data.region ?? result.data.defaults?.region);
   const screenProfile = trimValue(result.data.screenProfile ?? result.data.defaults?.screenProfile);
   const windowProfile = trimValue(result.data.windowProfile ?? result.data.defaults?.windowProfile);
   const blockImages = result.data.blockImages ?? result.data.defaults?.blockImages;
@@ -202,6 +207,7 @@ async function loadConfigDefaults(cwd: string): Promise<{
     ...(fingerprint ? { fingerprint } : {}),
     ...(fingerprintJson ? { fingerprintJson } : {}),
     ...(locales ? { locales } : {}),
+    ...(region ? { region } : {}),
     ...(screenProfile ? { screenProfile } : {}),
     ...(windowProfile ? { windowProfile } : {}),
     ...(blockImages !== undefined ? { blockImages } : {}),
@@ -306,6 +312,11 @@ export async function resolveSharedOptions(
     readEnvLocales(env, 'CAMOU_LOCALES', 'CAMOUCLI_LOCALES') ??
     configDefaults.locales;
 
+  const region =
+    trimValue(options.region) ??
+    readEnvDefault(env, 'CAMOU_REGION', 'CAMOUCLI_REGION') ??
+    configDefaults.region;
+
   const screenProfile =
     trimValue(options.screenProfile) ??
     readEnvDefault(env, 'CAMOU_SCREEN_PROFILE', 'CAMOUCLI_SCREEN_PROFILE') ??
@@ -346,6 +357,7 @@ export async function resolveSharedOptions(
     ...(fingerprint ? { fingerprint } : {}),
     ...(fingerprintJson ? { fingerprintJson } : {}),
     ...(locales ? { locales } : {}),
+    ...(region ? { region } : {}),
     ...(screenProfile ? { screenProfile } : {}),
     ...(windowProfile ? { windowProfile } : {}),
     ...(blockImages !== undefined ? { blockImages } : {}),
@@ -486,6 +498,10 @@ export function applyCliDefaultsToPayload(
       : undefined;
     if ((!currentLocales || currentLocales.length === 0) && options.locales && options.locales.length > 0) {
       nextPayload.locales = options.locales;
+    }
+
+    if (nextPayload.region === undefined && options.region !== undefined) {
+      nextPayload.region = options.region;
     }
 
     if (nextPayload.screenProfile === undefined && options.screenProfile !== undefined) {

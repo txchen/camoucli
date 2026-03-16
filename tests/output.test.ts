@@ -166,6 +166,49 @@ describe('CLI output', () => {
     expect(output).toContain('1 docs https://docs.example.com/');
   });
 
+  it('prints fingerprint profiles in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'fingerprint-profiles',
+        {
+          screenProfiles: [
+            {
+              name: 'desktop-fhd',
+              width: 1920,
+              height: 1080,
+              devicePixelRatio: 1,
+            },
+          ],
+          windowProfiles: [
+            {
+              name: 'desktop',
+              innerWidth: 1440,
+              innerHeight: 900,
+              outerWidth: 1536,
+              outerHeight: 980,
+              devicePixelRatio: 1,
+            },
+          ],
+          regionProfiles: [
+            {
+              region: 'US',
+              timezone: 'America/New_York',
+              locales: ['en-US', 'es-US', 'en'],
+            },
+          ],
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Screen profiles');
+    expect(output).toContain('- desktop-fhd 1920x1080 dpr=1');
+    expect(output).toContain('Window profiles');
+    expect(output).toContain('- desktop inner=1440x900 outer=1536x980 dpr=1');
+    expect(output).toContain('Region profiles');
+    expect(output).toContain('- US America/New_York locales=en-US,es-US,en');
+  });
+
   it('prints common browser actions in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

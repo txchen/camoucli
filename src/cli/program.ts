@@ -19,6 +19,7 @@ export interface SharedOptions {
   proxy?: string | undefined;
   locale?: string | undefined;
   locales?: string[] | undefined;
+  region?: string | undefined;
   timezone?: string | undefined;
   screenProfile?: string | undefined;
   windowProfile?: string | undefined;
@@ -44,6 +45,7 @@ export interface CliHandlers {
   onUse: (version: string, options: OutputOptions) => Promise<void>;
   onVersions: (options: OutputOptions) => Promise<void>;
   onPresets: (options: OutputOptions) => Promise<void>;
+  onFingerprintProfiles: (options: OutputOptions) => Promise<void>;
   onPath: (options: OutputOptions) => Promise<void>;
   onVersion: (options: OutputOptions) => Promise<void>;
   onDoctor: (options: OutputOptions) => Promise<void>;
@@ -74,6 +76,7 @@ function addSharedBrowserOptions(command: Command): Command {
     .option('--proxy <url>', 'proxy URL')
     .option('--locale <locale>', 'locale override')
     .option('--locales <locale>', 'accepted locales (repeat or use comma-separated values)', collectValues)
+    .option('--region <code>', 'region profile for locale/timezone/geolocation helpers')
     .option('--timezone <timezone>', 'timezone override')
     .option('--screen-profile <name>', 'named screen fingerprint profile')
     .option('--window-profile <name>', 'named window fingerprint profile')
@@ -109,6 +112,7 @@ export function toLaunchInput(options: SharedOptions): LaunchInput {
     proxy: options.proxy,
     locale: options.locale,
     locales: options.locales,
+    region: options.region,
     timezone: options.timezone,
     screenProfile: options.screenProfile,
     windowProfile: options.windowProfile,
@@ -184,6 +188,15 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .description('List built-in launch presets')
       .action(async (options: OutputOptions) => {
         await handlers.onPresets(options);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('fingerprint-profiles')
+      .description('List built-in fingerprint screen, window, and region profiles')
+      .action(async (options: OutputOptions) => {
+        await handlers.onFingerprintProfiles(options);
       }),
   );
 

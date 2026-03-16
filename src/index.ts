@@ -31,11 +31,18 @@ export {
 } from './camoufox/registry.js';
 export { listCamoufoxPresets, resolveCamoufoxPresets, type CamoufoxPresetDefinition, type ResolvedPresetBundle } from './camoufox/presets.js';
 export {
+  describeFingerprintRegionProfiles,
+  describeFingerprintScreenProfiles,
+  describeFingerprintWindowProfiles,
   listFingerprintScreenProfiles,
   listFingerprintWindowProfiles,
   resolveFingerprintHelpers,
+  type FingerprintGeolocationInput,
   type FingerprintHelperInput,
+  type FingerprintRegionProfileDefinition,
+  type FingerprintScreenProfileDefinition,
   type FingerprintScreenInput,
+  type FingerprintWindowProfileDefinition,
   type FingerprintWindowInput,
   type ResolvedFingerprintHelpers,
 } from './camoufox/fingerprint.js';

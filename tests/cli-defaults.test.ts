@@ -30,6 +30,7 @@ describe('CLI defaults resolution', () => {
         headless: true,
         preset: ['cache', 'low-bandwidth'],
         locales: ['en-US', 'fr-FR'],
+        region: 'US',
         screenProfile: 'desktop-fhd',
         windowProfile: 'desktop',
         blockImages: true,
@@ -45,6 +46,7 @@ describe('CLI defaults resolution', () => {
     expect(resolved.headless).toBe(true);
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
     expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
+    expect(resolved.region).toBe('US');
     expect(resolved.screenProfile).toBe('desktop-fhd');
     expect(resolved.windowProfile).toBe('desktop');
     expect(resolved.blockImages).toBe(true);
@@ -70,6 +72,7 @@ describe('CLI defaults resolution', () => {
           CAMOU_HEADLESS: 'true',
           CAMOU_PRESET: 'cache,low-bandwidth',
           CAMOU_LOCALES: 'en-US,fr-FR',
+          CAMOU_REGION: 'CA',
           CAMOU_SCREEN_PROFILE: 'desktop-fhd',
           CAMOU_WINDOW_PROFILE: 'desktop',
           CAMOU_BLOCK_IMAGES: 'true',
@@ -83,6 +86,7 @@ describe('CLI defaults resolution', () => {
     expect(resolved.headless).toBe(true);
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
     expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
+    expect(resolved.region).toBe('CA');
     expect(resolved.screenProfile).toBe('desktop-fhd');
     expect(resolved.windowProfile).toBe('desktop');
     expect(resolved.blockImages).toBe(true);
@@ -103,6 +107,7 @@ describe('CLI defaults resolution', () => {
         headless: false,
         preset: ['disable-coop'],
         locales: ['de-DE'],
+        region: 'DE',
         screenProfile: 'retina-mac',
         blockImages: false,
       },
@@ -115,6 +120,7 @@ describe('CLI defaults resolution', () => {
           CAMOU_HEADLESS: 'true',
           CAMOU_PRESET: 'cache',
           CAMOU_LOCALES: 'en-US,fr-FR',
+          CAMOU_REGION: 'US',
           CAMOU_SCREEN_PROFILE: 'desktop-fhd',
           CAMOU_BLOCK_IMAGES: 'true',
         },
@@ -127,6 +133,7 @@ describe('CLI defaults resolution', () => {
     expect(resolved.headless).toBe(false);
     expect(resolved.preset).toEqual(['disable-coop']);
     expect(resolved.locales).toEqual(['de-DE']);
+    expect(resolved.region).toBe('DE');
     expect(resolved.screenProfile).toBe('retina-mac');
     expect(resolved.blockImages).toBe(false);
   });
@@ -147,6 +154,7 @@ describe('CLI defaults resolution', () => {
       headless: true,
       preset: ['cache'],
       locales: ['en-US', 'fr-FR'],
+      region: 'US',
       screenProfile: 'desktop-fhd',
       windowProfile: 'desktop',
       blockImages: true,
@@ -161,6 +169,7 @@ describe('CLI defaults resolution', () => {
       headless: true,
       preset: ['cache'],
       locales: ['en-US', 'fr-FR'],
+      region: 'US',
       screenProfile: 'desktop-fhd',
       windowProfile: 'desktop',
       blockImages: true,
@@ -178,6 +187,7 @@ describe('CLI defaults resolution', () => {
           headless: false,
           preset: ['disable-coop'],
           locales: ['de-DE'],
+          region: 'DE',
           screenProfile: 'retina-mac',
           blockImages: false,
         },
@@ -190,6 +200,7 @@ describe('CLI defaults resolution', () => {
       headless: false,
       preset: ['disable-coop'],
       locales: ['de-DE'],
+      region: 'DE',
       screenProfile: 'retina-mac',
       blockImages: false,
     });

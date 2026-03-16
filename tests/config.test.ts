@@ -93,7 +93,38 @@ describe('launch config parsing', () => {
     expect(config.viewport).toEqual({ width: 1200, height: 700 });
   });
 
+  it('resolves region helpers into locale, timezone, and geolocation defaults', async () => {
+    const config = await resolveLaunchConfig({
+      region: 'JP',
+    });
+
+    expect(config.locale).toBe('ja-JP');
+    expect(config.timezoneId).toBe('Asia/Tokyo');
+    expect(config.camouConfig['navigator.language']).toBe('ja-JP');
+    expect(config.camouConfig['locale:region']).toBe('JP');
+    expect(config.camouConfig['geolocation:latitude']).toBe(35.6764);
+    expect(config.camouConfig['geolocation:longitude']).toBe(139.65);
+    expect(config.camouConfig.timezone).toBe('Asia/Tokyo');
+  });
+
+  it('lets explicit locale and timezone overrides win over region defaults', async () => {
+    const config = await resolveLaunchConfig({
+      region: 'DE',
+      locale: 'en-GB',
+      timezone: 'Europe/London',
+    });
+
+    expect(config.locale).toBe('en-GB');
+    expect(config.timezoneId).toBe('Europe/London');
+    expect(config.camouConfig['geolocation:latitude']).toBe(52.52);
+    expect(config.camouConfig['headers.Accept-Language']).toBe('en-GB;q=1.0, en;q=0.9');
+  });
+
   it('rejects conflicting locale helper inputs', async () => {
     await expect(resolveLaunchConfig({ locale: 'en-US', locales: ['fr-FR'] })).rejects.toThrow(ValidationError);
+  });
+
+  it('rejects unknown region helpers', async () => {
+    await expect(resolveLaunchConfig({ region: 'ZZ' })).rejects.toThrow(ValidationError);
   });
 });

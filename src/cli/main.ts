@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
+import { describeFingerprintRegionProfiles, describeFingerprintScreenProfiles, describeFingerprintWindowProfiles } from '../camoufox/fingerprint.js';
 import { listCamoufoxPresets } from '../camoufox/presets.js';
 import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
@@ -141,6 +142,17 @@ export async function main(argv: string[] = process.argv): Promise<number> {
               name: preset.name,
               description: preset.description,
             })),
+          },
+          options.json ?? false,
+        );
+    },
+    onFingerprintProfiles: async (options: OutputOptions) => {
+        printOutput(
+          'fingerprint-profiles',
+          {
+            screenProfiles: describeFingerprintScreenProfiles(),
+            windowProfiles: describeFingerprintWindowProfiles(),
+            regionProfiles: describeFingerprintRegionProfiles(),
           },
           options.json ?? false,
         );

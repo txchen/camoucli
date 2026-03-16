@@ -32,8 +32,20 @@ export const fingerprintWindowSchema = z.object({
   historyLength: z.number().int().positive().optional(),
 });
 
+export const fingerprintGeolocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracy: z.number().positive().optional(),
+  timezone: z.string().optional(),
+  region: z.string().optional(),
+  webrtcIpv4: z.string().optional(),
+  webrtcIpv6: z.string().optional(),
+});
+
 export const fingerprintHelperSchema = z.object({
   locales: fingerprintLocalesValueSchema.optional(),
+  region: z.string().optional(),
+  geolocation: fingerprintGeolocationSchema.optional(),
   screenProfile: z.string().optional(),
   screen: z.union([z.string().min(1), fingerprintScreenSchema]).optional(),
   windowProfile: z.string().optional(),
@@ -48,16 +60,51 @@ export const fingerprintHelperSchema = z.object({
 
 export type FingerprintScreenInput = z.infer<typeof fingerprintScreenSchema>;
 export type FingerprintWindowInput = z.infer<typeof fingerprintWindowSchema>;
+export type FingerprintGeolocationInput = z.infer<typeof fingerprintGeolocationSchema>;
 export type FingerprintHelperInput = z.infer<typeof fingerprintHelperSchema>;
 
 export interface ResolvedFingerprintHelpers {
   camouConfig: Record<string, unknown>;
   firefoxUserPrefs: FirefoxUserPrefs;
   locale?: string | undefined;
+  timezoneId?: string | undefined;
   viewport?: {
     width: number;
     height: number;
   } | undefined;
+}
+
+export interface FingerprintScreenProfileDefinition {
+  name: string;
+  width: number;
+  height: number;
+  availWidth: number;
+  availHeight: number;
+  devicePixelRatio: number;
+  suggestedWindow: {
+    innerWidth: number;
+    innerHeight: number;
+    outerWidth: number;
+    outerHeight: number;
+  };
+}
+
+export interface FingerprintWindowProfileDefinition {
+  name: string;
+  innerWidth: number;
+  innerHeight: number;
+  outerWidth: number;
+  outerHeight: number;
+  devicePixelRatio: number;
+}
+
+export interface FingerprintRegionProfileDefinition {
+  region: string;
+  description: string;
+  locales: string[];
+  timezone: string;
+  latitude: number;
+  longitude: number;
 }
 
 interface ResolvedScreenTemplate {
@@ -82,6 +129,15 @@ interface ResolvedWindowTemplate {
   screenY: number;
   devicePixelRatio: number;
   historyLength: number;
+}
+
+interface RegionProfile {
+  description: string;
+  locales: string[];
+  timezone: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
 }
 
 const SCREEN_PROFILES = {
@@ -214,6 +270,30 @@ const WINDOW_PROFILES = {
   },
 } as const satisfies Record<string, ResolvedWindowTemplate>;
 
+const REGION_PROFILES = {
+  AU: { description: 'Australia east coast desktop traffic', locales: ['en-AU', 'en'], timezone: 'Australia/Sydney', latitude: -33.8688, longitude: 151.2093, accuracy: 25 },
+  BR: { description: 'Brazil southeast traffic', locales: ['pt-BR', 'pt'], timezone: 'America/Sao_Paulo', latitude: -23.5505, longitude: -46.6333, accuracy: 25 },
+  CA: { description: 'Canada central traffic', locales: ['en-CA', 'fr-CA', 'en'], timezone: 'America/Toronto', latitude: 43.6532, longitude: -79.3832, accuracy: 25 },
+  CH: { description: 'Switzerland central europe traffic', locales: ['de-CH', 'fr-CH', 'it-CH', 'de'], timezone: 'Europe/Zurich', latitude: 47.3769, longitude: 8.5417, accuracy: 20 },
+  DE: { description: 'Germany central europe traffic', locales: ['de-DE', 'de'], timezone: 'Europe/Berlin', latitude: 52.52, longitude: 13.405, accuracy: 20 },
+  ES: { description: 'Spain iberian traffic', locales: ['es-ES', 'ca-ES', 'es'], timezone: 'Europe/Madrid', latitude: 40.4168, longitude: -3.7038, accuracy: 20 },
+  FR: { description: 'France western europe traffic', locales: ['fr-FR', 'fr'], timezone: 'Europe/Paris', latitude: 48.8566, longitude: 2.3522, accuracy: 20 },
+  GB: { description: 'United Kingdom traffic', locales: ['en-GB', 'en'], timezone: 'Europe/London', latitude: 51.5072, longitude: -0.1276, accuracy: 20 },
+  HK: { description: 'Hong Kong traffic', locales: ['zh-HK', 'en-HK', 'zh'], timezone: 'Asia/Hong_Kong', latitude: 22.3193, longitude: 114.1694, accuracy: 15 },
+  IE: { description: 'Ireland traffic', locales: ['en-IE', 'en'], timezone: 'Europe/Dublin', latitude: 53.3498, longitude: -6.2603, accuracy: 20 },
+  IN: { description: 'India metro traffic', locales: ['en-IN', 'hi-IN', 'en'], timezone: 'Asia/Kolkata', latitude: 28.6139, longitude: 77.209, accuracy: 30 },
+  IT: { description: 'Italy traffic', locales: ['it-IT', 'it'], timezone: 'Europe/Rome', latitude: 41.9028, longitude: 12.4964, accuracy: 20 },
+  JP: { description: 'Japan metro traffic', locales: ['ja-JP', 'ja'], timezone: 'Asia/Tokyo', latitude: 35.6764, longitude: 139.6500, accuracy: 20 },
+  KR: { description: 'South Korea metro traffic', locales: ['ko-KR', 'ko'], timezone: 'Asia/Seoul', latitude: 37.5665, longitude: 126.978, accuracy: 20 },
+  MX: { description: 'Mexico city traffic', locales: ['es-MX', 'es'], timezone: 'America/Mexico_City', latitude: 19.4326, longitude: -99.1332, accuracy: 25 },
+  NL: { description: 'Netherlands traffic', locales: ['nl-NL', 'en-NL', 'nl'], timezone: 'Europe/Amsterdam', latitude: 52.3676, longitude: 4.9041, accuracy: 20 },
+  NZ: { description: 'New Zealand traffic', locales: ['en-NZ', 'en'], timezone: 'Pacific/Auckland', latitude: -36.8485, longitude: 174.7633, accuracy: 25 },
+  PT: { description: 'Portugal traffic', locales: ['pt-PT', 'pt'], timezone: 'Europe/Lisbon', latitude: 38.7223, longitude: -9.1393, accuracy: 20 },
+  SG: { description: 'Singapore traffic', locales: ['en-SG', 'zh-SG', 'ms-SG', 'en'], timezone: 'Asia/Singapore', latitude: 1.3521, longitude: 103.8198, accuracy: 10 },
+  TW: { description: 'Taiwan traffic', locales: ['zh-TW', 'zh'], timezone: 'Asia/Taipei', latitude: 25.033, longitude: 121.5654, accuracy: 15 },
+  US: { description: 'United States east coast traffic', locales: ['en-US', 'es-US', 'en'], timezone: 'America/New_York', latitude: 40.7128, longitude: -74.006, accuracy: 25 },
+} as const satisfies Record<string, RegionProfile>;
+
 type FingerprintScreenValue = FingerprintHelperInput['screen'];
 type FingerprintWindowValue = FingerprintHelperInput['window'];
 
@@ -275,6 +355,27 @@ function formatAcceptLanguage(locales: string[]): string {
     .join(', ');
 }
 
+function normalizeRegionCode(value: string | undefined): string | undefined {
+  const trimmed = value?.trim().toUpperCase();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveRegionProfile(regionInput: string | undefined): RegionProfile | undefined {
+  const regionCode = normalizeRegionCode(regionInput);
+  if (!regionCode) {
+    return undefined;
+  }
+
+  const profile = REGION_PROFILES[regionCode as keyof typeof REGION_PROFILES];
+  if (!profile) {
+    throw new ValidationError(
+      `Unknown region profile: ${regionCode}. Available regions: ${Object.keys(REGION_PROFILES).join(', ')}`,
+    );
+  }
+
+  return profile;
+}
+
 function resolveLocaleHelpers(localesInput: string | string[] | undefined): Pick<ResolvedFingerprintHelpers, 'camouConfig' | 'locale'> {
   const locales = splitListValue(localesInput);
   if (!locales || locales.length === 0) {
@@ -307,6 +408,43 @@ function resolveLocaleHelpers(localesInput: string | string[] | undefined): Pick
       ...(primaryLocale.script ? { 'locale:script': primaryLocale.script } : {}),
       'locale:all': expandedLocales.join(', '),
       'headers.Accept-Language': formatAcceptLanguage(expandedLocales),
+    },
+  };
+}
+
+function resolveGeolocationHelpers(input: FingerprintHelperInput): Pick<ResolvedFingerprintHelpers, 'camouConfig' | 'timezoneId'> {
+  const regionProfile = resolveRegionProfile(input.region ?? input.geolocation?.region);
+  const latitude = input.geolocation?.latitude ?? regionProfile?.latitude;
+  const longitude = input.geolocation?.longitude ?? regionProfile?.longitude;
+  const accuracy = input.geolocation?.accuracy ?? regionProfile?.accuracy;
+  const timezone = input.geolocation?.timezone ?? regionProfile?.timezone;
+  const regionCode = normalizeRegionCode(input.geolocation?.region ?? input.region);
+
+  if ((latitude !== undefined && longitude === undefined) || (latitude === undefined && longitude !== undefined)) {
+    throw new ValidationError('Both geolocation latitude and longitude are required when setting geolocation helpers.');
+  }
+
+  if (timezone) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: timezone }).format(new Date());
+    } catch (error) {
+      throw new ValidationError(`Invalid timezone: ${timezone}`, undefined, error);
+    }
+  }
+
+  if (regionCode && !regionProfile && (latitude !== undefined || timezone !== undefined)) {
+    throw new ValidationError(`Unknown region profile: ${regionCode}.`);
+  }
+
+  return {
+    timezoneId: timezone,
+    camouConfig: {
+      ...(latitude !== undefined ? { 'geolocation:latitude': latitude } : {}),
+      ...(longitude !== undefined ? { 'geolocation:longitude': longitude } : {}),
+      ...(accuracy !== undefined ? { 'geolocation:accuracy': accuracy } : {}),
+      ...(timezone ? { timezone } : {}),
+      ...(input.geolocation?.webrtcIpv4 ? { 'webrtc:ipv4': input.geolocation.webrtcIpv4 } : {}),
+      ...(input.geolocation?.webrtcIpv6 ? { 'webrtc:ipv6': input.geolocation.webrtcIpv6 } : {}),
     },
   };
 }
@@ -483,6 +621,9 @@ export function mergeFingerprintHelpers(
   return {
     ...base,
     ...override,
+    ...(base.geolocation && override.geolocation
+      ? { geolocation: { ...base.geolocation, ...override.geolocation } }
+      : {}),
     ...(base.screen && override.screen && isScreenObject(base.screen) && isScreenObject(override.screen)
       ? { screen: { ...base.screen, ...override.screen } }
       : {}),
@@ -500,7 +641,9 @@ export function resolveFingerprintHelpers(input: FingerprintHelperInput | undefi
     };
   }
 
-  const localeHelpers = resolveLocaleHelpers(input.locales);
+  const regionProfile = resolveRegionProfile(input.region ?? input.geolocation?.region);
+  const localeHelpers = resolveLocaleHelpers(input.locales ?? regionProfile?.locales);
+  const geolocationHelpers = resolveGeolocationHelpers(input);
   const screen = resolveScreenTemplate(input);
   const window = resolveWindowTemplate(input, screen);
 
@@ -514,6 +657,7 @@ export function resolveFingerprintHelpers(input: FingerprintHelperInput | undefi
   return {
     camouConfig: {
       ...localeHelpers.camouConfig,
+      ...geolocationHelpers.camouConfig,
       ...buildScreenCamouConfig(screen),
       ...buildWindowCamouConfig(window),
       ...(input.fonts && input.fonts.length > 0 ? { fonts: [...new Set(input.fonts)] } : {}),
@@ -521,6 +665,7 @@ export function resolveFingerprintHelpers(input: FingerprintHelperInput | undefi
     },
     firefoxUserPrefs,
     locale: localeHelpers.locale,
+    timezoneId: geolocationHelpers.timezoneId,
     viewport: window
       ? {
           width: window.innerWidth,
@@ -536,4 +681,43 @@ export function listFingerprintScreenProfiles(): string[] {
 
 export function listFingerprintWindowProfiles(): string[] {
   return Object.keys(WINDOW_PROFILES);
+}
+
+export function describeFingerprintScreenProfiles(): FingerprintScreenProfileDefinition[] {
+  return Object.entries(SCREEN_PROFILES).map(([name, profile]) => ({
+    name,
+    width: profile.width,
+    height: profile.height,
+    availWidth: profile.availWidth,
+    availHeight: profile.availHeight,
+    devicePixelRatio: profile.devicePixelRatio,
+    suggestedWindow: {
+      innerWidth: profile.suggestedWindow.innerWidth,
+      innerHeight: profile.suggestedWindow.innerHeight,
+      outerWidth: profile.suggestedWindow.outerWidth,
+      outerHeight: profile.suggestedWindow.outerHeight,
+    },
+  }));
+}
+
+export function describeFingerprintWindowProfiles(): FingerprintWindowProfileDefinition[] {
+  return Object.entries(WINDOW_PROFILES).map(([name, profile]) => ({
+    name,
+    innerWidth: profile.innerWidth,
+    innerHeight: profile.innerHeight,
+    outerWidth: profile.outerWidth,
+    outerHeight: profile.outerHeight,
+    devicePixelRatio: profile.devicePixelRatio,
+  }));
+}
+
+export function describeFingerprintRegionProfiles(): FingerprintRegionProfileDefinition[] {
+  return Object.entries(REGION_PROFILES).map(([region, profile]) => ({
+    region,
+    description: profile.description,
+    locales: [...profile.locales],
+    timezone: profile.timezone,
+    latitude: profile.latitude,
+    longitude: profile.longitude,
+  }));
 }

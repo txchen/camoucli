@@ -37,6 +37,60 @@ function printPresets(data: Record<string, unknown>): void {
   }
 }
 
+function printFingerprintProfiles(data: Record<string, unknown>): void {
+  const screenProfiles = Array.isArray(data.screenProfiles) ? data.screenProfiles : [];
+  const windowProfiles = Array.isArray(data.windowProfiles) ? data.windowProfiles : [];
+  const regionProfiles = Array.isArray(data.regionProfiles) ? data.regionProfiles : [];
+
+  if (screenProfiles.length === 0 && windowProfiles.length === 0 && regionProfiles.length === 0) {
+    process.stdout.write('No fingerprint profiles available\n');
+    return;
+  }
+
+  if (screenProfiles.length > 0) {
+    process.stdout.write('Screen profiles\n');
+    for (const profile of screenProfiles) {
+      if (!profile || typeof profile !== 'object') {
+        continue;
+      }
+
+      const record = profile as Record<string, unknown>;
+      process.stdout.write(
+        `- ${String(record.name ?? 'unknown')} ${String(record.width ?? '?')}x${String(record.height ?? '?')} dpr=${String(record.devicePixelRatio ?? '?')}\n`,
+      );
+    }
+  }
+
+  if (windowProfiles.length > 0) {
+    process.stdout.write('Window profiles\n');
+    for (const profile of windowProfiles) {
+      if (!profile || typeof profile !== 'object') {
+        continue;
+      }
+
+      const record = profile as Record<string, unknown>;
+      process.stdout.write(
+        `- ${String(record.name ?? 'unknown')} inner=${String(record.innerWidth ?? '?')}x${String(record.innerHeight ?? '?')} outer=${String(record.outerWidth ?? '?')}x${String(record.outerHeight ?? '?')} dpr=${String(record.devicePixelRatio ?? '?')}\n`,
+      );
+    }
+  }
+
+  if (regionProfiles.length > 0) {
+    process.stdout.write('Region profiles\n');
+    for (const profile of regionProfiles) {
+      if (!profile || typeof profile !== 'object') {
+        continue;
+      }
+
+      const record = profile as Record<string, unknown>;
+      const locales = Array.isArray(record.locales) ? record.locales.map((locale) => String(locale)).join(',') : '';
+      process.stdout.write(
+        `- ${String(record.region ?? 'unknown')} ${String(record.timezone ?? '')}${locales ? ` locales=${locales}` : ''}\n`,
+      );
+    }
+  }
+}
+
 function formatSessionTab(data: Record<string, unknown>): string {
   const sessionName = typeof data.sessionName === 'string' ? data.sessionName : undefined;
   const tabName = typeof data.tabName === 'string' ? data.tabName : undefined;
@@ -409,6 +463,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'presets':
       printPresets(data as Record<string, unknown>);
+      return;
+    case 'fingerprint-profiles':
+      printFingerprintProfiles(data as Record<string, unknown>);
       return;
     case 'session.list':
       printSessionList(data);

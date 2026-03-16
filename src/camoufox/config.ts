@@ -30,6 +30,7 @@ export const launchInputSchema = z.object({
   proxy: z.string().optional(),
   locale: z.string().optional(),
   locales: fingerprintLocalesValueSchema.optional(),
+  region: z.string().optional(),
   timezone: z.string().optional(),
   screenProfile: z.string().optional(),
   screen: z.union([z.string().min(1), fingerprintScreenSchema]).optional(),
@@ -125,6 +126,7 @@ async function resolveFingerprintHelperInput(
 function buildLaunchFingerprintHelperInput(input: LaunchInput): FingerprintHelperInput | undefined {
   const flatHelperInput: FingerprintHelperInput = {
     ...(input.locales ? { locales: input.locales } : {}),
+    ...(input.region ? { region: input.region } : {}),
     ...(input.screenProfile ? { screenProfile: input.screenProfile } : {}),
     ...(input.screen ? { screen: input.screen } : {}),
     ...(input.windowProfile ? { windowProfile: input.windowProfile } : {}),
@@ -146,6 +148,7 @@ export function hasLaunchFingerprintHelpers(input: LaunchInput): boolean {
       input.fingerprintJson ||
       input.fingerprint ||
       input.locales ||
+      input.region ||
       input.screenProfile ||
       input.screen ||
       input.windowProfile ||
@@ -266,7 +269,7 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
     firefoxUserPrefs,
     proxy: parseProxyString(input.proxy),
     locale: validateLocale(fingerprintHelpers.locale ?? input.locale),
-    timezoneId: validateTimezone(input.timezone),
+    timezoneId: validateTimezone(input.timezone ?? fingerprintHelpers.timezoneId),
     viewport,
   };
 }

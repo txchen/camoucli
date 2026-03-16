@@ -11,6 +11,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -88,6 +89,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -115,6 +117,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -144,6 +147,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -171,6 +175,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -237,6 +242,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -260,6 +266,7 @@ describe('CLI program parsing', () => {
       onUse,
       onVersions: async () => undefined,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -279,6 +286,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions,
       onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -298,6 +306,7 @@ describe('CLI program parsing', () => {
       onUse: async () => undefined,
       onVersions: async () => undefined,
       onPresets,
+      onFingerprintProfiles: async () => undefined,
       onPath: async () => undefined,
       onVersion: async () => undefined,
       onDoctor: async () => undefined,
@@ -307,5 +316,25 @@ describe('CLI program parsing', () => {
     await program.parseAsync(['node', 'camou', 'presets', '--json'], { from: 'node' });
 
     expect(onPresets).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
+  });
+
+  it('routes fingerprint profiles to the listing handler', async () => {
+    const onFingerprintProfiles = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camou', 'fingerprint-profiles', '--json'], { from: 'node' });
+
+    expect(onFingerprintProfiles).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 });
