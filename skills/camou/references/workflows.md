@@ -132,4 +132,4 @@ When the user says "use the browser" or "test the site":
 5. interact with `click`, `fill`, `press`, `wait`
 6. re-snapshot after page changes
 7. keep the same `--session` if the workflow depends on login state
-8. if they want a reusable Node script instead, switch to the package API and use `launchCamoufox()` or `withCamoufox()`
+8. if they want a reusable Node script instead, switch to the package API and prefer `Camoufox.launch()` or `Camoufox.with()`

@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.3.0] - 2026-03-16
+
+### Added
+
+- Added Linux/macOS GitHub Actions CI for test, build, and package validation.
+- Added compatibility-matrix workflows and local scripts for probing Camoufox vs `playwright-core` compatibility.
+- Added broader browser automation commands including navigation, hover, type, check/uncheck, select, scroll, `get value`, and richer wait modes.
+- Added higher-level Node API wrappers including `Camoufox`, `AsyncCamoufox`, and `resolveCamoufoxLaunchSpec()`.
+
+### Changed
+
+- Updated `README.md`, skill docs, and compatibility docs to reflect the first-class Node API and expanded command surface.
+- Improved CI reliability by removing slow spawned `tsx` subprocesses from the CLI JSON tests.
+
+### Fixed
+
+- Fixed the macOS installer integration test to use platform-aware asset names and executable paths.
+
 ## [0.2.0] - 2026-03-15
 
 ### Added

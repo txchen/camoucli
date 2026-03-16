@@ -129,11 +129,10 @@ await camou.close();
 If you prefer a scoped helper:
 
 ```ts
-import { withCamoufox } from 'camou';
+import { Camoufox } from 'camou';
 
-await withCamoufox({ session: 'script' }, async ({ context }) => {
-  const page = await context.newPage();
-  await page.goto('https://example.com');
+await Camoufox.with({ session: 'script' }, async (camou) => {
+  const page = await camou.open('https://example.com');
   console.log(await page.title());
 });
 ```
@@ -141,7 +140,9 @@ await withCamoufox({ session: 'script' }, async ({ context }) => {
 Useful exported helpers include:
 
 - `Camoufox.launch()`
+- `Camoufox.launchContext()`
 - `Camoufox.with()`
+- `AsyncCamoufox`
 - `launchCamoufox()`
 - `launchCamoufoxContext()`
 - `resolveCamoufoxLaunchSpec()`

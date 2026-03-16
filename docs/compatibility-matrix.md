@@ -53,7 +53,6 @@ Write the markdown to a file:
 node scripts/generate-compatibility-matrix.mjs \
   compatibility-report-linux.json \
   compatibility-report-macos.json \
-  compatibility-report-windows.json \
   --output compatibility-matrix.md
 ```
 
