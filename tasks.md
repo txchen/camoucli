@@ -5,7 +5,7 @@ Living task tracker for the remaining Camoucli work.
 ## Current Priorities
 
 - [x] Add CI and compatibility matrix automation
-  - run build/test/package validation on Linux, macOS, and Windows
+  - run build/test/package validation on Linux and macOS
   - add repeatable compatibility-matrix tooling for Camoufox vs `playwright-core`
 - [x] Broaden the automation surface
   - expand navigation, interaction, wait, and data-extraction commands beyond the initial v1 set

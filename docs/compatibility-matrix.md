@@ -6,7 +6,7 @@ Camou includes cross-platform CI and a repeatable compatibility-matrix workflow 
 
 - CI workflow: `.github/workflows/ci.yml`
   - runs `npm test`, `npm run build`, and `npm pack --dry-run`
-  - covers Linux, macOS, and Windows
+  - covers Linux and macOS
 - Compatibility workflow: `.github/workflows/compatibility-matrix.yml`
   - installs selected Camoufox versions
   - runs `camou doctor --json`

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { CommanderError } from 'commander';
+import { pathToFileURL } from 'node:url';
 
 import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
 import { listCamoufoxPresets } from '../camoufox/presets.js';
@@ -56,7 +57,7 @@ function printCliError(error: unknown, asJson: boolean): void {
   process.stderr.write(`${normalized instanceof Error ? normalized.message : String(normalized)}\n`);
 }
 
-async function main(argv: string[] = process.argv): Promise<number> {
+export async function main(argv: string[] = process.argv): Promise<number> {
   const asJson = wantsJsonOutput(argv);
   const program = createProgram({
     onInstall: async (version: string | undefined, options: OutputOptions) => {
@@ -171,9 +172,20 @@ async function main(argv: string[] = process.argv): Promise<number> {
   }
 }
 
-main().then((exitCode) => {
-  process.exit(exitCode);
-}).catch((error: CamoucliError | Error | unknown) => {
-  printCliError(error, wantsJsonOutput(process.argv));
-  process.exit(getExitCode(normalizeCliError(error)));
-});
+function isEntrypoint(): boolean {
+  const entryPath = process.argv[1];
+  if (!entryPath) {
+    return false;
+  }
+
+  return import.meta.url === pathToFileURL(entryPath).href;
+}
+
+if (isEntrypoint()) {
+  main().then((exitCode) => {
+    process.exit(exitCode);
+  }).catch((error: CamoucliError | Error | unknown) => {
+    printCliError(error, wantsJsonOutput(process.argv));
+    process.exit(getExitCode(normalizeCliError(error)));
+  });
+}

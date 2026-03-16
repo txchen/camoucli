@@ -416,7 +416,7 @@ Current local verification with `playwright-core` `1.51.1`:
 
 The repo now also includes:
 
-- cross-platform CI in `.github/workflows/ci.yml`
+- Linux/macOS CI in `.github/workflows/ci.yml`
 - a workflow-driven compatibility probe in `.github/workflows/compatibility-matrix.yml`
 - local scripts to generate compatibility reports and markdown summaries
 
