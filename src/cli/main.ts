@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { CommanderError } from 'commander';
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
@@ -178,7 +179,13 @@ function isEntrypoint(): boolean {
     return false;
   }
 
-  return import.meta.url === pathToFileURL(entryPath).href;
+  try {
+    const currentFilePath = realpathSync(new URL(import.meta.url));
+    const entryFilePath = realpathSync(entryPath);
+    return currentFilePath === entryFilePath;
+  } catch {
+    return import.meta.url === pathToFileURL(entryPath).href;
+  }
 }
 
 if (isEntrypoint()) {

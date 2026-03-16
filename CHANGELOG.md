@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.3.1] - 2026-03-16
+
+### Fixed
+
+- Fixed the packaged `camou` CLI so it runs correctly when executed through npm-installed bin symlinks on Linux and macOS.
+- Added regression coverage for symlinked bin execution to prevent silent no-op CLI failures in future releases.
+- Made the new CLI bin regression test path-independent so it works correctly in CI and other checkout locations.
+
 ## [0.3.0] - 2026-03-16
 
 ### Added

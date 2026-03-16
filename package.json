@@ -1,6 +1,6 @@
 {
   "name": "camou",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CLI and local daemon for driving Camoufox through Playwright",
   "repository": {
     "type": "git",
