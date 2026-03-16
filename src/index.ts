@@ -30,6 +30,15 @@ export {
   type BrowserRegistry,
 } from './camoufox/registry.js';
 export { listCamoufoxPresets, resolveCamoufoxPresets, type CamoufoxPresetDefinition, type ResolvedPresetBundle } from './camoufox/presets.js';
+export {
+  listFingerprintScreenProfiles,
+  listFingerprintWindowProfiles,
+  resolveFingerprintHelpers,
+  type FingerprintHelperInput,
+  type FingerprintScreenInput,
+  type FingerprintWindowInput,
+  type ResolvedFingerprintHelpers,
+} from './camoufox/fingerprint.js';
 export { getCamoucliPaths, ensureBasePaths, ensureSessionPaths, getSessionPaths, type CamoucliPaths, type SessionPaths } from './state/paths.js';
 export {
   BrowserNotInstalledError,

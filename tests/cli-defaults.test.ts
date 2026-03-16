@@ -23,7 +23,17 @@ describe('CLI defaults resolution', () => {
     await mkdir(nestedDir, { recursive: true });
     await writeFile(
       path.join(projectRoot, '.camou.json'),
-      `${JSON.stringify({ session: 'workspace', tabname: 'assistant', browser: '135.0.1-beta.24', headless: true, preset: ['cache', 'low-bandwidth'] }, null, 2)}\n`,
+      `${JSON.stringify({
+        session: 'workspace',
+        tabname: 'assistant',
+        browser: '135.0.1-beta.24',
+        headless: true,
+        preset: ['cache', 'low-bandwidth'],
+        locales: ['en-US', 'fr-FR'],
+        screenProfile: 'desktop-fhd',
+        windowProfile: 'desktop',
+        blockImages: true,
+      }, null, 2)}\n`,
       'utf8',
     );
 
@@ -34,6 +44,10 @@ describe('CLI defaults resolution', () => {
     expect(resolved.browser).toBe('135.0.1-beta.24');
     expect(resolved.headless).toBe(true);
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
+    expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
+    expect(resolved.screenProfile).toBe('desktop-fhd');
+    expect(resolved.windowProfile).toBe('desktop');
+    expect(resolved.blockImages).toBe(true);
     expect(resolved.defaultsFilePath).toBe(path.join(projectRoot, '.camou.json'));
     await expect(findCamouConfigFile(nestedDir)).resolves.toBe(path.join(projectRoot, '.camou.json'));
   });
@@ -55,6 +69,10 @@ describe('CLI defaults resolution', () => {
           CAMOU_BROWSER: '135.0.1-beta.24',
           CAMOU_HEADLESS: 'true',
           CAMOU_PRESET: 'cache,low-bandwidth',
+          CAMOU_LOCALES: 'en-US,fr-FR',
+          CAMOU_SCREEN_PROFILE: 'desktop-fhd',
+          CAMOU_WINDOW_PROFILE: 'desktop',
+          CAMOU_BLOCK_IMAGES: 'true',
         },
       },
     );
@@ -64,6 +82,10 @@ describe('CLI defaults resolution', () => {
     expect(resolved.browser).toBe('135.0.1-beta.24');
     expect(resolved.headless).toBe(true);
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
+    expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
+    expect(resolved.screenProfile).toBe('desktop-fhd');
+    expect(resolved.windowProfile).toBe('desktop');
+    expect(resolved.blockImages).toBe(true);
   });
 
   it('lets explicit CLI options override env vars and config files', async () => {
@@ -80,6 +102,9 @@ describe('CLI defaults resolution', () => {
         browser: '135.0.1-beta.25',
         headless: false,
         preset: ['disable-coop'],
+        locales: ['de-DE'],
+        screenProfile: 'retina-mac',
+        blockImages: false,
       },
       {
         cwd: rootDir,
@@ -89,6 +114,9 @@ describe('CLI defaults resolution', () => {
           CAMOU_BROWSER: '135.0.1-beta.24',
           CAMOU_HEADLESS: 'true',
           CAMOU_PRESET: 'cache',
+          CAMOU_LOCALES: 'en-US,fr-FR',
+          CAMOU_SCREEN_PROFILE: 'desktop-fhd',
+          CAMOU_BLOCK_IMAGES: 'true',
         },
       },
     );
@@ -98,6 +126,9 @@ describe('CLI defaults resolution', () => {
     expect(resolved.browser).toBe('135.0.1-beta.25');
     expect(resolved.headless).toBe(false);
     expect(resolved.preset).toEqual(['disable-coop']);
+    expect(resolved.locales).toEqual(['de-DE']);
+    expect(resolved.screenProfile).toBe('retina-mac');
+    expect(resolved.blockImages).toBe(false);
   });
 
   it('falls back to built-in defaults when nothing is configured', async () => {
@@ -115,6 +146,10 @@ describe('CLI defaults resolution', () => {
       browser: '135.0.1-beta.24',
       headless: true,
       preset: ['cache'],
+      locales: ['en-US', 'fr-FR'],
+      screenProfile: 'desktop-fhd',
+      windowProfile: 'desktop',
+      blockImages: true,
     };
 
     expect(
@@ -125,6 +160,10 @@ describe('CLI defaults resolution', () => {
       browser: '135.0.1-beta.24',
       headless: true,
       preset: ['cache'],
+      locales: ['en-US', 'fr-FR'],
+      screenProfile: 'desktop-fhd',
+      windowProfile: 'desktop',
+      blockImages: true,
     });
 
     expect(
@@ -138,6 +177,9 @@ describe('CLI defaults resolution', () => {
           browser: '135.0.1-beta.25',
           headless: false,
           preset: ['disable-coop'],
+          locales: ['de-DE'],
+          screenProfile: 'retina-mac',
+          blockImages: false,
         },
         resolved,
       ),
@@ -147,6 +189,9 @@ describe('CLI defaults resolution', () => {
       browser: '135.0.1-beta.25',
       headless: false,
       preset: ['disable-coop'],
+      locales: ['de-DE'],
+      screenProfile: 'retina-mac',
+      blockImages: false,
     });
 
     expect(

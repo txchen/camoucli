@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import type { Page } from 'playwright-core';
 
-import type { LaunchInput } from '../camoufox/config.js';
+import { hasLaunchFingerprintHelpers, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
 import { SessionError, ValidationError } from '../util/errors.js';
@@ -451,9 +451,9 @@ export class BrowserManager {
   }
 
   private assertSessionCompatible(session: SessionRuntime, input: LaunchInput): void {
-    if (input.configPath || input.configJson || input.prefsPath || input.prefsJson || input.preset?.length) {
+    if (input.configPath || input.configJson || input.prefsPath || input.prefsJson || input.preset?.length || hasLaunchFingerprintHelpers(input)) {
       throw new SessionError(
-        `Session ${session.name} is already running. Stop it before changing config, prefs, or presets for that session.`,
+        `Session ${session.name} is already running. Stop it before changing config, prefs, presets, or fingerprint helpers for that session.`,
       );
     }
 

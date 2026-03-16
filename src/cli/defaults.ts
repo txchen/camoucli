@@ -3,6 +3,7 @@ import { access, readFile } from 'node:fs/promises';
 
 import { z } from 'zod';
 
+import { fingerprintLocalesValueSchema } from '../camoufox/fingerprint.js';
 import { ValidationError } from '../util/errors.js';
 import type { SharedOptions } from './program.js';
 
@@ -16,6 +17,15 @@ const configDefaultsSchema = z.object({
   headless: z.boolean().optional(),
   preset: presetValueSchema.optional(),
   presets: presetValueSchema.optional(),
+  fingerprint: z.string().min(1).optional(),
+  fingerprintJson: z.string().min(1).optional(),
+  locales: fingerprintLocalesValueSchema.optional(),
+  screenProfile: z.string().min(1).optional(),
+  windowProfile: z.string().min(1).optional(),
+  blockImages: z.boolean().optional(),
+  blockWebRtc: z.boolean().optional(),
+  blockWebGl: z.boolean().optional(),
+  disableCoop: z.boolean().optional(),
   defaults: z.object({
     session: z.string().min(1).optional(),
     tab: z.string().min(1).optional(),
@@ -24,6 +34,15 @@ const configDefaultsSchema = z.object({
     headless: z.boolean().optional(),
     preset: presetValueSchema.optional(),
     presets: presetValueSchema.optional(),
+    fingerprint: z.string().min(1).optional(),
+    fingerprintJson: z.string().min(1).optional(),
+    locales: fingerprintLocalesValueSchema.optional(),
+    screenProfile: z.string().min(1).optional(),
+    windowProfile: z.string().min(1).optional(),
+    blockImages: z.boolean().optional(),
+    blockWebRtc: z.boolean().optional(),
+    blockWebGl: z.boolean().optional(),
+    disableCoop: z.boolean().optional(),
   }).optional(),
 });
 
@@ -35,6 +54,15 @@ export interface ResolvedCliDefaults {
   browser?: string | undefined;
   headless?: boolean | undefined;
   preset?: string[] | undefined;
+  fingerprint?: string | undefined;
+  fingerprintJson?: string | undefined;
+  locales?: string[] | undefined;
+  screenProfile?: string | undefined;
+  windowProfile?: string | undefined;
+  blockImages?: boolean | undefined;
+  blockWebRtc?: boolean | undefined;
+  blockWebGl?: boolean | undefined;
+  disableCoop?: boolean | undefined;
   defaultsFilePath?: string | undefined;
 }
 
@@ -49,6 +77,18 @@ function trimValue(value: string | undefined): string | undefined {
 }
 
 function normalizePresetValues(value: string | string[] | undefined): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const items = (Array.isArray(value) ? value : value.split(','))
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? [...new Set(items)] : undefined;
+}
+
+function normalizeLocalesValue(value: string | string[] | undefined): string[] | undefined {
   if (!value) {
     return undefined;
   }
@@ -108,6 +148,15 @@ async function loadConfigDefaults(cwd: string): Promise<{
   browser?: string;
   headless?: boolean;
   preset?: string[];
+  fingerprint?: string;
+  fingerprintJson?: string;
+  locales?: string[];
+  screenProfile?: string;
+  windowProfile?: string;
+  blockImages?: boolean;
+  blockWebRtc?: boolean;
+  blockWebGl?: boolean;
+  disableCoop?: boolean;
   defaultsFilePath?: string | undefined;
 }> {
   const configPath = await findNearestConfigFile(cwd);
@@ -134,6 +183,15 @@ async function loadConfigDefaults(cwd: string): Promise<{
   const preset = normalizePresetValues(
     result.data.preset ?? result.data.presets ?? result.data.defaults?.preset ?? result.data.defaults?.presets,
   );
+  const fingerprint = trimValue(result.data.fingerprint ?? result.data.defaults?.fingerprint);
+  const fingerprintJson = trimValue(result.data.fingerprintJson ?? result.data.defaults?.fingerprintJson);
+  const locales = normalizeLocalesValue(result.data.locales ?? result.data.defaults?.locales);
+  const screenProfile = trimValue(result.data.screenProfile ?? result.data.defaults?.screenProfile);
+  const windowProfile = trimValue(result.data.windowProfile ?? result.data.defaults?.windowProfile);
+  const blockImages = result.data.blockImages ?? result.data.defaults?.blockImages;
+  const blockWebRtc = result.data.blockWebRtc ?? result.data.defaults?.blockWebRtc;
+  const blockWebGl = result.data.blockWebGl ?? result.data.defaults?.blockWebGl;
+  const disableCoop = result.data.disableCoop ?? result.data.defaults?.disableCoop;
 
   return {
     ...(session ? { session } : {}),
@@ -141,6 +199,15 @@ async function loadConfigDefaults(cwd: string): Promise<{
     ...(browser ? { browser } : {}),
     ...(headless !== undefined ? { headless } : {}),
     ...(preset ? { preset } : {}),
+    ...(fingerprint ? { fingerprint } : {}),
+    ...(fingerprintJson ? { fingerprintJson } : {}),
+    ...(locales ? { locales } : {}),
+    ...(screenProfile ? { screenProfile } : {}),
+    ...(windowProfile ? { windowProfile } : {}),
+    ...(blockImages !== undefined ? { blockImages } : {}),
+    ...(blockWebRtc !== undefined ? { blockWebRtc } : {}),
+    ...(blockWebGl !== undefined ? { blockWebGl } : {}),
+    ...(disableCoop !== undefined ? { disableCoop } : {}),
     defaultsFilePath: configPath,
   };
 }
@@ -172,6 +239,17 @@ function readEnvPreset(env: NodeJS.ProcessEnv, ...names: string[]): string[] | u
     const value = trimValue(env[name]);
     if (value !== undefined) {
       return normalizePresetValues(value);
+    }
+  }
+
+  return undefined;
+}
+
+function readEnvLocales(env: NodeJS.ProcessEnv, ...names: string[]): string[] | undefined {
+  for (const name of names) {
+    const value = trimValue(env[name]);
+    if (value !== undefined) {
+      return normalizeLocalesValue(value);
     }
   }
 
@@ -213,6 +291,51 @@ export async function resolveSharedOptions(
     readEnvPreset(env, 'CAMOU_PRESET', 'CAMOU_PRESETS', 'CAMOUCLI_PRESET', 'CAMOUCLI_PRESETS') ??
     configDefaults.preset;
 
+  const fingerprint =
+    trimValue(options.fingerprint) ??
+    readEnvDefault(env, 'CAMOU_FINGERPRINT', 'CAMOUCLI_FINGERPRINT') ??
+    configDefaults.fingerprint;
+
+  const fingerprintJson =
+    trimValue(options.fingerprintJson) ??
+    readEnvDefault(env, 'CAMOU_FINGERPRINT_JSON', 'CAMOUCLI_FINGERPRINT_JSON') ??
+    configDefaults.fingerprintJson;
+
+  const locales =
+    normalizeLocalesValue(options.locales) ??
+    readEnvLocales(env, 'CAMOU_LOCALES', 'CAMOUCLI_LOCALES') ??
+    configDefaults.locales;
+
+  const screenProfile =
+    trimValue(options.screenProfile) ??
+    readEnvDefault(env, 'CAMOU_SCREEN_PROFILE', 'CAMOUCLI_SCREEN_PROFILE') ??
+    configDefaults.screenProfile;
+
+  const windowProfile =
+    trimValue(options.windowProfile) ??
+    readEnvDefault(env, 'CAMOU_WINDOW_PROFILE', 'CAMOUCLI_WINDOW_PROFILE') ??
+    configDefaults.windowProfile;
+
+  const blockImages =
+    (options.blockImages !== undefined ? options.blockImages : undefined) ??
+    readEnvBoolean(env, 'CAMOU_BLOCK_IMAGES', 'CAMOUCLI_BLOCK_IMAGES') ??
+    configDefaults.blockImages;
+
+  const blockWebRtc =
+    (options.blockWebrtc !== undefined ? options.blockWebrtc : undefined) ??
+    readEnvBoolean(env, 'CAMOU_BLOCK_WEBRTC', 'CAMOUCLI_BLOCK_WEBRTC') ??
+    configDefaults.blockWebRtc;
+
+  const blockWebGl =
+    (options.blockWebgl !== undefined ? options.blockWebgl : undefined) ??
+    readEnvBoolean(env, 'CAMOU_BLOCK_WEBGL', 'CAMOUCLI_BLOCK_WEBGL') ??
+    configDefaults.blockWebGl;
+
+  const disableCoop =
+    (options.disableCoop !== undefined ? options.disableCoop : undefined) ??
+    readEnvBoolean(env, 'CAMOU_DISABLE_COOP', 'CAMOUCLI_DISABLE_COOP') ??
+    configDefaults.disableCoop;
+
   return {
     ...options,
     session,
@@ -220,6 +343,15 @@ export async function resolveSharedOptions(
     ...(browser ? { browser } : {}),
     ...(headless !== undefined ? { headless } : {}),
     ...(preset ? { preset } : {}),
+    ...(fingerprint ? { fingerprint } : {}),
+    ...(fingerprintJson ? { fingerprintJson } : {}),
+    ...(locales ? { locales } : {}),
+    ...(screenProfile ? { screenProfile } : {}),
+    ...(windowProfile ? { windowProfile } : {}),
+    ...(blockImages !== undefined ? { blockImages } : {}),
+    ...(blockWebRtc !== undefined ? { blockWebRtc } : {}),
+    ...(blockWebGl !== undefined ? { blockWebGl } : {}),
+    ...(disableCoop !== undefined ? { disableCoop } : {}),
     defaultsFilePath: configDefaults.defaultsFilePath,
   };
 }
@@ -339,6 +471,45 @@ export function applyCliDefaultsToPayload(
       : undefined;
     if ((!currentPreset || currentPreset.length === 0) && options.preset && options.preset.length > 0) {
       nextPayload.preset = options.preset;
+    }
+
+    if (nextPayload.fingerprintPath === undefined && options.fingerprint !== undefined) {
+      nextPayload.fingerprintPath = options.fingerprint;
+    }
+
+    if (nextPayload.fingerprintJson === undefined && options.fingerprintJson !== undefined) {
+      nextPayload.fingerprintJson = options.fingerprintJson;
+    }
+
+    const currentLocales = Array.isArray(nextPayload.locales)
+      ? nextPayload.locales.map((item) => String(item)).filter(Boolean)
+      : undefined;
+    if ((!currentLocales || currentLocales.length === 0) && options.locales && options.locales.length > 0) {
+      nextPayload.locales = options.locales;
+    }
+
+    if (nextPayload.screenProfile === undefined && options.screenProfile !== undefined) {
+      nextPayload.screenProfile = options.screenProfile;
+    }
+
+    if (nextPayload.windowProfile === undefined && options.windowProfile !== undefined) {
+      nextPayload.windowProfile = options.windowProfile;
+    }
+
+    if (nextPayload.blockImages === undefined && options.blockImages !== undefined) {
+      nextPayload.blockImages = options.blockImages;
+    }
+
+    if (nextPayload.blockWebRtc === undefined && options.blockWebRtc !== undefined) {
+      nextPayload.blockWebRtc = options.blockWebRtc;
+    }
+
+    if (nextPayload.blockWebGl === undefined && options.blockWebGl !== undefined) {
+      nextPayload.blockWebGl = options.blockWebGl;
+    }
+
+    if (nextPayload.disableCoop === undefined && options.disableCoop !== undefined) {
+      nextPayload.disableCoop = options.disableCoop;
     }
   }
 

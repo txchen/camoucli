@@ -39,5 +39,6 @@ Living task tracker for the remaining Camoucli work.
 - [ ] Add optional remote or attach mode
   - let external Playwright clients connect to a `camou`-managed browser
 - [ ] Optional remote Playwright or server mode
-- [ ] BrowserForge-style higher-level fingerprint helpers
+- [x] BrowserForge-style higher-level fingerprint helpers
+  - add multi-locale, screen/window profile, and common toggle helpers for CLI and Node usage
 - [ ] CDP-heavy or streaming features

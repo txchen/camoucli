@@ -172,6 +172,11 @@ import { Camoufox } from 'camou';
 const camou = await Camoufox.launch({
   session: 'script',
   headless: false,
+  fingerprint: {
+    locales: ['en-US', 'fr-FR'],
+    screenProfile: 'desktop-fhd',
+    blockImages: true,
+  },
 });
 
 const page = await camou.open('https://example.com');
@@ -391,10 +396,19 @@ Most browser commands support:
 - `--config-json <json>`
 - `--prefs <path>`
 - `--prefs-json <json>`
+- `--fingerprint <path>`
+- `--fingerprint-json <json>`
 - `--preset <name>`
 - `--proxy <url>`
 - `--locale <locale>`
+- `--locales <locale[,locale...]>`
 - `--timezone <timezone>`
+- `--screen-profile <name>`
+- `--window-profile <name>`
+- `--block-images`
+- `--block-webrtc`
+- `--block-webgl`
+- `--disable-coop`
 - `--width <px>`
 - `--height <px>`
 - `--json`
@@ -427,6 +441,63 @@ Apply one or more:
 ```bash
 camou open https://example.com --preset cache --preset low-bandwidth
 ```
+
+## Fingerprint Helpers
+
+Camou now includes a higher-level helper layer for common Camoufox identity settings without forcing you to handcraft raw config keys.
+
+CLI shortcuts:
+
+```bash
+camou open https://example.com \
+  --locales en-US,fr-FR \
+  --screen-profile desktop-fhd \
+  --window-profile desktop \
+  --block-images
+```
+
+You can also pass a helper JSON object:
+
+```bash
+camou open https://example.com --fingerprint-json '{"screenProfile":"retina-mac","locales":["en-US","en"],"blockWebRtc":true}'
+```
+
+Node API example:
+
+```ts
+import { Camoufox } from 'camou';
+
+const camou = await Camoufox.launch({
+  fingerprint: {
+    locales: ['en-US', 'fr-FR'],
+    screenProfile: 'desktop-fhd',
+    windowProfile: 'desktop',
+    blockImages: true,
+  },
+});
+```
+
+Supported helper fields include:
+
+- `locales` to keep `navigator.language`, `navigator.languages`, and `Accept-Language` aligned
+- `screenProfile` / `windowProfile` for curated screen and window templates
+- `screen` / `window` in the Node API for direct helper objects
+- `blockImages`, `blockWebRtc`, `blockWebGl`, and `disableCoop` as Python-style toggle helpers
+- `fonts` and `fontSpacingSeed` in the Node API for higher-level font config
+
+Built-in screen profiles:
+
+- `laptop-hd`
+- `desktop-fhd`
+- `desktop-qhd`
+- `retina-mac`
+
+Built-in window profiles:
+
+- `laptop`
+- `desktop`
+- `desktop-large`
+- `retina`
 
 ## Doctor And Troubleshooting
 

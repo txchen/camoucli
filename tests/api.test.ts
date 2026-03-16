@@ -65,6 +65,11 @@ describe('public Node API', () => {
       headless: true,
       browser: '135.0.1-beta.24',
       preset: ['cache'],
+      fingerprint: {
+        locales: ['en-US', 'fr-FR'],
+        screenProfile: 'desktop-fhd',
+        blockImages: true,
+      },
     });
 
     expect(launchPersistentCamoufoxMock).toHaveBeenCalledWith(
@@ -74,6 +79,11 @@ describe('public Node API', () => {
         headless: true,
         browser: '135.0.1-beta.24',
         preset: ['cache'],
+        fingerprint: {
+          locales: ['en-US', 'fr-FR'],
+          screenProfile: 'desktop-fhd',
+          blockImages: true,
+        },
       }),
       undefined,
     );

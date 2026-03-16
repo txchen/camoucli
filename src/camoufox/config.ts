@@ -3,6 +3,15 @@ import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 
 import { ValidationError } from '../util/errors.js';
+import {
+  fingerprintHelperSchema,
+  fingerprintLocalesValueSchema,
+  fingerprintScreenSchema,
+  fingerprintWindowSchema,
+  mergeFingerprintHelpers,
+  resolveFingerprintHelpers,
+  type FingerprintHelperInput,
+} from './fingerprint.js';
 import { parseFirefoxUserPrefs, type FirefoxUserPrefs } from './prefs.js';
 import { resolveCamoufoxPresets } from './presets.js';
 
@@ -14,10 +23,24 @@ export const launchInputSchema = z.object({
   configJson: z.string().optional(),
   prefsPath: z.string().optional(),
   prefsJson: z.string().optional(),
+  fingerprintPath: z.string().optional(),
+  fingerprintJson: z.string().optional(),
+  fingerprint: fingerprintHelperSchema.optional(),
   preset: z.array(z.string()).optional(),
   proxy: z.string().optional(),
   locale: z.string().optional(),
+  locales: fingerprintLocalesValueSchema.optional(),
   timezone: z.string().optional(),
+  screenProfile: z.string().optional(),
+  screen: z.union([z.string().min(1), fingerprintScreenSchema]).optional(),
+  windowProfile: z.string().optional(),
+  window: z.union([z.string().min(1), fingerprintWindowSchema]).optional(),
+  fonts: z.array(z.string().min(1)).optional(),
+  fontSpacingSeed: z.number().int().nonnegative().optional(),
+  blockImages: z.boolean().optional(),
+  blockWebRtc: z.boolean().optional(),
+  blockWebGl: z.boolean().optional(),
+  disableCoop: z.boolean().optional(),
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   browser: z.string().optional(),
@@ -44,6 +67,14 @@ export interface ResolvedLaunchConfig {
   } | undefined;
 }
 
+function parseJsonString(raw: string, label: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new ValidationError(`Unable to parse ${label} JSON.`, undefined, error);
+  }
+}
+
 export async function loadJsonObjectFile(filePath: string, label: string): Promise<Record<string, unknown>> {
   let raw: string;
   try {
@@ -56,12 +87,7 @@ export async function loadJsonObjectFile(filePath: string, label: string): Promi
 }
 
 export function parseJsonObjectString(raw: string, label: string): Record<string, unknown> {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch (error) {
-    throw new ValidationError(`Unable to parse ${label} JSON.`, undefined, error);
-  }
+  const parsed = parseJsonString(raw, label);
 
   const result = jsonObjectSchema.safeParse(parsed);
   if (!result.success) {
@@ -69,6 +95,68 @@ export function parseJsonObjectString(raw: string, label: string): Record<string
   }
 
   return result.data;
+}
+
+async function resolveFingerprintHelperInput(
+  pathValue: string | undefined,
+  jsonValue: string | undefined,
+  directValue: FingerprintHelperInput | undefined,
+): Promise<FingerprintHelperInput | undefined> {
+  if (pathValue && jsonValue) {
+    throw new ValidationError('Pass either fingerprint path or fingerprint JSON, not both.');
+  }
+
+  let parsedValue: FingerprintHelperInput | undefined;
+  if (pathValue) {
+    let raw: string;
+    try {
+      raw = await readFile(pathValue, 'utf8');
+    } catch (error) {
+      throw new ValidationError(`Unable to read fingerprint helper file at ${pathValue}.`, { filePath: pathValue }, error);
+    }
+    parsedValue = fingerprintHelperSchema.parse(parseJsonString(raw, 'fingerprint helper'));
+  } else if (jsonValue) {
+    parsedValue = fingerprintHelperSchema.parse(parseJsonString(jsonValue, 'fingerprint helper'));
+  }
+
+  return mergeFingerprintHelpers(parsedValue, directValue);
+}
+
+function buildLaunchFingerprintHelperInput(input: LaunchInput): FingerprintHelperInput | undefined {
+  const flatHelperInput: FingerprintHelperInput = {
+    ...(input.locales ? { locales: input.locales } : {}),
+    ...(input.screenProfile ? { screenProfile: input.screenProfile } : {}),
+    ...(input.screen ? { screen: input.screen } : {}),
+    ...(input.windowProfile ? { windowProfile: input.windowProfile } : {}),
+    ...(input.window ? { window: input.window } : {}),
+    ...(input.fonts ? { fonts: input.fonts } : {}),
+    ...(input.fontSpacingSeed !== undefined ? { fontSpacingSeed: input.fontSpacingSeed } : {}),
+    ...(input.blockImages !== undefined ? { blockImages: input.blockImages } : {}),
+    ...(input.blockWebRtc !== undefined ? { blockWebRtc: input.blockWebRtc } : {}),
+    ...(input.blockWebGl !== undefined ? { blockWebGl: input.blockWebGl } : {}),
+    ...(input.disableCoop !== undefined ? { disableCoop: input.disableCoop } : {}),
+  };
+
+  return Object.keys(flatHelperInput).length > 0 ? flatHelperInput : undefined;
+}
+
+export function hasLaunchFingerprintHelpers(input: LaunchInput): boolean {
+  return Boolean(
+    input.fingerprintPath ||
+      input.fingerprintJson ||
+      input.fingerprint ||
+      input.locales ||
+      input.screenProfile ||
+      input.screen ||
+      input.windowProfile ||
+      input.window ||
+      input.fonts ||
+      input.fontSpacingSeed !== undefined ||
+      input.blockImages !== undefined ||
+      input.blockWebRtc !== undefined ||
+      input.blockWebGl !== undefined ||
+      input.disableCoop !== undefined,
+  );
 }
 
 export async function resolveJsonObjectInput(
@@ -137,18 +225,37 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
   const presets = resolveCamoufoxPresets(input.preset);
   const rawConfig = await resolveJsonObjectInput(input.configPath, input.configJson, 'config');
   const rawPrefs = await resolveJsonObjectInput(input.prefsPath, input.prefsJson, 'prefs');
+  if (input.locale && input.locales) {
+    throw new ValidationError('Pass either locale or locales, not both.');
+  }
+
+  const helperInput = mergeFingerprintHelpers(
+    await resolveFingerprintHelperInput(input.fingerprintPath, input.fingerprintJson, input.fingerprint),
+    buildLaunchFingerprintHelperInput({
+      ...input,
+      ...(input.locale ? { locales: [input.locale] } : {}),
+    }),
+  );
+  const fingerprintHelpers = resolveFingerprintHelpers(helperInput);
   const camouConfig = {
     ...presets.camouConfig,
+    ...fingerprintHelpers.camouConfig,
     ...rawConfig,
   };
   const firefoxUserPrefs = parseFirefoxUserPrefs({
     ...presets.firefoxUserPrefs,
+    ...fingerprintHelpers.firefoxUserPrefs,
     ...rawPrefs,
   });
-  const viewport = input.width && input.height ? { width: input.width, height: input.height } : undefined;
+  const viewport = input.width && input.height ? { width: input.width, height: input.height } : fingerprintHelpers.viewport;
 
   if ((input.width && !input.height) || (!input.width && input.height)) {
     throw new ValidationError('Both width and height are required when setting window size.');
+  }
+
+  if (viewport) {
+    camouConfig['window.innerWidth'] = viewport.width;
+    camouConfig['window.innerHeight'] = viewport.height;
   }
 
   return {
@@ -158,7 +265,7 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
     camouConfig,
     firefoxUserPrefs,
     proxy: parseProxyString(input.proxy),
-    locale: validateLocale(input.locale),
+    locale: validateLocale(fingerprintHelpers.locale ?? input.locale),
     timezoneId: validateTimezone(input.timezone),
     viewport,
   };

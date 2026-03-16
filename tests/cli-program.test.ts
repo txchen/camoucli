@@ -36,6 +36,16 @@ describe('CLI program parsing', () => {
         '{"foo":1}',
         '--prefs-json',
         '{"bar":true}',
+        '--locales',
+        'en-US,fr-FR',
+        '--screen-profile',
+        'desktop-fhd',
+        '--window-profile',
+        'desktop',
+        '--block-images',
+        '--block-webrtc',
+        '--block-webgl',
+        '--disable-coop',
         '--json',
       ],
       { from: 'node' },
@@ -54,6 +64,13 @@ describe('CLI program parsing', () => {
         preset: ['cache', 'low-bandwidth'],
         configJson: '{"foo":1}',
         prefsJson: '{"bar":true}',
+        locales: ['en-US', 'fr-FR'],
+        screenProfile: 'desktop-fhd',
+        windowProfile: 'desktop',
+        blockImages: true,
+        blockWebRtc: true,
+        blockWebGl: true,
+        disableCoop: true,
       }),
       expect.objectContaining({
         session: 'work',
@@ -85,6 +102,35 @@ describe('CLI program parsing', () => {
         action: 'wait',
         target: '#app',
         timeoutMs: 2500,
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('passes fingerprint helper JSON through shared launch options', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(
+      ['node', 'camou', 'open', 'https://example.com', '--fingerprint-json', '{"screenProfile":"laptop-hd"}'],
+      { from: 'node' },
+    );
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'open',
+      expect.objectContaining({
+        action: 'open',
+        fingerprintJson: '{"screenProfile":"laptop-hd"}',
       }),
       expect.any(Object),
     );

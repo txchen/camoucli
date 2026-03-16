@@ -13,10 +13,19 @@ export interface SharedOptions {
   configJson?: string | undefined;
   prefs?: string | undefined;
   prefsJson?: string | undefined;
+  fingerprint?: string | undefined;
+  fingerprintJson?: string | undefined;
   preset?: string[] | undefined;
   proxy?: string | undefined;
   locale?: string | undefined;
+  locales?: string[] | undefined;
   timezone?: string | undefined;
+  screenProfile?: string | undefined;
+  windowProfile?: string | undefined;
+  blockImages?: boolean | undefined;
+  blockWebrtc?: boolean | undefined;
+  blockWebgl?: boolean | undefined;
+  disableCoop?: boolean | undefined;
   width?: number | undefined;
   height?: number | undefined;
   json?: boolean | undefined;
@@ -59,10 +68,19 @@ function addSharedBrowserOptions(command: Command): Command {
     .option('--config-json <json>', 'inline Camoufox config JSON')
     .option('--prefs <path>', 'Firefox prefs file path')
     .option('--prefs-json <json>', 'inline Firefox prefs JSON')
+    .option('--fingerprint <path>', 'fingerprint helper JSON file path')
+    .option('--fingerprint-json <json>', 'inline fingerprint helper JSON')
     .option('--preset <name>', 'apply a built-in preset (repeat or use comma-separated values)', collectValues)
     .option('--proxy <url>', 'proxy URL')
     .option('--locale <locale>', 'locale override')
+    .option('--locales <locale>', 'accepted locales (repeat or use comma-separated values)', collectValues)
     .option('--timezone <timezone>', 'timezone override')
+    .option('--screen-profile <name>', 'named screen fingerprint profile')
+    .option('--window-profile <name>', 'named window fingerprint profile')
+    .option('--block-images', 'block image requests')
+    .option('--block-webrtc', 'disable WebRTC')
+    .option('--block-webgl', 'disable WebGL')
+    .option('--disable-coop', 'disable Cross-Origin-Opener-Policy isolation')
     .option('--width <width>', 'window width', parseInteger)
     .option('--height <height>', 'window height', parseInteger)
     .option('--json', 'JSON output')
@@ -85,10 +103,19 @@ export function toLaunchInput(options: SharedOptions): LaunchInput {
     configJson: options.configJson,
     prefsPath: options.prefs,
     prefsJson: options.prefsJson,
+    fingerprintPath: options.fingerprint,
+    fingerprintJson: options.fingerprintJson,
     preset: options.preset,
     proxy: options.proxy,
     locale: options.locale,
+    locales: options.locales,
     timezone: options.timezone,
+    screenProfile: options.screenProfile,
+    windowProfile: options.windowProfile,
+    blockImages: options.blockImages,
+    blockWebRtc: options.blockWebrtc,
+    blockWebGl: options.blockWebgl,
+    disableCoop: options.disableCoop,
     width: options.width,
     height: options.height,
   };
