@@ -169,6 +169,36 @@ describe('CLI output', () => {
   it('prints common browser actions in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(
+        'back',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          title: 'Back Page',
+          url: 'https://example.com/back',
+        },
+        false,
+      );
+      printOutput(
+        'forward',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          title: 'Forward Page',
+          url: 'https://example.com/forward',
+        },
+        false,
+      );
+      printOutput(
+        'reload',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          title: 'Reloaded Page',
+          url: 'https://example.com/reload',
+        },
+        false,
+      );
+      printOutput(
         'open',
         {
           sessionName: 'work',
@@ -189,12 +219,59 @@ describe('CLI output', () => {
         false,
       );
       printOutput(
+        'hover',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '@e2',
+        },
+        false,
+      );
+      printOutput(
         'fill',
         {
           sessionName: 'work',
           tabName: 'main',
           target: '@e2',
           valueLength: 12,
+        },
+        false,
+      );
+      printOutput(
+        'type',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '@e2',
+          valueLength: 5,
+        },
+        false,
+      );
+      printOutput(
+        'check',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '#agree',
+        },
+        false,
+      );
+      printOutput(
+        'uncheck',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '#agree',
+        },
+        false,
+      );
+      printOutput(
+        'select',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '#choice',
+          value: 'b',
         },
         false,
       );
@@ -208,6 +285,26 @@ describe('CLI output', () => {
         false,
       );
       printOutput(
+        'scroll',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          direction: 'down',
+          amount: 250,
+          url: 'https://example.com/dashboard',
+        },
+        false,
+      );
+      printOutput(
+        'scroll.intoView',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          target: '#submit',
+        },
+        false,
+      );
+      printOutput(
         'wait',
         {
           sessionName: 'work',
@@ -217,13 +314,37 @@ describe('CLI output', () => {
         },
         false,
       );
+      printOutput(
+        'wait',
+        {
+          sessionName: 'work',
+          tabName: 'main',
+          text: 'Done',
+          loadState: 'networkidle',
+          url: 'https://example.com/done',
+        },
+        false,
+      );
+      printOutput('get.value', { value: 'selected-b' }, false);
     });
 
+    expect(output).toContain('Went back work/main "Back Page" https://example.com/back');
+    expect(output).toContain('Went forward work/main "Forward Page" https://example.com/forward');
+    expect(output).toContain('Reloaded work/main "Reloaded Page" https://example.com/reload');
     expect(output).toContain('Opened work/main "Example Domain" https://example.com/');
     expect(output).toContain('Clicked work/main @e1 https://www.iana.org/domains/example');
+    expect(output).toContain('Hovered work/main @e2');
     expect(output).toContain('Filled work/main @e2 (12 chars)');
+    expect(output).toContain('Typed work/main @e2 (+5 chars)');
+    expect(output).toContain('Checked work/main #agree');
+    expect(output).toContain('Unchecked work/main #agree');
+    expect(output).toContain('Selected work/main #choice "b"');
     expect(output).toContain('Pressed work/main Enter');
+    expect(output).toContain('Scrolled work/main down 250 https://example.com/dashboard');
+    expect(output).toContain('Scrolled into view work/main #submit');
     expect(output).toContain('Ready work/main #ready https://example.com/dashboard');
+    expect(output).toContain('Ready work/main text="Done" load=networkidle https://example.com/done');
+    expect(output).toContain('selected-b');
   });
 
   it('prints session, tab, and remove actions in human-readable form', () => {

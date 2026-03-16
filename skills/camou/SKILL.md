@@ -108,15 +108,14 @@ camou doctor --json
 If the user wants code instead of one-off shell commands, use the package API.
 
 ```ts
-import { launchCamoufox } from 'camou';
+import { Camoufox } from 'camou';
 
-const camou = await launchCamoufox({
+const camou = await Camoufox.launch({
   session: 'script',
   headless: false,
 });
 
-const page = await camou.context.newPage();
-await page.goto('https://example.com');
+const page = await camou.open('https://example.com');
 console.log(await page.title());
 
 await camou.close();
@@ -135,8 +134,11 @@ await withCamoufox({ session: 'script' }, async ({ context }) => {
 
 Useful script exports:
 
+- `Camoufox.launch()`
+- `Camoufox.with()`
 - `launchCamoufox()`
 - `launchCamoufoxContext()`
+- `resolveCamoufoxLaunchSpec()`
 - `withCamoufox()`
 - `installCamoufox()`
 - `listInstalledBrowsers()`
@@ -162,15 +164,26 @@ camou doctor
 
 ```bash
 camou open <url>
+camou back
+camou forward
+camou reload
 camou snapshot [-i]
 camou click <selectorOrRef>
+camou hover <selectorOrRef>
 camou fill <selectorOrRef> <text>
+camou type <selectorOrRef> <text>
+camou check <selectorOrRef>
+camou uncheck <selectorOrRef>
+camou select <selectorOrRef> <value>
 camou press <key>
-camou wait <selectorOrRef>
+camou scroll <direction> [amount]
+camou scrollintoview <selectorOrRef>
+camou wait [selectorOrRef] [--text <text>] [--load <state>]
 camou screenshot [path]
 camou get url
 camou get title
 camou get text <selectorOrRef>
+camou get value <selectorOrRef>
 ```
 
 ### Sessions and tabs
@@ -216,11 +229,10 @@ camou snapshot -i --json
 ### Programmatic Node automation
 
 ```ts
-import { withCamoufox } from 'camou';
+import { Camoufox } from 'camou';
 
-await withCamoufox({ session: 'agent-script', headless: true }, async ({ context }) => {
-  const page = await context.newPage();
-  await page.goto('https://example.com');
+await Camoufox.with({ session: 'agent-script', headless: true }, async (camou) => {
+  const page = await camou.open('https://example.com');
   console.log(await page.title());
 });
 ```

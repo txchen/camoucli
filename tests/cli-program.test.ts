@@ -90,6 +90,99 @@ describe('CLI program parsing', () => {
     );
   });
 
+  it('parses wait text and load-state options', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'wait', '--text', 'Done', '--load', 'networkidle'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'wait',
+      expect.objectContaining({
+        action: 'wait',
+        text: 'Done',
+        loadState: 'networkidle',
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it('routes broadened automation commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'hover', '@e1'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'type', '#name', 'hello'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'select', '#choice', 'b'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'scroll', 'down', '250'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'scrollintoview', '#submit'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'value', '#name'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'reload'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'hover',
+      expect.objectContaining({ action: 'hover', target: '@e1' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'type',
+      expect.objectContaining({ action: 'type', target: '#name', text: 'hello' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'select',
+      expect.objectContaining({ action: 'select', target: '#choice', value: 'b' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      4,
+      'scroll',
+      expect.objectContaining({ action: 'scroll', direction: 'down', amount: 250 }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      5,
+      'scroll.intoView',
+      expect.objectContaining({ action: 'scroll.intoView', target: '#submit' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      6,
+      'get.value',
+      expect.objectContaining({ action: 'get.value', target: '#name' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      7,
+      'reload',
+      expect.objectContaining({ action: 'reload' }),
+      expect.any(Object),
+    );
+  });
+
   it('defaults session stop to the default session name', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({

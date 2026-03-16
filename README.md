@@ -113,15 +113,14 @@ Camou can also be used as a Node library, not just a CLI.
 The programmatic API is Playwright-based: it launches Camoufox for you and gives you a real Playwright `BrowserContext`, similar in spirit to the Camoufox Python wrapper.
 
 ```ts
-import { launchCamoufox } from 'camou';
+import { Camoufox } from 'camou';
 
-const camou = await launchCamoufox({
+const camou = await Camoufox.launch({
   session: 'script',
   headless: false,
 });
 
-const page = await camou.context.newPage();
-await page.goto('https://example.com');
+const page = await camou.open('https://example.com');
 console.log(await page.title());
 
 await camou.close();
@@ -141,8 +140,11 @@ await withCamoufox({ session: 'script' }, async ({ context }) => {
 
 Useful exported helpers include:
 
+- `Camoufox.launch()`
+- `Camoufox.with()`
 - `launchCamoufox()`
 - `launchCamoufoxContext()`
+- `resolveCamoufoxLaunchSpec()`
 - `withCamoufox()`
 - `installCamoufox()`
 - `listInstalledBrowsers()`
@@ -290,15 +292,26 @@ camou doctor
 
 ```bash
 camou open <url>
+camou back
+camou forward
+camou reload
 camou snapshot [-i]
 camou click <selectorOrRef>
+camou hover <selectorOrRef>
 camou fill <selectorOrRef> <text>
+camou type <selectorOrRef> <text>
+camou check <selectorOrRef>
+camou uncheck <selectorOrRef>
+camou select <selectorOrRef> <value>
 camou press <key>
-camou wait <selectorOrRef>
+camou scroll <direction> [amount]
+camou scrollintoview <selectorOrRef>
+camou wait [selectorOrRef] [--text <text>] [--load <state>]
 camou screenshot [path]
 camou get url
 camou get title
 camou get text <selectorOrRef>
+camou get value <selectorOrRef>
 ```
 
 ### Sessions and tabs
@@ -331,6 +344,11 @@ Most browser commands support:
 - `--height <px>`
 - `--json`
 - `--verbose`
+
+`wait` also supports:
+
+- `--text <text>`
+- `--load <domcontentloaded|load|networkidle>`
 
 ## Presets
 
@@ -396,6 +414,14 @@ Current local verification with `playwright-core` `1.51.1`:
 | `135.0.1-beta.24` | launches | smoke-tested successfully |
 | `135.0.1-beta.23` | incompatible | `Browser.setContrast` is not supported |
 
+The repo now also includes:
+
+- cross-platform CI in `.github/workflows/ci.yml`
+- a workflow-driven compatibility probe in `.github/workflows/compatibility-matrix.yml`
+- local scripts to generate compatibility reports and markdown summaries
+
+See `docs/compatibility-matrix.md` for the workflow and local tooling.
+
 ## Storage Layout
 
 Camou keeps its own runtime state and profiles, but stores browser binaries in the shared Camoufox cache layout when possible.
@@ -428,6 +454,16 @@ Local development commands:
 ```bash
 npm run dev -- --help
 npm run dev:daemon
+```
+
+Compatibility tooling:
+
+```bash
+# produce a raw compatibility report JSON
+node scripts/run-compatibility-report.mjs --output compatibility-report.json
+
+# turn one or more reports into a markdown table
+node scripts/generate-compatibility-matrix.mjs compatibility-report.json
 ```
 
 ## Acknowledgements

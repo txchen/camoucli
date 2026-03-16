@@ -5,7 +5,7 @@ import type { Page } from 'playwright-core';
 import type { LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
-import { SessionError } from '../util/errors.js';
+import { SessionError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { locatorForTarget } from './actions.js';
 import { clearSnapshotRefs, takeSnapshot } from './snapshot.js';
@@ -70,6 +70,39 @@ export class BrowserManager {
     };
   }
 
+  async back(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => null);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      url: tab.page.url(),
+      title: await tab.page.title(),
+    };
+  }
+
+  async forward(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.goForward({ waitUntil: 'domcontentloaded' }).catch(() => null);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      url: tab.page.url(),
+      title: await tab.page.title(),
+    };
+  }
+
+  async reload(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.reload({ waitUntil: 'domcontentloaded' });
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      url: tab.page.url(),
+      title: await tab.page.title(),
+    };
+  }
+
   async snapshot(input: LaunchInput & { session: string; tabName: string; interactive: boolean }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const result = await takeSnapshot(tab.page, input.interactive);
@@ -96,6 +129,16 @@ export class BrowserManager {
     };
   }
 
+  async hover(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).hover();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+    };
+  }
+
   async fill(input: LaunchInput & { session: string; tabName: string; target: string; text: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).fill(input.text);
@@ -107,6 +150,50 @@ export class BrowserManager {
     };
   }
 
+  async type(input: LaunchInput & { session: string; tabName: string; target: string; text: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).type(input.text);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      valueLength: input.text.length,
+    };
+  }
+
+  async check(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).check();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      checked: true,
+    };
+  }
+
+  async uncheck(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).uncheck();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      checked: false,
+    };
+  }
+
+  async select(input: LaunchInput & { session: string; tabName: string; target: string; value: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).selectOption(input.value);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      value: input.value,
+    };
+  }
+
   async press(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.press(input.key);
@@ -114,6 +201,40 @@ export class BrowserManager {
       sessionName: input.session,
       tabName: tab.name,
       key: input.key,
+    };
+  }
+
+  async scroll(
+    input: LaunchInput & { session: string; tabName: string; direction: 'up' | 'down' | 'left' | 'right'; amount?: number | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const amount = input.amount ?? 500;
+    const delta =
+      input.direction === 'up'
+        ? { x: 0, y: -amount }
+        : input.direction === 'down'
+          ? { x: 0, y: amount }
+          : input.direction === 'left'
+            ? { x: -amount, y: 0 }
+            : { x: amount, y: 0 };
+
+    await tab.page.mouse.wheel(delta.x, delta.y);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      direction: input.direction,
+      amount,
+      url: tab.page.url(),
+    };
+  }
+
+  async scrollIntoView(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).scrollIntoViewIfNeeded();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
     };
   }
 
@@ -160,16 +281,44 @@ export class BrowserManager {
     };
   }
 
-  async wait(
-    input: LaunchInput & { session: string; tabName: string; target: string; timeoutMs?: number | undefined },
-  ): Promise<Record<string, unknown>> {
+  async getValue(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    const waitOptions = input.timeoutMs ? { timeout: input.timeoutMs } : undefined;
-    await locatorForTarget(tab.page, tab, input.target).waitFor(waitOptions);
+    const value = await locatorForTarget(tab.page, tab, input.target).inputValue();
     return {
       sessionName: input.session,
       tabName: tab.name,
       target: input.target,
+      value,
+    };
+  }
+
+  async wait(
+    input: LaunchInput & { session: string; tabName: string; target?: string | undefined; text?: string | undefined; loadState?: 'domcontentloaded' | 'load' | 'networkidle' | undefined; timeoutMs?: number | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    if (!input.target && !input.text && !input.loadState) {
+      throw new ValidationError('wait requires a target, --text value, or --load state.');
+    }
+
+    const waitOptions = input.timeoutMs ? { timeout: input.timeoutMs } : undefined;
+    if (input.target) {
+      await locatorForTarget(tab.page, tab, input.target).waitFor(waitOptions);
+    }
+
+    if (input.text) {
+      await tab.page.getByText(input.text).first().waitFor(waitOptions);
+    }
+
+    if (input.loadState) {
+      await tab.page.waitForLoadState(input.loadState, waitOptions);
+    }
+
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      ...(input.target ? { target: input.target } : {}),
+      ...(input.text ? { text: input.text } : {}),
+      ...(input.loadState ? { loadState: input.loadState } : {}),
       url: tab.page.url(),
     };
   }
@@ -230,6 +379,7 @@ export class BrowserManager {
   private async ensureSession(sessionName: string, input: LaunchInput): Promise<SessionRuntime> {
     const existing = this.sessions.get(sessionName);
     if (existing) {
+      this.assertSessionCompatible(existing, input);
       return existing;
     }
 

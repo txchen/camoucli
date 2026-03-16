@@ -15,6 +15,8 @@ interface FakeElement {
   href?: string;
   inputType?: string;
   value?: string;
+  checked?: boolean;
+  options?: string[];
 }
 
 interface StoredPageState {
@@ -25,6 +27,17 @@ interface StoredPageState {
 
 const profileStore = new Map<string, StoredPageState[]>();
 const launchLog: FakeLaunchRecord[] = [];
+
+function cloneState(state: StoredPageState): StoredPageState {
+  return {
+    url: state.url,
+    title: state.title,
+    elements: state.elements.map((element) => ({
+      ...element,
+      options: element.options ? [...element.options] : undefined,
+    })),
+  };
+}
 
 function decodeDataUrl(url: string): string {
   const index = url.indexOf(',');
@@ -41,6 +54,7 @@ function parseElements(html: string): FakeElement[] {
     { regex: /<button([^>]*)>(.*?)<\/button>/gis, tag: 'button' },
     { regex: /<input([^>]*)>/gis, tag: 'input' },
     { regex: /<textarea([^>]*)>(.*?)<\/textarea>/gis, tag: 'textarea' },
+    { regex: /<select([^>]*)>(.*?)<\/select>/gis, tag: 'select' },
     { regex: /<p([^>]*)>(.*?)<\/p>/gis, tag: 'p' },
   ] as const;
 
@@ -53,13 +67,27 @@ function parseElements(html: string): FakeElement[] {
       const href = /href=["']([^"']+)["']/i.exec(attrs)?.[1];
       const placeholder = /placeholder=["']([^"']+)["']/i.exec(attrs)?.[1];
       const inputType = /type=["']([^"']+)["']/i.exec(attrs)?.[1] ?? (pattern.tag === 'input' ? 'text' : undefined);
+      const checked = /checked/i.test(attrs);
+      const optionMatches = Array.from((match[2] ?? '').matchAll(/<option([^>]*)>(.*?)<\/option>/gis));
+      const options = optionMatches.map((optionMatch) => {
+        const optionAttrs = optionMatch[1] ?? '';
+        const optionText = (optionMatch[2] ?? '').replace(/<[^>]+>/g, '').trim();
+        return /value=["']([^"']+)["']/i.exec(optionAttrs)?.[1] ?? optionText;
+      });
+      const selectedOption =
+        optionMatches.find((optionMatch) => /selected/i.test(optionMatch[1] ?? '')) ?? optionMatches[0];
+      const selectedValue = selectedOption
+        ? /value=["']([^"']+)["']/i.exec(selectedOption[1] ?? '')?.[1] ?? (selectedOption[2] ?? '').replace(/<[^>]+>/g, '').trim()
+        : undefined;
       elements.push({
         id,
         tag: pattern.tag,
         text: body || placeholder || pattern.tag,
         href,
         inputType,
-        value: body || '',
+        value: pattern.tag === 'select' ? selectedValue ?? '' : body || '',
+        checked: pattern.tag === 'input' ? checked : undefined,
+        options: pattern.tag === 'select' ? options : undefined,
       });
     }
   }
@@ -110,6 +138,13 @@ class FakeLocator {
     }
   }
 
+  async hover(): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+  }
+
   async fill(value: string): Promise<void> {
     const element = this.page.resolveElement(this.selector);
     if (!element) {
@@ -120,6 +155,47 @@ class FakeLocator {
     element.text = value;
   }
 
+  async type(value: string): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    const nextValue = `${element.value ?? ''}${value}`;
+    element.value = nextValue;
+    element.text = nextValue;
+  }
+
+  async check(): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    element.checked = true;
+  }
+
+  async uncheck(): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    element.checked = false;
+  }
+
+  async selectOption(value: string): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    element.value = value;
+    if (element.options?.includes(value)) {
+      element.text = value;
+    }
+  }
+
   async innerText(): Promise<string> {
     const element = this.page.resolveElement(this.selector);
     if (!element) {
@@ -127,6 +203,26 @@ class FakeLocator {
     }
 
     return element.text;
+  }
+
+  async inputValue(): Promise<string> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    return element.value ?? '';
+  }
+
+  async scrollIntoViewIfNeeded(): Promise<void> {
+    const element = this.page.resolveElement(this.selector);
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+  }
+
+  first(): FakeLocator {
+    return this;
   }
 
   async waitFor(): Promise<void> {
@@ -139,6 +235,8 @@ class FakeLocator {
 
 class FakePage extends EventEmitter {
   private state: StoredPageState;
+  private history: StoredPageState[];
+  private historyIndex: number;
   private readonly mainFrameRef = {};
   private closed = false;
   private refs = new Map<string, FakeElement>();
@@ -147,9 +245,15 @@ class FakePage extends EventEmitter {
     press: async (_key: string) => undefined,
   };
 
+  readonly mouse = {
+    wheel: async (_deltaX: number, _deltaY: number) => undefined,
+  };
+
   constructor(initialState: StoredPageState) {
     super();
-    this.state = initialState;
+    this.state = cloneState(initialState);
+    this.history = [cloneState(initialState)];
+    this.historyIndex = 0;
   }
 
   mainFrame(): object {
@@ -157,9 +261,48 @@ class FakePage extends EventEmitter {
   }
 
   async goto(url: string): Promise<void> {
-    this.state = parsePageState(url);
+    const nextState = parsePageState(url);
+    this.history = this.history.slice(0, this.historyIndex + 1);
+    this.history.push(cloneState(nextState));
+    this.historyIndex = this.history.length - 1;
+    this.state = cloneState(nextState);
     this.refs.clear();
     this.emit('framenavigated', this.mainFrameRef);
+  }
+
+  async goBack(): Promise<FakePage | null> {
+    if (this.historyIndex === 0) {
+      return null;
+    }
+
+    this.historyIndex -= 1;
+    this.state = cloneState(this.history[this.historyIndex]!);
+    this.refs.clear();
+    this.emit('framenavigated', this.mainFrameRef);
+    return this;
+  }
+
+  async goForward(): Promise<FakePage | null> {
+    if (this.historyIndex >= this.history.length - 1) {
+      return null;
+    }
+
+    this.historyIndex += 1;
+    this.state = cloneState(this.history[this.historyIndex]!);
+    this.refs.clear();
+    this.emit('framenavigated', this.mainFrameRef);
+    return this;
+  }
+
+  async reload(): Promise<FakePage> {
+    this.state = cloneState(this.history[this.historyIndex]!);
+    this.refs.clear();
+    this.emit('framenavigated', this.mainFrameRef);
+    return this;
+  }
+
+  async waitForLoadState(): Promise<void> {
+    return undefined;
   }
 
   url(): string {
@@ -172,6 +315,10 @@ class FakePage extends EventEmitter {
 
   locator(selector: string): FakeLocator {
     return new FakeLocator(this, selector);
+  }
+
+  getByText(text: string): FakeLocator {
+    return new FakeLocator(this, `text=${text}`);
   }
 
   async screenshot(options: { path: string }): Promise<void> {
@@ -223,6 +370,11 @@ class FakePage extends EventEmitter {
       return this.refs.get(selector);
     }
 
+    if (selector.startsWith('text=')) {
+      const text = selector.slice('text='.length);
+      return this.state.elements.find((element) => element.text.includes(text));
+    }
+
     if (selector.startsWith('#')) {
       const id = selector.slice(1);
       return this.state.elements.find((element) => element.id === id);
@@ -232,11 +384,7 @@ class FakePage extends EventEmitter {
   }
 
   serialize(): StoredPageState {
-    return {
-      url: this.state.url,
-      title: this.state.title,
-      elements: this.state.elements.map((element) => ({ ...element })),
-    };
+    return cloneState(this.state);
   }
 }
 

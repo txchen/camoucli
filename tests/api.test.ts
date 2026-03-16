@@ -7,9 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTestPaths } from './helpers/temp-paths.js';
 
 const launchPersistentCamoufoxMock = vi.fn();
+const preparePersistentCamoufoxLaunchMock = vi.fn();
 
 vi.mock('../src/camoufox/launcher.js', () => ({
   launchPersistentCamoufox: launchPersistentCamoufoxMock,
+  preparePersistentCamoufoxLaunch: preparePersistentCamoufoxLaunchMock,
 }));
 
 describe('public Node API', () => {
@@ -18,6 +20,7 @@ describe('public Node API', () => {
   beforeEach(async () => {
     vi.resetModules();
     launchPersistentCamoufoxMock.mockReset();
+    preparePersistentCamoufoxLaunchMock.mockReset();
     rootDir = await mkdtemp(path.join(os.tmpdir(), 'camou-api-'));
   });
 
@@ -118,6 +121,82 @@ describe('public Node API', () => {
     const context = await launchCamoufoxContext({ paths: createTestPaths(rootDir) });
 
     expect(context).toBe(fakeContext);
+  });
+
+  it('exposes first-class helpers for launch resolution and Python-like wrappers', async () => {
+    const fakePage = { goto: vi.fn(async () => undefined), title: vi.fn(async () => 'Example Domain') };
+    const fakeContext = {
+      close: vi.fn(async () => undefined),
+      newPage: vi.fn(async () => fakePage),
+      pages: vi.fn(() => []),
+    };
+
+    launchPersistentCamoufoxMock.mockResolvedValue({
+      context: fakeContext,
+      browserVersion: '135.0.1-beta.24',
+      installPath: '/tmp/camoufox-bin',
+      sessionPaths: {
+        sessionName: 'script',
+        safeSessionName: 'script',
+        rootDir: '/tmp/script',
+        profileDir: '/tmp/script/user-data',
+        downloadsDir: '/tmp/script/downloads',
+        artifactsDir: '/tmp/script/artifacts',
+      },
+      resolvedConfig: {
+        headless: false,
+        presetNames: [],
+        camouConfig: {},
+        firefoxUserPrefs: {},
+      },
+    });
+    preparePersistentCamoufoxLaunchMock.mockResolvedValue({
+      browserVersion: '135.0.1-beta.24',
+      installPath: '/tmp/camoufox-bin',
+      sessionPaths: {
+        sessionName: 'script',
+        safeSessionName: 'script',
+        rootDir: '/tmp/script',
+        profileDir: '/tmp/script/user-data',
+        downloadsDir: '/tmp/script/downloads',
+        artifactsDir: '/tmp/script/artifacts',
+      },
+      resolvedConfig: {
+        headless: false,
+        presetNames: [],
+        camouConfig: {},
+        firefoxUserPrefs: {},
+      },
+      userDataDir: '/tmp/script/user-data',
+      launchOptions: {
+        executablePath: '/tmp/camoufox-bin',
+        headless: false,
+      },
+    });
+
+    const { Camoufox, resolveCamoufoxLaunchSpec } = await import('../src/index.js');
+    const paths = createTestPaths(rootDir);
+    const spec = await resolveCamoufoxLaunchSpec({ paths, session: 'script' });
+
+    expect(spec).toMatchObject({
+      sessionName: 'script',
+      browserVersion: '135.0.1-beta.24',
+      executablePath: '/tmp/camoufox-bin',
+      userDataDir: '/tmp/script/user-data',
+    });
+
+    const browser = await Camoufox.launch({ paths, session: 'script' });
+    expect(browser.sessionName).toBe('script');
+    const page = await browser.open('https://example.com');
+    expect(page).toBe(fakePage);
+    expect(fakePage.goto).toHaveBeenCalledWith('https://example.com', { waitUntil: 'domcontentloaded' });
+    await browser.close();
+
+    await Camoufox.with({ paths, session: 'script' }, async (session) => {
+      expect(session.browserVersion).toBe('135.0.1-beta.24');
+    });
+
+    expect(fakeContext.close).toHaveBeenCalledTimes(2);
   });
 
   it('closes the session after withCamoufox callbacks, even on failure', async () => {

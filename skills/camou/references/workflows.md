@@ -72,10 +72,18 @@ camou open https://example.com --browser <version>
 Core programmatic helpers:
 
 ```ts
-import { launchCamoufox, withCamoufox } from 'camou';
+import { Camoufox, launchCamoufox, withCamoufox } from 'camou';
 ```
 
 The Node API returns a real Playwright `BrowserContext`, so standard Playwright methods work after launch.
+
+High-level wrapper pattern:
+
+```ts
+const camou = await Camoufox.launch({ session: 'script' });
+const page = await camou.open('https://example.com');
+await camou.close();
+```
 
 ## Common Failure Patterns
 

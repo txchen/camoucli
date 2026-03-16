@@ -67,11 +67,24 @@ function printOpenResult(data: Record<string, unknown>): void {
   process.stdout.write(`Opened ${location}${title}${url ? ` ${url}` : ''}\n`);
 }
 
+function printNavigationResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const title = typeof data.title === 'string' && data.title.length > 0 ? ` ${formatQuoted(data.title)}` : '';
+  const url = typeof data.url === 'string' ? data.url : '';
+  process.stdout.write(`${prefix} ${location}${title}${url ? ` ${url}` : ''}\n`);
+}
+
 function printClickResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const target = String(data.target ?? 'unknown');
   const url = typeof data.url === 'string' ? data.url : '';
   process.stdout.write(`Clicked ${location} ${target}${url ? ` ${url}` : ''}\n`);
+}
+
+function printHoverResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  process.stdout.write(`Hovered ${location} ${target}\n`);
 }
 
 function printFillResult(data: Record<string, unknown>): void {
@@ -81,17 +94,53 @@ function printFillResult(data: Record<string, unknown>): void {
   process.stdout.write(`Filled ${location} ${target}${valueLength !== undefined ? ` (${valueLength} chars)` : ''}\n`);
 }
 
+function printTypeResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  const valueLength = typeof data.valueLength === 'number' ? data.valueLength : undefined;
+  process.stdout.write(`Typed ${location} ${target}${valueLength !== undefined ? ` (+${valueLength} chars)` : ''}\n`);
+}
+
+function printCheckResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  process.stdout.write(`${prefix} ${location} ${target}\n`);
+}
+
+function printSelectResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  process.stdout.write(`Selected ${location} ${target} ${formatQuoted(data.value ?? '')}\n`);
+}
+
 function printPressResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const key = String(data.key ?? 'unknown');
   process.stdout.write(`Pressed ${location} ${key}\n`);
 }
 
-function printWaitResult(data: Record<string, unknown>): void {
+function printScrollResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const direction = String(data.direction ?? 'down');
+  const amount = typeof data.amount === 'number' ? data.amount : undefined;
+  const url = typeof data.url === 'string' ? data.url : '';
+  process.stdout.write(`Scrolled ${location} ${direction}${amount !== undefined ? ` ${amount}` : ''}${url ? ` ${url}` : ''}\n`);
+}
+
+function printScrollIntoViewResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const target = String(data.target ?? 'unknown');
+  process.stdout.write(`Scrolled into view ${location} ${target}\n`);
+}
+
+function printWaitResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = typeof data.target === 'string' ? data.target : undefined;
+  const text = typeof data.text === 'string' ? `text=${formatQuoted(data.text)}` : undefined;
+  const loadState = typeof data.loadState === 'string' ? `load=${data.loadState}` : undefined;
+  const waitedFor = [target, text, loadState].filter(Boolean).join(' ');
   const url = typeof data.url === 'string' ? data.url : '';
-  process.stdout.write(`Ready ${location} ${target}${url ? ` ${url}` : ''}\n`);
+  process.stdout.write(`Ready ${location}${waitedFor ? ` ${waitedFor}` : ''}${url ? ` ${url}` : ''}\n`);
 }
 
 function printSessionStopResult(data: Record<string, unknown>): void {
@@ -116,6 +165,10 @@ function printTabCloseResult(data: Record<string, unknown>): void {
   }
 
   process.stdout.write(`Tab ${target ?? tabName ?? 'target'} was not found\n`);
+}
+
+function printValueResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String((data as Record<string, unknown>).value ?? '')}\n`);
 }
 
 function printSessionList(data: unknown): void {
@@ -369,14 +422,44 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'open':
       printOpenResult(data as Record<string, unknown>);
       return;
+    case 'back':
+      printNavigationResult('Went back', data as Record<string, unknown>);
+      return;
+    case 'forward':
+      printNavigationResult('Went forward', data as Record<string, unknown>);
+      return;
+    case 'reload':
+      printNavigationResult('Reloaded', data as Record<string, unknown>);
+      return;
     case 'click':
       printClickResult(data as Record<string, unknown>);
+      return;
+    case 'hover':
+      printHoverResult(data as Record<string, unknown>);
       return;
     case 'fill':
       printFillResult(data as Record<string, unknown>);
       return;
+    case 'type':
+      printTypeResult(data as Record<string, unknown>);
+      return;
+    case 'check':
+      printCheckResult('Checked', data as Record<string, unknown>);
+      return;
+    case 'uncheck':
+      printCheckResult('Unchecked', data as Record<string, unknown>);
+      return;
+    case 'select':
+      printSelectResult(data as Record<string, unknown>);
+      return;
     case 'press':
       printPressResult(data as Record<string, unknown>);
+      return;
+    case 'scroll':
+      printScrollResult(data as Record<string, unknown>);
+      return;
+    case 'scroll.intoView':
+      printScrollIntoViewResult(data as Record<string, unknown>);
       return;
     case 'wait':
       printWaitResult(data as Record<string, unknown>);
@@ -401,6 +484,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'get.text':
       process.stdout.write(`${String((data as Record<string, unknown>).text ?? '')}\n`);
+      return;
+    case 'get.value':
+      printValueResult(data as Record<string, unknown>);
       return;
     case 'screenshot':
       process.stdout.write(`${String((data as Record<string, unknown>).path ?? '')}\n`);

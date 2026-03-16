@@ -196,7 +196,180 @@ describe('daemon integration', () => {
       expect.arrayContaining(['alpha:135.0.1-beta.24', 'beta:135.0.1-beta.23', 'explicit:135.0.1-beta.24']),
     );
   });
+
+  it('supports broader navigation, interaction, and extraction commands', async () => {
+    const secondUrl = dataPage('<title>Second</title><p>Next page</p>');
+    const controlsUrl = dataPage(`
+      <title>Controls</title>
+      <input id="name" placeholder="Name">
+      <input id="agree" type="checkbox">
+      <select id="choice"><option value="a" selected>A</option><option value="b">B</option></select>
+      <button id="submit">Submit</button>
+      <a id="next" href="${secondUrl}">Next</a>
+    `);
+
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'actions',
+      tabName: 'main',
+      url: controlsUrl,
+      headless: true,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'hover',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'type',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+      text: 'hello',
+    });
+
+    let value = (await sendDaemonRequest(paths, {
+      action: 'get.value',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+    })) as { value: string };
+    expect(value.value).toBe('hello');
+
+    await sendDaemonRequest(paths, {
+      action: 'fill',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+      text: 'reset',
+    });
+
+    value = (await sendDaemonRequest(paths, {
+      action: 'get.value',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+    })) as { value: string };
+    expect(value.value).toBe('reset');
+
+    await sendDaemonRequest(paths, {
+      action: 'check',
+      session: 'actions',
+      tabName: 'main',
+      target: '#agree',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'uncheck',
+      session: 'actions',
+      tabName: 'main',
+      target: '#agree',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'select',
+      session: 'actions',
+      tabName: 'main',
+      target: '#choice',
+      value: 'b',
+    });
+
+    value = (await sendDaemonRequest(paths, {
+      action: 'get.value',
+      session: 'actions',
+      tabName: 'main',
+      target: '#choice',
+    })) as { value: string };
+    expect(value.value).toBe('b');
+
+    await sendDaemonRequest(paths, {
+      action: 'scroll',
+      session: 'actions',
+      tabName: 'main',
+      direction: 'down',
+      amount: 250,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'scroll.intoView',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'wait',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'wait',
+      session: 'actions',
+      tabName: 'main',
+      text: 'Submit',
+      loadState: 'networkidle',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'click',
+      session: 'actions',
+      tabName: 'main',
+      target: '#next',
+    });
+
+    let pageState = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'actions',
+      tabName: 'main',
+    })) as { title: string };
+    expect(pageState.title).toBe('Second');
+
+    await sendDaemonRequest(paths, {
+      action: 'back',
+      session: 'actions',
+      tabName: 'main',
+    });
+    pageState = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'actions',
+      tabName: 'main',
+    })) as { title: string };
+    expect(pageState.title).toBe('Controls');
+
+    await sendDaemonRequest(paths, {
+      action: 'forward',
+      session: 'actions',
+      tabName: 'main',
+    });
+    pageState = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'actions',
+      tabName: 'main',
+    })) as { title: string };
+    expect(pageState.title).toBe('Second');
+
+    await sendDaemonRequest(paths, {
+      action: 'reload',
+      session: 'actions',
+      tabName: 'main',
+    });
+    pageState = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'actions',
+      tabName: 'main',
+    })) as { title: string };
+    expect(pageState.title).toBe('Second');
+  });
 });
+
+function dataPage(html: string): string {
+  return `data:text/html,${encodeURIComponent(html)}`;
+}
 
 async function seedInstalledBrowser(paths: CamoucliPaths, version: string): Promise<void> {
   const rootDir = path.join(paths.browsersDir, 'official', version);

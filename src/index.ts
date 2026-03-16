@@ -1,4 +1,14 @@
-export { CamoufoxSession, launchCamoufox, launchCamoufoxContext, withCamoufox, type LaunchCamoufoxOptions } from './api.js';
+export {
+  AsyncCamoufox,
+  Camoufox,
+  CamoufoxSession,
+  launchCamoufox,
+  launchCamoufoxContext,
+  resolveCamoufoxLaunchSpec,
+  withCamoufox,
+  type LaunchCamoufoxOptions,
+  type ResolvedCamoufoxLaunchSpec,
+} from './api.js';
 export {
   doctorCamoufox,
   inspectCamoufoxInstall,
@@ -37,5 +47,5 @@ export {
   type ErrorPayload,
 } from './util/errors.js';
 export type { LaunchInput, ResolvedLaunchConfig } from './camoufox/config.js';
-export type { BrowserLaunchProbe, LaunchedSession } from './camoufox/launcher.js';
+export type { BrowserLaunchProbe, LaunchedSession, PreparedPersistentCamoufoxLaunch } from './camoufox/launcher.js';
 export type { BrowserContext, Page } from 'playwright-core';

@@ -10,14 +10,34 @@ export class DaemonRouter {
         return { ok: true, pid: process.pid };
       case 'open':
         return this.browserManager.open(request);
+      case 'back':
+        return this.browserManager.back(request);
+      case 'forward':
+        return this.browserManager.forward(request);
+      case 'reload':
+        return this.browserManager.reload(request);
       case 'snapshot':
         return this.browserManager.snapshot(request);
       case 'click':
         return this.browserManager.click(request);
+      case 'hover':
+        return this.browserManager.hover(request);
       case 'fill':
         return this.browserManager.fill(request);
+      case 'type':
+        return this.browserManager.type(request);
+      case 'check':
+        return this.browserManager.check(request);
+      case 'uncheck':
+        return this.browserManager.uncheck(request);
+      case 'select':
+        return this.browserManager.select(request);
       case 'press':
         return this.browserManager.press(request);
+      case 'scroll':
+        return this.browserManager.scroll(request);
+      case 'scroll.intoView':
+        return this.browserManager.scrollIntoView(request);
       case 'screenshot':
         return this.browserManager.screenshot(request);
       case 'get.url':
@@ -26,6 +46,8 @@ export class DaemonRouter {
         return this.browserManager.getTitle(request);
       case 'get.text':
         return this.browserManager.getText(request);
+      case 'get.value':
+        return this.browserManager.getValue(request);
       case 'wait':
         return this.browserManager.wait(request);
       case 'session.list':

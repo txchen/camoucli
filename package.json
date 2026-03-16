@@ -36,6 +36,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
+    "compatibility:matrix": "node scripts/generate-compatibility-matrix.mjs",
+    "compatibility:report": "node scripts/run-compatibility-report.mjs",
     "dev": "tsx src/cli/main.ts",
     "dev:daemon": "tsx src/daemon/main.ts",
     "prepack": "npm run build",

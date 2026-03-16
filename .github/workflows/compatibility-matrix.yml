@@ -1,0 +1,81 @@
+name: Compatibility Matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: Comma-separated Camoufox versions to install and probe
+        required: false
+        default: 135.0.1-beta.24,135.0.1-beta.23
+  schedule:
+    - cron: '0 9 * * 1'
+
+jobs:
+  probe:
+    name: Probe (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Generate compatibility report
+        env:
+          CAMOUFOX_VERSIONS: ${{ inputs.versions || '135.0.1-beta.24,135.0.1-beta.23' }}
+        run: node scripts/run-compatibility-report.mjs --output compatibility-report.json
+
+      - name: Upload compatibility report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-report-${{ matrix.os }}
+          path: compatibility-report.json
+
+  summary:
+    name: Build matrix summary
+    runs-on: ubuntu-latest
+    needs: probe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Download reports
+        uses: actions/download-artifact@v4
+        with:
+          path: compatibility-reports
+
+      - name: Generate markdown summary
+        run: |
+          node scripts/generate-compatibility-matrix.mjs compatibility-reports/*/*.json --output compatibility-matrix.md
+          cat compatibility-matrix.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload markdown summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-matrix
+          path: compatibility-matrix.md

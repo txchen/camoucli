@@ -21,6 +21,18 @@ const openRequestSchema = browserRequestBase.extend({
   url: z.string().min(1),
 });
 
+const backRequestSchema = browserRequestBase.extend({
+  action: z.literal('back'),
+});
+
+const forwardRequestSchema = browserRequestBase.extend({
+  action: z.literal('forward'),
+});
+
+const reloadRequestSchema = browserRequestBase.extend({
+  action: z.literal('reload'),
+});
+
 const snapshotRequestSchema = browserRequestBase.extend({
   action: z.literal('snapshot'),
   interactive: z.boolean().default(false),
@@ -31,15 +43,53 @@ const clickRequestSchema = browserRequestBase.extend({
   target: z.string().min(1),
 });
 
+const hoverRequestSchema = browserRequestBase.extend({
+  action: z.literal('hover'),
+  target: z.string().min(1),
+});
+
 const fillRequestSchema = browserRequestBase.extend({
   action: z.literal('fill'),
   target: z.string().min(1),
   text: z.string(),
 });
 
+const typeRequestSchema = browserRequestBase.extend({
+  action: z.literal('type'),
+  target: z.string().min(1),
+  text: z.string(),
+});
+
+const checkRequestSchema = browserRequestBase.extend({
+  action: z.literal('check'),
+  target: z.string().min(1),
+});
+
+const uncheckRequestSchema = browserRequestBase.extend({
+  action: z.literal('uncheck'),
+  target: z.string().min(1),
+});
+
+const selectRequestSchema = browserRequestBase.extend({
+  action: z.literal('select'),
+  target: z.string().min(1),
+  value: z.string(),
+});
+
 const pressRequestSchema = browserRequestBase.extend({
   action: z.literal('press'),
   key: z.string().min(1),
+});
+
+const scrollRequestSchema = browserRequestBase.extend({
+  action: z.literal('scroll'),
+  direction: z.enum(['up', 'down', 'left', 'right']),
+  amount: z.number().int().positive().optional(),
+});
+
+const scrollIntoViewRequestSchema = browserRequestBase.extend({
+  action: z.literal('scroll.intoView'),
+  target: z.string().min(1),
 });
 
 const screenshotRequestSchema = browserRequestBase.extend({
@@ -60,9 +110,18 @@ const getTextRequestSchema = browserRequestBase.extend({
   target: z.string().min(1),
 });
 
+const getValueRequestSchema = browserRequestBase.extend({
+  action: z.literal('get.value'),
+  target: z.string().min(1),
+});
+
+const loadStateSchema = z.enum(['domcontentloaded', 'load', 'networkidle']);
+
 const waitRequestSchema = browserRequestBase.extend({
   action: z.literal('wait'),
-  target: z.string().min(1),
+  target: z.string().min(1).optional(),
+  text: z.string().min(1).optional(),
+  loadState: loadStateSchema.optional(),
   timeoutMs: z.number().int().positive().optional(),
 });
 
@@ -98,14 +157,25 @@ const tabCloseRequestSchema = z.object({
 export const daemonRequestSchema = z.discriminatedUnion('action', [
   pingRequestSchema,
   openRequestSchema,
+  backRequestSchema,
+  forwardRequestSchema,
+  reloadRequestSchema,
   snapshotRequestSchema,
   clickRequestSchema,
+  hoverRequestSchema,
   fillRequestSchema,
+  typeRequestSchema,
+  checkRequestSchema,
+  uncheckRequestSchema,
+  selectRequestSchema,
   pressRequestSchema,
+  scrollRequestSchema,
+  scrollIntoViewRequestSchema,
   screenshotRequestSchema,
   getUrlRequestSchema,
   getTitleRequestSchema,
   getTextRequestSchema,
+  getValueRequestSchema,
   waitRequestSchema,
   sessionListRequestSchema,
   sessionStopRequestSchema,
