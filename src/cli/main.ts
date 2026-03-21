@@ -3,7 +3,7 @@ import { CommanderError } from 'commander';
 import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, removeCamoufox } from '../camoufox/installer.js';
+import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, listRemoteCamoufoxReleases, removeCamoufox } from '../camoufox/installer.js';
 import { describeFingerprintRegionProfiles, describeFingerprintScreenProfiles, describeFingerprintWindowProfiles } from '../camoufox/fingerprint.js';
 import { listCamoufoxPresets } from '../camoufox/presets.js';
 import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
@@ -129,6 +129,29 @@ export async function main(argv: string[] = process.argv): Promise<number> {
               current: install.version === installedBrowsers.currentVersion,
               sourceRepo: install.sourceRepo,
               path: install.executablePath,
+            })),
+          },
+          options.json ?? false,
+        );
+    },
+    onRemoteVersions: async (options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        await ensureBasePaths(paths);
+        const [installedBrowsers, remoteVersions] = await Promise.all([
+          listInstalledBrowsers(paths),
+          listRemoteCamoufoxReleases(),
+        ]);
+        const installedVersions = new Set(installedBrowsers.installs.map((install) => install.version));
+        printOutput(
+          'remote-versions',
+          {
+            remoteVersions: remoteVersions.map((release) => ({
+              version: release.version,
+              tag: release.tag,
+              repo: release.repo,
+              prerelease: release.prerelease,
+              installed: installedVersions.has(release.version),
+              current: release.version === installedBrowsers.currentVersion,
             })),
           },
           options.json ?? false,

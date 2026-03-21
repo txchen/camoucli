@@ -507,4 +507,45 @@ describe('CLI output', () => {
     expect(output).toContain('note: Shared library inspection is currently implemented for Linux only.');
     expect(output).toContain('Run `camou install` to download a compatible Camoufox build.');
   });
+
+  it('prints remote versions', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'remote-versions',
+        {
+          remoteVersions: [
+            {
+              version: '135.0.1-beta.24',
+              tag: 'v135.0.1-beta.24',
+              repo: 'daijro/camoufox',
+              prerelease: false,
+              installed: true,
+              current: true,
+            },
+            {
+              version: '135.0.1-beta.23',
+              tag: 'v135.0.1-beta.23',
+              repo: 'daijro/camoufox',
+              prerelease: true,
+              installed: false,
+              current: false,
+            },
+          ],
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Remote versions:');
+    expect(output).toContain('* 135.0.1-beta.24 v135.0.1-beta.24 daijro/camoufox installed current');
+    expect(output).toContain('135.0.1-beta.23 v135.0.1-beta.23 daijro/camoufox prerelease');
+  });
+
+  it('prints when no compatible remote versions are available', () => {
+    const output = captureStdout(() => {
+      printOutput('remote-versions', { remoteVersions: [] }, false);
+    });
+
+    expect(output).toContain('Remote versions: none');
+  });
 });

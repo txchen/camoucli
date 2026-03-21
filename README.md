@@ -310,6 +310,7 @@ Both tabs share the same browser profile, but each tab has its own page and ref 
 ### Install and switch versions
 
 ```bash
+camou remote-versions
 camou install 135.0.1-beta.24
 camou install 135.0.1-beta.23
 camou versions
@@ -329,6 +330,7 @@ camou open https://example.com --session canary --browser 135.0.1-beta.24
 camou snapshot -i --json
 camou get title --json
 camou doctor --json
+camou remote-versions --json | jq -r '.remoteVersions[].version'
 ```
 
 Errors are also structured when `--json` is enabled.
@@ -342,6 +344,7 @@ camou install [version]
 camou remove [version]
 camou use <version>
 camou versions
+camou remote-versions
 camou presets
 camou version
 camou path

@@ -38,6 +38,8 @@ export interface ResolvedRelease {
   prerelease: boolean;
 }
 
+export interface RemoteCamoufoxRelease extends ResolvedRelease {}
+
 interface CamoufoxVersionMetadata {
   version: string;
   build: string;
@@ -59,17 +61,23 @@ async function fetchJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function resolveRelease(version?: string): Promise<ResolvedRelease> {
+async function scanCompatibleReleases(options?: {
+  version?: string | undefined;
+  latestOnly?: boolean | undefined;
+}): Promise<RemoteCamoufoxRelease[]> {
   const target = getPlatformTarget();
-  const normalizedVersion = version ? normalizeReleaseVersion(version) : undefined;
+  const normalizedVersion = options?.version ? normalizeReleaseVersion(options.version) : undefined;
   const expectedAssetName = normalizedVersion
     ? buildExpectedAssetName(normalizedVersion, target)
     : undefined;
+  const compatibleReleases = new Map<string, RemoteCamoufoxRelease>();
 
   for (const repo of DEFAULT_RELEASE_REPOS) {
-    const apiUrl = version
+    const apiUrl = options?.latestOnly
+      ? `https://api.github.com/repos/${repo}/releases/latest`
+      : normalizedVersion
       ? `https://api.github.com/repos/${repo}/releases`
-      : `https://api.github.com/repos/${repo}/releases/latest`;
+      : `https://api.github.com/repos/${repo}/releases`;
     const payload = await fetchJson<GitHubRelease | GitHubRelease[]>(apiUrl);
     const releases = Array.isArray(payload) ? payload : [payload];
 
@@ -85,7 +93,7 @@ export async function resolveRelease(version?: string): Promise<ResolvedRelease>
         continue;
       }
 
-      return {
+      const resolvedRelease = {
         repo,
         tag: release.tag_name,
         version: releaseVersion,
@@ -93,7 +101,29 @@ export async function resolveRelease(version?: string): Promise<ResolvedRelease>
         assetUrl: asset.browser_download_url,
         prerelease: release.prerelease ?? false,
       };
+
+      if (normalizedVersion || options?.latestOnly) {
+        return [resolvedRelease];
+      }
+
+      if (!compatibleReleases.has(releaseVersion)) {
+        compatibleReleases.set(releaseVersion, resolvedRelease);
+      }
     }
+  }
+
+  return Array.from(compatibleReleases.values()).sort((left, right) => right.version.localeCompare(left.version, undefined, { numeric: true }));
+}
+
+export async function listRemoteCamoufoxReleases(): Promise<RemoteCamoufoxRelease[]> {
+  return scanCompatibleReleases();
+}
+
+export async function resolveRelease(version?: string): Promise<ResolvedRelease> {
+  const compatibleReleases = await scanCompatibleReleases({ version, latestOnly: !version });
+  const release = compatibleReleases[0];
+  if (release) {
+    return release;
   }
 
   throw new InstallError(

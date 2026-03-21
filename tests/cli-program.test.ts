@@ -298,6 +298,27 @@ describe('CLI program parsing', () => {
     expect(onVersions).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 
+  it('routes remote-versions to the remote listing handler', async () => {
+    const onRemoteVersions = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onRemoteVersions,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camou', 'remote-versions', '--json'], { from: 'node' });
+
+    expect(onRemoteVersions).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
+  });
+
   it('routes presets to the listing handler', async () => {
     const onPresets = vi.fn(async () => undefined);
     const program = createProgram({

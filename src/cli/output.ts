@@ -19,6 +19,29 @@ function printInstalledVersions(data: Record<string, unknown>): void {
   }
 }
 
+function printRemoteVersions(data: Record<string, unknown>): void {
+  const remoteVersions = Array.isArray(data.remoteVersions) ? data.remoteVersions : [];
+  if (remoteVersions.length === 0) {
+    process.stdout.write('Remote versions: none\n');
+    return;
+  }
+
+  process.stdout.write('Remote versions:\n');
+  for (const release of remoteVersions) {
+    if (!release || typeof release !== 'object') {
+      continue;
+    }
+
+    const record = release as Record<string, unknown>;
+    const version = String(record.version ?? 'unknown');
+    const tag = String(record.tag ?? 'unknown');
+    const repo = String(record.repo ?? 'unknown');
+    const flags = [record.prerelease === true ? 'prerelease' : undefined, record.installed === true ? 'installed' : undefined, record.current === true ? 'current' : undefined]
+      .filter((value): value is string => Boolean(value));
+    process.stdout.write(` ${record.current === true ? '*' : ' '} ${version} ${tag} ${repo}${flags.length > 0 ? ` ${flags.join(' ')}` : ''}\n`);
+  }
+}
+
 function printPresets(data: Record<string, unknown>): void {
   const presets = Array.isArray(data.presets) ? data.presets : [];
 
@@ -460,6 +483,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'versions':
       printInstalledVersions(data as Record<string, unknown>);
+      return;
+    case 'remote-versions':
+      printRemoteVersions(data as Record<string, unknown>);
       return;
     case 'presets':
       printPresets(data as Record<string, unknown>);

@@ -13,9 +13,11 @@ export {
   doctorCamoufox,
   inspectCamoufoxInstall,
   installCamoufox,
+  listRemoteCamoufoxReleases,
   removeCamoufox,
   resolveRelease,
   type CamoufoxInstallInspection,
+  type RemoteCamoufoxRelease,
   type ResolvedRelease,
 } from './camoufox/installer.js';
 export {

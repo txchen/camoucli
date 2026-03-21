@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { installCamoufox } from '../src/camoufox/installer.js';
+import { installCamoufox, listRemoteCamoufoxReleases } from '../src/camoufox/installer.js';
 import { resolveInstalledBrowser } from '../src/camoufox/registry.js';
 import { ensureBasePaths } from '../src/state/paths.js';
 import { buildExpectedAssetName, getPlatformTarget } from '../src/util/platform.js';
@@ -87,5 +87,67 @@ describe('installer integration', () => {
 
     expect(versionJson).toMatchObject({ version: '135.0.1', build: 'beta.24' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('lists only remote releases compatible with the current machine', async () => {
+    const target = getPlatformTarget();
+    const compatibleAsset = buildExpectedAssetName('135.0.1-beta.24', target);
+    const newerCompatibleAsset = buildExpectedAssetName('135.0.1-beta.25', target);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify([
+            {
+              tag_name: 'v135.0.1-beta.24',
+              prerelease: false,
+              assets: [
+                {
+                  name: compatibleAsset,
+                  browser_download_url: `https://example.com/${compatibleAsset}`,
+                },
+              ],
+            },
+            {
+              tag_name: 'v135.0.1-beta.24-linux-x86_64',
+              prerelease: false,
+              assets: [
+                {
+                  name: 'camoufox-135.0.1-beta.24-win.x86_64.zip',
+                  browser_download_url: 'https://example.com/incompatible.zip',
+                },
+              ],
+            },
+            {
+              tag_name: 'v135.0.1-beta.25',
+              prerelease: true,
+              assets: [
+                {
+                  name: newerCompatibleAsset,
+                  browser_download_url: `https://example.com/${newerCompatibleAsset}`,
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const releases = await listRemoteCamoufoxReleases();
+
+    expect(releases).toMatchObject([
+      {
+        version: '135.0.1-beta.25',
+        tag: 'v135.0.1-beta.25',
+        prerelease: true,
+      },
+      {
+        version: '135.0.1-beta.24',
+        tag: 'v135.0.1-beta.24',
+        prerelease: false,
+      },
+    ]);
   });
 });

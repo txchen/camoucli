@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.6.0] - 2026-03-21
+
+### Added
+
+- Added `camou remote-versions` to list remotely available Camoufox releases that are compatible with the current machine.
+- Added `listRemoteCamoufoxReleases()` to the public package exports for Node-side tooling and scripts.
+
+### Changed
+
+- Refactored Camoufox release discovery so remote version listing and `camou install` share the same compatibility filtering rules.
+- Updated `README.md` with `remote-versions` examples, including a `--json` + `jq` automation snippet.
+
 ## [0.5.0] - 2026-03-16
 
 ### Added

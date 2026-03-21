@@ -44,6 +44,7 @@ export interface CliHandlers {
   onRemove: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onUse: (version: string, options: OutputOptions) => Promise<void>;
   onVersions: (options: OutputOptions) => Promise<void>;
+  onRemoteVersions?: (options: OutputOptions) => Promise<void>;
   onPresets: (options: OutputOptions) => Promise<void>;
   onFingerprintProfiles: (options: OutputOptions) => Promise<void>;
   onPath: (options: OutputOptions) => Promise<void>;
@@ -179,6 +180,15 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .description('List installed Camoufox versions')
       .action(async (options: OutputOptions) => {
         await handlers.onVersions(options);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('remote-versions')
+      .description('List compatible remote Camoufox releases')
+      .action(async (options: OutputOptions) => {
+        await handlers.onRemoteVersions?.(options);
       }),
   );
 
