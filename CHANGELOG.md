@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.7.0] - 2026-03-21
+
+### Added
+
+- Added top-level `camou profile` commands for disk-backed browser profile management: `list`, `inspect`, and `remove`.
+- Added daemon-backed stored profile inventory and inspection that annotate profiles with live running-session metadata when applicable.
+
+### Changed
+
+- Clarified the command model so `camou session list` stays focused on running sessions, while persistent on-disk state is managed under `camou profile`.
+- Updated `README.md` and the `camou` skill docs to reflect the new profile-management workflow.
+
+
 ## [0.6.1] - 2026-03-21
 
 ### Fixed

@@ -141,6 +141,126 @@ describe('CLI output', () => {
     expect(output).toContain('  - main https://example.com/');
   });
 
+  it('prints profile list in human-readable form', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'profile.list',
+        [
+          {
+            profileName: 'stored-only',
+            running: false,
+            rootDir: '/tmp/profiles/stored-only',
+          },
+          {
+            profileName: 'running-profile',
+            running: true,
+            sessionName: 'running profile',
+            status: 'running',
+            browserVersion: '135.0.1-beta.24',
+            headless: true,
+            tabs: [
+              {
+                tabName: 'main',
+                url: 'https://example.com/',
+              },
+            ],
+            rootDir: '/tmp/profiles/running-profile',
+          },
+        ],
+        false,
+      );
+    });
+
+    expect(output).toContain('Stored profiles:');
+    expect(output).toContain('- stored-only stopped /tmp/profiles/stored-only');
+    expect(output).toContain('- running-profile running 135.0.1-beta.24 headless /tmp/profiles/running-profile');
+    expect(output).toContain('  session: running profile');
+    expect(output).toContain('  tab: main https://example.com/');
+  });
+
+  it('prints when no stored profiles exist', () => {
+    const output = captureStdout(() => {
+      printOutput('profile.list', [], false);
+    });
+
+    expect(output).toContain('Stored profiles: none');
+  });
+
+  it('prints profile inspection results', () => {
+    const runningOutput = captureStdout(() => {
+      printOutput(
+        'profile.inspect',
+        {
+          profileName: 'running-profile',
+          found: true,
+          running: true,
+          sessionName: 'running profile',
+          browserVersion: '135.0.1-beta.24',
+          headless: true,
+          rootDir: '/tmp/profiles/running-profile',
+          profileDir: '/tmp/profiles/running-profile/user-data',
+          downloadsDir: '/tmp/profiles/running-profile/downloads',
+          artifactsDir: '/tmp/profiles/running-profile/artifacts',
+          tabs: [{ tabName: 'main', url: 'https://example.com/' }],
+        },
+        false,
+      );
+    });
+
+    const missingOutput = captureStdout(() => {
+      printOutput(
+        'profile.inspect',
+        {
+          profileName: 'missing',
+          found: false,
+          running: false,
+          rootDir: '/tmp/profiles/missing',
+        },
+        false,
+      );
+    });
+
+    expect(runningOutput).toContain('Profile running-profile');
+    expect(runningOutput).toContain('State: running');
+    expect(runningOutput).toContain('Session: running profile');
+    expect(runningOutput).toContain('Browser: 135.0.1-beta.24 headless');
+    expect(runningOutput).toContain('Tab: main https://example.com/');
+    expect(missingOutput).toContain('Profile missing was not found');
+  });
+
+  it('prints profile removal results', () => {
+    const removedOutput = captureStdout(() => {
+      printOutput(
+        'profile.remove',
+        {
+          profileName: 'running-profile',
+          removed: true,
+          stopped: true,
+          rootDir: '/tmp/profiles/running-profile',
+        },
+        false,
+      );
+    });
+
+    const missingOutput = captureStdout(() => {
+      printOutput(
+        'profile.remove',
+        {
+          profileName: 'missing',
+          removed: false,
+          stopped: false,
+          rootDir: '/tmp/profiles/missing',
+        },
+        false,
+      );
+    });
+
+    expect(removedOutput).toContain('Removed profile running-profile');
+    expect(removedOutput).toContain('Stopped running session first');
+    expect(removedOutput).toContain('/tmp/profiles/running-profile');
+    expect(missingOutput).toContain('Profile missing was not found');
+  });
+
   it('prints tab list in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

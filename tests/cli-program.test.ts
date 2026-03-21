@@ -234,6 +234,102 @@ describe('CLI program parsing', () => {
     );
   });
 
+  it('routes session list to the running session handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'session', 'list', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'session.list',
+      { action: 'session.list' },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes profile list to the stored profile handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'profile', 'list', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'profile.list',
+      { action: 'profile.list' },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes profile inspect to the stored profile inspection handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'profile', 'inspect', 'work', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'profile.inspect',
+      { action: 'profile.inspect', profile: 'work' },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes profile remove to the stored profile removal handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'profile', 'remove', 'work', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'profile.remove',
+      { action: 'profile.remove', profile: 'work' },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
   it('leaves session stop unresolved so env/config defaults can apply later', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({

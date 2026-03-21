@@ -72,6 +72,86 @@ describe('daemon integration', () => {
     await rm(rootDir, { recursive: true, force: true });
   });
 
+  it('lists stored profiles on disk and marks running ones', async () => {
+    await ensureSessionPaths(paths, 'stored-only');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'running profile',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ERunning%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const profiles = (await sendDaemonRequest(paths, {
+      action: 'profile.list',
+    })) as Array<{ profileName: string; running: boolean }>;
+
+    expect(profiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ profileName: 'stored-only', running: false }),
+        expect.objectContaining({ profileName: 'running-profile', running: true }),
+      ]),
+    );
+  });
+
+  it('inspects one stored profile and includes running metadata when active', async () => {
+    await ensureSessionPaths(paths, 'stored-only');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'running profile',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ERunning%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const stored = (await sendDaemonRequest(paths, {
+      action: 'profile.inspect',
+      profile: 'stored-only',
+    })) as { profileName: string; found: boolean; running: boolean };
+
+    const running = (await sendDaemonRequest(paths, {
+      action: 'profile.inspect',
+      profile: 'running profile',
+    })) as { profileName: string; found: boolean; running: boolean; sessionName?: string; tabs?: Array<{ tabName: string }> };
+
+    const missing = (await sendDaemonRequest(paths, {
+      action: 'profile.inspect',
+      profile: 'missing',
+    })) as { profileName: string; found: boolean; running: boolean };
+
+    expect(stored).toMatchObject({ profileName: 'stored-only', found: true, running: false });
+    expect(running).toMatchObject({ profileName: 'running-profile', found: true, running: true, sessionName: 'running profile' });
+    expect(running.tabs).toEqual(expect.arrayContaining([expect.objectContaining({ tabName: 'main' })]));
+    expect(missing).toMatchObject({ profileName: 'missing', found: false, running: false });
+  });
+
+  it('removes a stored profile and stops the running session if needed', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'running profile',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ERunning%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const removed = (await sendDaemonRequest(paths, {
+      action: 'profile.remove',
+      profile: 'running profile',
+    })) as { profileName: string; removed: boolean; stopped: boolean; rootDir: string };
+
+    const profiles = (await sendDaemonRequest(paths, {
+      action: 'profile.list',
+    })) as Array<{ profileName: string }>;
+
+    expect(removed).toMatchObject({
+      profileName: 'running-profile',
+      removed: true,
+      stopped: true,
+    });
+    expect(removed.rootDir).toBe(path.join(paths.profilesDir, 'running-profile'));
+    expect(profiles.map((profile) => profile.profileName)).not.toContain('running-profile');
+  });
+
   it('persists session pages across daemon restarts for the same profile', async () => {
     const pageUrl = 'data:text/html,%3Ctitle%3EPersisted%3C%2Ftitle%3E%3Cp%3Eremember%3C%2Fp%3E';
 

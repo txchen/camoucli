@@ -285,6 +285,104 @@ function printSessionList(data: unknown): void {
   }
 }
 
+function printProfileList(data: unknown): void {
+  const profiles = Array.isArray(data) ? data : [];
+
+  if (profiles.length === 0) {
+    process.stdout.write('Stored profiles: none\n');
+    return;
+  }
+
+  process.stdout.write('Stored profiles:\n');
+  for (const profile of profiles) {
+    if (!profile || typeof profile !== 'object') {
+      continue;
+    }
+
+    const record = profile as Record<string, unknown>;
+    const profileName = String(record.profileName ?? 'unknown');
+    const running = record.running === true;
+    const rootDir = String(record.rootDir ?? '');
+    const browserVersion = typeof record.browserVersion === 'string' ? ` ${record.browserVersion}` : '';
+    const mode = running ? ` ${record.headless === true ? 'headless' : 'headed'}` : '';
+    process.stdout.write(`- ${profileName} ${running ? 'running' : 'stopped'}${browserVersion}${mode}${rootDir ? ` ${rootDir}` : ''}\n`);
+
+    if (typeof record.sessionName === 'string' && record.sessionName.length > 0) {
+      process.stdout.write(`  session: ${record.sessionName}\n`);
+    }
+
+    const tabs = Array.isArray(record.tabs) ? record.tabs : [];
+    for (const tab of tabs) {
+      if (!tab || typeof tab !== 'object') {
+        continue;
+      }
+
+      const tabRecord = tab as Record<string, unknown>;
+      process.stdout.write(`  tab: ${String(tabRecord.tabName ?? 'unknown')} ${String(tabRecord.url ?? '')}\n`);
+    }
+  }
+}
+
+function printProfileInspectResult(data: Record<string, unknown>): void {
+  const profileName = String(data.profileName ?? 'unknown');
+  if (data.found !== true) {
+    process.stdout.write(`Profile ${profileName} was not found\n`);
+    if (typeof data.rootDir === 'string') {
+      process.stdout.write(`${data.rootDir}\n`);
+    }
+    return;
+  }
+
+  process.stdout.write(`Profile ${profileName}\n`);
+  process.stdout.write(`State: ${data.running === true ? 'running' : 'stopped'}\n`);
+  if (typeof data.sessionName === 'string') {
+    process.stdout.write(`Session: ${data.sessionName}\n`);
+  }
+  if (typeof data.browserVersion === 'string') {
+    process.stdout.write(`Browser: ${data.browserVersion}${data.headless === true ? ' headless' : ' headed'}\n`);
+  }
+  if (typeof data.rootDir === 'string') {
+    process.stdout.write(`Root: ${data.rootDir}\n`);
+  }
+  if (typeof data.profileDir === 'string') {
+    process.stdout.write(`User data: ${data.profileDir}\n`);
+  }
+  if (typeof data.downloadsDir === 'string') {
+    process.stdout.write(`Downloads: ${data.downloadsDir}\n`);
+  }
+  if (typeof data.artifactsDir === 'string') {
+    process.stdout.write(`Artifacts: ${data.artifactsDir}\n`);
+  }
+  const tabs = Array.isArray(data.tabs) ? data.tabs : [];
+  for (const tab of tabs) {
+    if (!tab || typeof tab !== 'object') {
+      continue;
+    }
+    const record = tab as Record<string, unknown>;
+    process.stdout.write(`Tab: ${String(record.tabName ?? 'unknown')} ${String(record.url ?? '')}\n`);
+  }
+}
+
+function printProfileRemoveResult(data: Record<string, unknown>): void {
+  const profileName = String(data.profileName ?? 'unknown');
+  const rootDir = typeof data.rootDir === 'string' ? data.rootDir : undefined;
+  if (data.removed === true) {
+    process.stdout.write(`Removed profile ${profileName}\n`);
+    if (data.stopped === true) {
+      process.stdout.write('Stopped running session first\n');
+    }
+    if (rootDir) {
+      process.stdout.write(`${rootDir}\n`);
+    }
+    return;
+  }
+
+  process.stdout.write(`Profile ${profileName} was not found\n`);
+  if (rootDir) {
+    process.stdout.write(`${rootDir}\n`);
+  }
+}
+
 function printTabList(data: unknown): void {
   const tabs = Array.isArray(data) ? data : [];
 
@@ -495,6 +593,15 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'session.list':
       printSessionList(data);
+      return;
+    case 'profile.list':
+      printProfileList(data);
+      return;
+    case 'profile.inspect':
+      printProfileInspectResult(data as Record<string, unknown>);
+      return;
+    case 'profile.remove':
+      printProfileRemoveResult(data as Record<string, unknown>);
       return;
     case 'tab.list':
       printTabList(data);

@@ -142,6 +142,23 @@ const tabListRequestSchema = z.object({
   session: z.string().min(1),
 });
 
+const profileListRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('profile.list'),
+});
+
+const profileInspectRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('profile.inspect'),
+  profile: z.string().min(1),
+});
+
+const profileRemoveRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('profile.remove'),
+  profile: z.string().min(1),
+});
+
 const tabNewRequestSchema = browserRequestBase.extend({
   action: z.literal('tab.new'),
   url: z.string().min(1).optional(),
@@ -179,6 +196,9 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   waitRequestSchema,
   sessionListRequestSchema,
   sessionStopRequestSchema,
+  profileListRequestSchema,
+  profileInspectRequestSchema,
+  profileRemoveRequestSchema,
   tabListRequestSchema,
   tabNewRequestSchema,
   tabCloseRequestSchema,

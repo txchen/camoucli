@@ -379,8 +379,13 @@ camou get value <selectorOrRef>
 
 ### Sessions and tabs
 
+`camou session list` shows running daemon-owned sessions. `camou profile list` shows stored profiles on disk, `camou profile inspect <name>` shows one stored profile in detail, and `camou profile remove <name>` safely deletes one stored profile.
+
 ```bash
 camou session list
+camou profile list
+camou profile inspect <name>
+camou profile remove <name>
 camou session stop [name]
 camou tab list
 camou tab new [url]

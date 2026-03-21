@@ -5,6 +5,7 @@ import type { Page } from 'playwright-core';
 import { hasLaunchFingerprintHelpers, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
+import { inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
 import { SessionError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { locatorForTarget } from './actions.js';
@@ -57,6 +58,66 @@ export class BrowserManager {
 
   async stopAllSessions(): Promise<void> {
     await Promise.all(Array.from(this.sessions.keys()).map((sessionName) => this.stopSession(sessionName)));
+  }
+
+  async listStoredProfiles(): Promise<Array<Record<string, unknown>>> {
+    const storedProfiles = await listStoredSessionProfiles(this.paths);
+    const runningSessions = new Map(Array.from(this.sessions.values()).map((session) => [session.paths.safeSessionName, session]));
+
+    return storedProfiles.map((profile) => {
+      const runningSession = runningSessions.get(profile.profileName);
+      return {
+        ...profile,
+        running: Boolean(runningSession),
+        ...(runningSession
+          ? {
+              sessionName: runningSession.name,
+              status: runningSession.status,
+              browserVersion: runningSession.browserVersion,
+              headless: runningSession.resolvedConfig.headless,
+              tabs: Array.from(runningSession.tabs.values()).map((tab) => ({ tabName: tab.name, url: tab.page.url() })),
+            }
+          : {}),
+      };
+    });
+  }
+
+  async inspectStoredProfile(profileName: string): Promise<Record<string, unknown>> {
+    const record = await inspectStoredSessionProfile(this.paths, profileName);
+    if (!record.found) {
+      return {
+        profileName: record.profileName,
+        found: false,
+        running: false,
+        rootDir: record.rootDir,
+      };
+    }
+
+    const runningSession = this.findRunningSessionByProfileName(record.profileName);
+    return {
+      ...record,
+      running: Boolean(runningSession),
+      ...(runningSession
+        ? {
+            sessionName: runningSession.name,
+            status: runningSession.status,
+            browserVersion: runningSession.browserVersion,
+            headless: runningSession.resolvedConfig.headless,
+            tabs: Array.from(runningSession.tabs.values()).map((tab) => ({ tabName: tab.name, url: tab.page.url() })),
+          }
+        : {}),
+    };
+  }
+
+  async removeStoredProfile(profileName: string): Promise<Record<string, unknown>> {
+    const safeProfileName = this.findRunningSessionByProfileName(profileName)?.paths.safeSessionName;
+    const runningSession = this.findRunningSessionByProfileName(profileName);
+    const stopped = runningSession ? (await this.stopSession(runningSession.name)).stopped : false;
+    const removed = await removeStoredSessionProfile(this.paths, safeProfileName ?? profileName);
+    return {
+      ...removed,
+      stopped,
+    };
   }
 
   async open(input: LaunchInput & { session: string; tabName: string; url: string }): Promise<Record<string, unknown>> {
@@ -448,6 +509,11 @@ export class BrowserManager {
 
     const page = await session.context.newPage();
     return this.trackPage(session, tabName, page);
+  }
+
+  private findRunningSessionByProfileName(profileName: string): SessionRuntime | undefined {
+    const normalizedProfileName = profileName.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'default';
+    return Array.from(this.sessions.values()).find((session) => session.paths.safeSessionName === normalizedProfileName);
   }
 
   private assertSessionCompatible(session: SessionRuntime, input: LaunchInput): void {

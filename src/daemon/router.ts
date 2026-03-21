@@ -54,6 +54,12 @@ export class DaemonRouter {
         return this.browserManager.listSessions();
       case 'session.stop':
         return this.browserManager.stopSession(request.session);
+      case 'profile.list':
+        return this.browserManager.listStoredProfiles();
+      case 'profile.inspect':
+        return this.browserManager.inspectStoredProfile(request.profile);
+      case 'profile.remove':
+        return this.browserManager.removeStoredProfile(request.profile);
       case 'tab.list':
         return this.browserManager.listTabs(request.session);
       case 'tab.new':

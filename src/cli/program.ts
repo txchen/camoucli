@@ -482,6 +482,37 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
+  const profileCommand = program.command('profile').description('Manage stored browser profiles');
+  addSharedOutputOptions(
+    profileCommand
+      .command('list')
+      .description('List stored profiles on disk')
+      .action(async (options: OutputOptions) => {
+        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('profile.list', { action: 'profile.list' }, shared);
+      }),
+  );
+
+  addSharedOutputOptions(
+    profileCommand
+      .command('inspect <name>')
+      .description('Inspect one stored profile')
+      .action(async (name: string, options: OutputOptions) => {
+        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('profile.inspect', { action: 'profile.inspect', profile: name }, shared);
+      }),
+  );
+
+  addSharedOutputOptions(
+    profileCommand
+      .command('remove <name>')
+      .description('Remove a stored profile')
+      .action(async (name: string, options: OutputOptions) => {
+        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('profile.remove', { action: 'profile.remove', profile: name }, shared);
+      }),
+  );
+
   const tabCommand = program.command('tab').description('Manage named tabs within a session');
   addSharedBrowserOptions(
     tabCommand
