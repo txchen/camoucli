@@ -87,12 +87,12 @@ The skill teaches agents the recommended Camou workflow: `open -> snapshot -i ->
 ## Quick Start
 
 ```bash
-camou install
-camou open https://example.com
-camou snapshot -i
+camou install                  # Install the default browser build
+camou open https://example.com # Open the target page
+camou snapshot -i              # Capture interactive refs
 # @e1 a "Learn more"
-camou click @e1
-camou get title
+camou click @e1                # Click the chosen ref
+camou get title                # Read the current page title
 ```
 
 What happens behind the scenes:
@@ -153,9 +153,9 @@ Example `.camou.json`:
 Then you can run commands like:
 
 ```bash
-camou open https://example.com
-camou snapshot -i
-camou click @e1
+camou open https://example.com # Open the target page
+camou snapshot -i              # Capture interactive refs
+camou click @e1                # Click the chosen ref
 ```
 
 and they automatically use the configured session, tab, browser version, headless mode, and presets unless you override them with flags.
@@ -222,11 +222,11 @@ Notes:
 For agents and automation loops, this is the happy path:
 
 ```bash
-camou open https://target.site
-camou snapshot -i --json
-camou click @e3
-camou fill @e5 "hello"
-camou snapshot -i --json
+camou open https://target.site # Open the target page
+camou snapshot -i --json       # Capture JSON refs
+camou click @e3                # Act on a chosen ref
+camou fill @e5 "hello"       # Fill the next field
+camou snapshot -i --json       # Refresh refs after changes
 ```
 
 Why this works well:
@@ -249,8 +249,8 @@ A session is a named browser workspace selected with `--session <name>`.
 Example:
 
 ```bash
-camou open https://github.com --session work
-camou open https://mail.google.com --session personal
+camou open https://github.com --session work          # Open the work session
+camou open https://mail.google.com --session personal # Open a separate personal session
 ```
 
 ### Tab
@@ -264,8 +264,8 @@ A tab is a named page binding inside a session selected with `--tabname <name>`.
 Example:
 
 ```bash
-camou open https://reddit.com --session work --tabname reddit
-camou open https://news.ycombinator.com --session work --tabname hn
+camou open https://reddit.com --session work --tabname reddit       # First named tab
+camou open https://news.ycombinator.com --session work --tabname hn # Second named tab
 ```
 
 ### Ref
@@ -288,9 +288,9 @@ Camou keeps an active Camoufox version, but you can also pick a version per comm
 ### Persistent login session
 
 ```bash
-camou open https://github.com/login --session work --tabname github
+camou open https://github.com/login --session work --tabname github   # Start a named session
 # log in once in the browser
-camou open https://github.com/settings/profile --session work --tabname github
+camou open https://github.com/settings/profile --session work --tabname github # Reuse saved login
 ```
 
 Use the same `--session` name later and the login state is still there.
@@ -298,11 +298,11 @@ Use the same `--session` name later and the login state is still there.
 ### Multi-tab parallel-safe browsing
 
 ```bash
-camou open https://reddit.com --session research --tabname reddit
-camou open https://news.ycombinator.com --session research --tabname hn
+camou open https://reddit.com --session research --tabname reddit       # Shared session, first tab
+camou open https://news.ycombinator.com --session research --tabname hn # Shared session, second tab
 
-camou snapshot -i --session research --tabname reddit
-camou snapshot -i --session research --tabname hn
+camou snapshot -i --session research --tabname reddit                   # Inspect the reddit tab
+camou snapshot -i --session research --tabname hn                       # Inspect the hn tab
 ```
 
 Both tabs share the same browser profile, but each tab has its own page and ref map.
@@ -310,29 +310,29 @@ Both tabs share the same browser profile, but each tab has its own page and ref 
 ### Install and switch versions
 
 ```bash
-camou remote-versions
-camou install 135.0.1-beta.24
-camou install 135.0.1-beta.23
-camou versions
-camou use 135.0.1-beta.24
-camou doctor --json
+camou remote-versions         # Show compatible remote versions
+camou install 135.0.1-beta.24 # Install one version
+camou install 135.0.1-beta.23 # Install another version
+camou versions                # Show installed and active versions
+camou use 135.0.1-beta.24     # Switch the default version
+camou doctor --json           # Check compatibility in JSON
 ```
 
 ### Use a specific browser version for one session
 
 ```bash
-camou open https://example.com --session canary --browser 135.0.1-beta.24
+camou open https://example.com --session canary --browser 135.0.1-beta.24 # Pin one run
 ```
 
 ### JSON output for automation
 
 ```bash
-camou snapshot -i --json
-camou get title --json
-camou eval 'document.title' --json
-camou cookies export --json
-camou doctor --json
-camou remote-versions --json | jq -r '.remoteVersions[].version'
+camou snapshot -i --json                        # JSON interactive snapshot
+camou get title --json                          # JSON scalar output
+camou eval 'document.title' --json              # JSON eval result
+camou cookies export --json                     # JSON cookie export
+camou doctor --json                             # JSON diagnostics
+camou remote-versions --json | jq -r '.remoteVersions[].version' # Extract versions
 ```
 
 Errors are also structured when `--json` is enabled.
@@ -342,60 +342,61 @@ Errors are also structured when `--json` is enabled.
 ### Browser management
 
 ```bash
-camou install [version]
-camou remove [version]
-camou use <version>
-camou versions
-camou remote-versions
-camou presets
-camou version
-camou path
-camou doctor
+camou install [version]    # Install the default or one specific build
+camou remove [version]     # Remove an installed browser build
+camou use <version>        # Switch the default browser version
+camou versions             # List installed versions and the default
+camou remote-versions      # List compatible remote versions
+camou presets              # Show built-in launch presets
+camou version              # Print the active camoucli version
+camou path                 # Show the active browser executable path
+camou doctor               # Diagnose install and launch issues
 ```
 
 ### Page automation
 
 ```bash
-camou open <url>
-camou back
-camou forward
-camou reload
-camou eval <expression>
-camou snapshot [-i]
-camou click <selectorOrRef>
-camou hover <selectorOrRef>
-camou fill <selectorOrRef> <text>
-camou type <selectorOrRef> <text>
-camou check <selectorOrRef>
-camou uncheck <selectorOrRef>
-camou select <selectorOrRef> <value>
-camou press <key>
-camou scroll <direction> [amount]
-camou scrollintoview <selectorOrRef>
-camou wait [selectorOrRef] [--text <text>] [--load <state>]
-camou screenshot [path]
-camou get url
-camou get title
-camou get text <selectorOrRef>
-camou get value <selectorOrRef>
+camou open <url>                  # Open a URL in the current tab
+camou back                        # Go back in the current tab history
+camou forward                     # Go forward in the current tab history
+camou reload                      # Reload the current page
+camou eval <expression>           # Run JavaScript in the current tab
+camou snapshot                    # Capture page state and refs
+camou snapshot -i                 # Interactive elements only; recommended
+camou click <selectorOrRef>       # Click a selector or @eN ref
+camou hover <selectorOrRef>       # Hover a selector or @eN ref
+camou fill <selectorOrRef> <text> # Set an input value directly
+camou type <selectorOrRef> <text> # Type text with key events
+camou check <selectorOrRef>       # Check a checkbox or radio input
+camou uncheck <selectorOrRef>     # Uncheck a checkbox
+camou select <selectorOrRef> <value> # Choose a select option
+camou press <key>                 # Press a keyboard key in the page
+camou scroll <direction> [amount] # Scroll up, down, left, or right
+camou scrollintoview <selectorOrRef> # Scroll until visible
+camou wait [selectorOrRef] [--text <text>] [--load <state>] # Wait for element, text, or load
+camou screenshot [path]           # Save a screenshot of the current page
+camou get url                     # Read the current page URL
+camou get title                   # Read the current page title
+camou get text <selectorOrRef>    # Read visible text from an element
+camou get value <selectorOrRef>   # Read an element's form value
 ```
 
 ### Sessions and tabs
 
-`camou session list` shows running daemon-owned sessions. `camou profile list` shows stored profiles on disk, `camou profile inspect <name>` shows one stored profile in detail, and `camou profile remove <name>` safely deletes one stored profile.
+Use `session` for live daemon state and `profile` for stored disk-backed browser data.
 
 ```bash
-camou session list
-camou profile list
-camou profile inspect <name>
-camou profile remove <name>
-camou cookies export [path]
-camou cookies import <path>
-camou close --all
-camou session stop [name]
-camou tab list
-camou tab new [url]
-camou tab close [nameOrIndex]
+camou session list            # List running daemon sessions
+camou profile list            # List stored profiles on disk
+camou profile inspect <name>  # Show one profile's paths
+camou profile remove <name>   # Delete a profile; stops it first if needed
+camou cookies export [path]   # Export context cookies as JSON
+camou cookies import <path>   # Import cookies into session context
+camou close --all             # Stop all running sessions
+camou session stop [name]     # Stop one session or the current session
+camou tab list                # List tabs in the current session
+camou tab new [url]           # Create a new tab, optionally opening a URL
+camou tab close [nameOrIndex] # Close one tab by name or index
 ```
 
 ## Common Flags

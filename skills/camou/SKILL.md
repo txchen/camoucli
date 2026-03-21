@@ -26,19 +26,19 @@ If the user wants a reusable Node script, test, or automation module, prefer imp
 
 Most tasks should follow this loop:
 
-1. `camou open <url>`
-2. `camou snapshot -i --json`
+1. `camou open <url>` — start from the target page
+2. `camou snapshot -i --json` — capture interactive refs in machine-readable form
 3. interact with `@eN` refs using `click`, `fill`, `press`, `get text`, or `wait`
 4. re-run `snapshot` after navigation or meaningful page changes
 
 Example:
 
 ```bash
-camou open https://example.com
-camou snapshot -i
+camou open https://example.com   # Open the target page
+camou snapshot -i                # Capture interactive refs
 # @e1 a "Learn more"
-camou click @e1
-camou snapshot -i
+camou click @e1                  # Act on the chosen ref
+camou snapshot -i                # Refresh refs after page change
 ```
 
 Important rule:
@@ -52,9 +52,9 @@ Important rule:
 Reuse the same session name to keep profile data, cookies, and storage.
 
 ```bash
-camou open https://github.com/login --session work --tabname github
+camou open https://github.com/login --session work --tabname github   # Start a named session
 # ... login once ...
-camou open https://github.com/settings/profile --session work --tabname github
+camou open https://github.com/settings/profile --session work --tabname github # Reuse saved login state
 ```
 
 ### Use `--tabname` for parallel-safe browsing
@@ -62,11 +62,11 @@ camou open https://github.com/settings/profile --session work --tabname github
 Tabs in the same session share browser state but keep separate page bindings and ref maps.
 
 ```bash
-camou open https://reddit.com --session research --tabname reddit
-camou open https://news.ycombinator.com --session research --tabname hn
+camou open https://reddit.com --session research --tabname reddit       # Shared session, first tab
+camou open https://news.ycombinator.com --session research --tabname hn # Shared session, second tab
 
-camou snapshot -i --session research --tabname reddit
-camou snapshot -i --session research --tabname hn
+camou snapshot -i --session research --tabname reddit                   # Inspect the reddit tab
+camou snapshot -i --session research --tabname hn                       # Inspect the hn tab
 ```
 
 ### Prefer project defaults when a repo should always use the same session/tab
@@ -114,13 +114,13 @@ Then agents can just run `camou open ...`, `camou snapshot ...`, and so on witho
 Use `session` for live runtime state and `profile` for disk-backed browser data.
 
 ```bash
-camou session list
-camou profile list
-camou profile inspect work
-camou profile remove work
-camou cookies export work.json
-camou cookies import work.json
-camou close --all
+camou session list            # List live daemon sessions
+camou profile list            # List stored profiles on disk
+camou profile inspect work    # Show one profile's paths
+camou profile remove work     # Delete one profile
+camou cookies export work.json # Save cookies to JSON
+camou cookies import work.json # Restore cookies from JSON
+camou close --all             # Stop every running session
 ```
 
 Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed.
@@ -130,10 +130,10 @@ Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon 
 Use these when you need lightweight scripting, cookie portability, or fast daemon cleanup.
 
 ```bash
-camou eval 'document.title'
-camou cookies export cookies.json
-camou cookies import cookies.json
-camou close --all
+camou eval 'document.title'      # Read page state with JS
+camou cookies export cookies.json # Save cookies for reuse
+camou cookies import cookies.json # Restore cookies into session
+camou close --all                # Fast cleanup for all running sessions
 ```
 
 Guidance:
@@ -144,11 +144,11 @@ Guidance:
 ### Use `--json` when output will be parsed
 
 ```bash
-camou snapshot -i --json
-camou get title --json
-camou eval 'document.title' --json
-camou cookies export --json
-camou doctor --json
+camou snapshot -i --json         # JSON interactive snapshot
+camou get title --json           # JSON scalar output
+camou eval 'document.title' --json # JSON eval result
+camou cookies export --json      # JSON cookie export
+camou doctor --json              # JSON diagnostics
 ```
 
 Top-level CLI failures are also structured when `--json` is enabled.
@@ -159,15 +159,15 @@ Top-level CLI failures are also structured when `--json` is enabled.
 - `camou <command> ... --browser <version>` uses a specific installed version without changing the default
 
 ```bash
-camou versions
-camou use 135.0.1-beta.24
-camou open https://example.com --session canary --browser 135.0.1-beta.24
+camou versions                                      # Show installed and active versions
+camou use 135.0.1-beta.24                           # Switch the default version
+camou open https://example.com --session canary --browser 135.0.1-beta.24 # Pin one run
 ```
 
 ### Run `doctor` when launch fails
 
 ```bash
-camou doctor --json
+camou doctor --json   # Emit JSON compatibility diagnostics
 ```
 
 `doctor` helps with:
@@ -226,57 +226,58 @@ Useful script exports:
 ### Browser management
 
 ```bash
-camou install [version]
-camou remove [version]
-camou use <version>
-camou versions
-camou presets
-camou version
-camou path
-camou doctor
-camou profile list
-camou profile inspect <name>
-camou profile remove <name>
-camou cookies export [path]
-camou cookies import <path>
-camou close --all
+camou install [version]           # Install the default or one specific build
+camou remove [version]            # Remove an installed Camoufox build
+camou use <version>               # Switch the default browser version
+camou versions                    # List installed versions and the default
+camou presets                     # Show built-in launch presets
+camou version                     # Print the active camoucli version
+camou path                        # Show the active browser executable path
+camou doctor                      # Diagnose install and launch issues
+camou profile list                # List stored disk-backed profiles
+camou profile inspect <name>      # Show one profile's paths
+camou profile remove <name>       # Delete a profile; stops it first if needed
+camou cookies export [path]       # Export context cookies as JSON
+camou cookies import <path>       # Import cookies into session context
+camou close --all                 # Stop all running sessions
 ```
 
 ### Page automation
 
 ```bash
-camou open <url>
-camou back
-camou forward
-camou reload
-camou eval <expression>
-camou snapshot [-i]
-camou click <selectorOrRef>
-camou hover <selectorOrRef>
-camou fill <selectorOrRef> <text>
-camou type <selectorOrRef> <text>
-camou check <selectorOrRef>
-camou uncheck <selectorOrRef>
-camou select <selectorOrRef> <value>
-camou press <key>
-camou scroll <direction> [amount]
-camou scrollintoview <selectorOrRef>
-camou wait [selectorOrRef] [--text <text>] [--load <state>]
-camou screenshot [path]
-camou get url
-camou get title
-camou get text <selectorOrRef>
-camou get value <selectorOrRef>
+camou open <url>                  # Open a URL in the current tab
+camou back                        # Go back in the current tab history
+camou forward                     # Go forward in the current tab history
+camou reload                      # Reload the current page
+camou eval <expression>           # Run JavaScript in the current tab
+camou snapshot                    # Capture page state and refs
+camou snapshot -i                 # Interactive elements only; recommended
+camou click <selectorOrRef>       # Click a selector or @eN ref
+camou hover <selectorOrRef>       # Hover a selector or @eN ref
+camou fill <selectorOrRef> <text> # Set an input value directly
+camou type <selectorOrRef> <text> # Type text with key events
+camou check <selectorOrRef>       # Check a checkbox or radio input
+camou uncheck <selectorOrRef>     # Uncheck a checkbox
+camou select <selectorOrRef> <value> # Choose a select option
+camou press <key>                 # Press a keyboard key in the page
+camou scroll <direction> [amount] # Scroll up, down, left, or right
+camou scrollintoview <selectorOrRef> # Scroll until visible
+camou wait [selectorOrRef] [--text <text>] [--load <state>] # Wait for element, text, or load
+camou screenshot [path]           # Save a screenshot of the current page
+camou get url                     # Read the current page URL
+camou get title                   # Read the current page title
+camou get text <selectorOrRef>    # Read visible text from an element
+camou get value <selectorOrRef>   # Read an element's form value
 ```
 
 ### Sessions and tabs
 
 ```bash
-camou session list
-camou session stop [name]
-camou tab list
-camou tab new [url]
-camou tab close [nameOrIndex]
+camou session list                # List running daemon sessions
+camou session stop [name]         # Stop one session or the current session
+camou tab list                    # List tabs in the current session
+camou tab new [url]               # Create a new tab, optionally opening a URL
+camou tab close [nameOrIndex]     # Close one tab by name or index
 ```
 
 ## Useful Patterns
@@ -284,29 +285,29 @@ camou tab close [nameOrIndex]
 ### Form flow
 
 ```bash
-camou open https://example.com/form
-camou snapshot -i
-camou fill @e1 "user@example.com"
-camou fill @e2 "password123"
-camou click @e3
-camou snapshot -i
+camou open https://example.com/form   # Load the form page
+camou snapshot -i                     # Capture interactive refs
+camou fill @e1 "user@example.com"   # Fill the email field
+camou fill @e2 "password123"        # Fill the password field
+camou click @e3                       # Submit the form
+camou snapshot -i                     # Refresh refs after the submit
 ```
 
 ### Persistent authenticated session
 
 ```bash
-camou open https://app.example.com/login --session app --tabname main
+camou open https://app.example.com/login --session app --tabname main     # Create the app session
 # ... complete login ...
-camou open https://app.example.com/dashboard --session app --tabname main
+camou open https://app.example.com/dashboard --session app --tabname main # Reuse authenticated state
 ```
 
 ### Machine-readable agent loop
 
 ```bash
-camou open https://target.site --json
-camou snapshot -i --json
-camou click @e2 --json
-camou snapshot -i --json
+camou open https://target.site --json   # JSON open result
+camou snapshot -i --json                # JSON interactive snapshot
+camou click @e2 --json                  # JSON action result
+camou snapshot -i --json                # JSON post-action state
 ```
 
 ### Programmatic Node automation
@@ -323,9 +324,9 @@ await Camoufox.with({ session: 'agent-script', headless: true }, async (camou) =
 ### Diagnose compatibility
 
 ```bash
-camou versions
-camou doctor --json
-camou use 135.0.1-beta.24
+camou versions              # Inspect installed and active versions
+camou doctor --json         # Check compatibility first
+camou use 135.0.1-beta.24   # Switch to the target version
 ```
 
 ## Presets
@@ -333,8 +334,8 @@ camou use 135.0.1-beta.24
 Built-in presets add a small layer of tested defaults on top of raw config and prefs input.
 
 ```bash
-camou presets
-camou open https://example.com --preset cache --preset low-bandwidth
+camou presets                                                  # Show preset names
+camou open https://example.com --preset cache --preset low-bandwidth # Launch with two presets
 ```
 
 Available presets in the current CLI:
