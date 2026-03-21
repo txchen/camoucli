@@ -51,6 +51,8 @@ export interface CliHandlers {
   onVersion: (options: OutputOptions) => Promise<void>;
   onDoctor: (options: OutputOptions) => Promise<void>;
   onDaemonAction: (action: string, payload: Record<string, unknown>, options: SharedOptions) => Promise<void>;
+  onDaemonStop?: (options: OutputOptions) => Promise<void>;
+  onDaemonRestart?: (options: OutputOptions) => Promise<void>;
 }
 
 export interface ProgramOptions {
@@ -554,6 +556,33 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .action(async (name: string, options: OutputOptions) => {
         const shared: SharedOptions = { json: options.json, verbose: options.verbose };
         await handlers.onDaemonAction('profile.remove', { action: 'profile.remove', profile: name }, shared);
+      }),
+  );
+
+  const daemonCommand = program.command('daemon').description('Manage the local camou daemon');
+  addSharedOutputOptions(
+    daemonCommand
+      .command('stop')
+      .description('Stop the local daemon process')
+      .action(async (options: OutputOptions) => {
+        if (!handlers.onDaemonStop) {
+          throw new Error('Daemon stop handler not configured');
+        }
+        const shared: OutputOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonStop(shared);
+      }),
+  );
+
+  addSharedOutputOptions(
+    daemonCommand
+      .command('restart')
+      .description('Restart the local daemon process')
+      .action(async (options: OutputOptions) => {
+        if (!handlers.onDaemonRestart) {
+          throw new Error('Daemon restart handler not configured');
+        }
+        const shared: OutputOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonRestart(shared);
       }),
   );
 

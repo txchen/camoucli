@@ -10,6 +10,12 @@ import {
   type DaemonSuccessResponse,
 } from './protocol.js';
 
+export interface DaemonStatus {
+  ok: true;
+  pid?: number | undefined;
+  version?: string | undefined;
+}
+
 export async function sendDaemonRequest(
   paths: CamoucliPaths,
   request: Omit<DaemonRequest, 'id'> & { id?: string },
@@ -74,11 +80,24 @@ export async function sendDaemonRequest(
   return response.data;
 }
 
-export async function pingDaemon(paths: CamoucliPaths): Promise<boolean> {
+export async function getDaemonStatus(paths: CamoucliPaths): Promise<DaemonStatus | undefined> {
   try {
-    await sendDaemonRequest(paths, { action: 'ping' }, 2_000);
-    return true;
+    const data = await sendDaemonRequest(paths, { action: 'ping' }, 2_000);
+    if (!data || typeof data !== 'object') {
+      return undefined;
+    }
+
+    const record = data as Record<string, unknown>;
+    return {
+      ok: true,
+      pid: typeof record.pid === 'number' ? record.pid : undefined,
+      version: typeof record.version === 'string' ? record.version : undefined,
+    };
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+export async function pingDaemon(paths: CamoucliPaths): Promise<boolean> {
+  return Boolean(await getDaemonStatus(paths));
 }

@@ -64,3 +64,32 @@ export async function removeDaemonArtifacts(paths: CamoucliPaths): Promise<void>
     await rm(paths.runtimeDir, { recursive: false, force: false }).catch(() => undefined);
   }
 }
+
+export async function stopDaemonProcess(pid: number, timeoutMs = 2_000): Promise<boolean> {
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+      return true;
+    }
+    throw error;
+  }
+
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!isProcessAlive(pid)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') {
+      throw error;
+    }
+  }
+
+  return !isProcessAlive(pid);
+}

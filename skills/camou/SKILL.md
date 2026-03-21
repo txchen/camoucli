@@ -121,9 +121,11 @@ camou profile remove work     # Delete one profile
 camou cookies export work.json # Save cookies to JSON
 camou cookies import work.json # Restore cookies from JSON
 camou close --all             # Stop every running session
+camou daemon stop             # Stop the local daemon process
+camou daemon restart          # Restart the local daemon process
 ```
 
-Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed.
+Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed. Use `camou daemon restart` after CLI upgrades if an older daemon is still running.
 
 ### Eval, cookies, and close-all
 
@@ -240,6 +242,8 @@ camou profile remove <name>       # Delete a profile; stops it first if needed
 camou cookies export [path]       # Export context cookies as JSON
 camou cookies import <path>       # Import cookies into session context
 camou close --all                 # Stop all running sessions
+camou daemon stop                 # Stop the local daemon process
+camou daemon restart              # Restart the local daemon process
 ```
 
 ### Page automation

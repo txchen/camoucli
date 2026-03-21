@@ -1,3 +1,5 @@
+import packageJson from '../../package.json' with { type: 'json' };
+
 import type { BrowserManager } from '../browser/manager.js';
 import type { DaemonRequest } from '../ipc/protocol.js';
 
@@ -7,7 +9,7 @@ export class DaemonRouter {
   async handle(request: DaemonRequest): Promise<unknown> {
     switch (request.action) {
       case 'ping':
-        return { ok: true, pid: process.pid };
+        return { ok: true, pid: process.pid, version: packageJson.version };
       case 'open':
         return this.browserManager.open(request);
       case 'back':

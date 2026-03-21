@@ -337,6 +337,15 @@ camou remote-versions --json | jq -r '.remoteVersions[].version' # Extract versi
 
 Errors are also structured when `--json` is enabled.
 
+### Daemon lifecycle
+
+```bash
+camou daemon stop             # Stop the local daemon process
+camou daemon restart          # Restart the daemon after upgrades or cleanup
+```
+
+Use `camou daemon restart` after upgrading the CLI if an older background daemon is still running.
+
 ## Command Reference
 
 ### Browser management
@@ -393,6 +402,8 @@ camou profile remove <name>   # Delete a profile; stops it first if needed
 camou cookies export [path]   # Export context cookies as JSON
 camou cookies import <path>   # Import cookies into session context
 camou close --all             # Stop all running sessions
+camou daemon stop             # Stop the local daemon process
+camou daemon restart          # Restart the local daemon process
 camou session stop [name]     # Stop one session or the current session
 camou tab list                # List tabs in the current session
 camou tab new [url]           # Create a new tab, optionally opening a URL

@@ -402,6 +402,50 @@ describe('CLI program parsing', () => {
     );
   });
 
+  it('routes daemon stop to the daemon stop handler', async () => {
+    const onDaemonStop = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+      onDaemonStop,
+      onDaemonRestart: async () => undefined,
+    });
+
+    await program.parseAsync(['node', 'camou', 'daemon', 'stop', '--json'], { from: 'node' });
+
+    expect(onDaemonStop).toHaveBeenCalledWith(expect.objectContaining({ json: true, verbose: undefined }));
+  });
+
+  it('routes daemon restart to the daemon restart handler', async () => {
+    const onDaemonRestart = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+      onDaemonStop: async () => undefined,
+      onDaemonRestart,
+    });
+
+    await program.parseAsync(['node', 'camou', 'daemon', 'restart', '--json'], { from: 'node' });
+
+    expect(onDaemonRestart).toHaveBeenCalledWith(expect.objectContaining({ json: true, verbose: undefined }));
+  });
+
   it('routes close --all to the stop-all handler', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({

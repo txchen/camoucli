@@ -251,6 +251,22 @@ function printWaitResult(data: Record<string, unknown>): void {
   process.stdout.write(`Ready ${location}${waitedFor ? ` ${waitedFor}` : ''}${url ? ` ${url}` : ''}\n`);
 }
 
+function printDaemonStopResult(data: Record<string, unknown>): void {
+  const stopped = Boolean(data.stopped);
+  if (!stopped) {
+    process.stdout.write('Daemon is not running\n');
+    return;
+  }
+
+  const pid = typeof data.pid === 'number' ? ` ${data.pid}` : '';
+  process.stdout.write(`Stopped daemon${pid}\n`);
+}
+
+function printDaemonRestartResult(data: Record<string, unknown>): void {
+  const pid = typeof data.pid === 'number' ? ` ${data.pid}` : '';
+  process.stdout.write(`Restarted daemon${pid}\n`);
+}
+
 function printSessionStopResult(data: Record<string, unknown>): void {
   const sessionName = typeof data.sessionName === 'string' ? data.sessionName : 'session';
   const stopped = data.stopped === true;
@@ -699,6 +715,12 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'session.stop':
       printSessionStopResult(data as Record<string, unknown>);
+      return;
+    case 'daemon.stop':
+      printDaemonStopResult(data as Record<string, unknown>);
+      return;
+    case 'daemon.restart':
+      printDaemonRestartResult(data as Record<string, unknown>);
       return;
     case 'tab.new':
       printTabNewResult(data as Record<string, unknown>);
