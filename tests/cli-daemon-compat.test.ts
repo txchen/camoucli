@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import packageJson from '../package.json' with { type: 'json' };
+
+const CURRENT_VERSION = packageJson.version;
+const INCOMPATIBLE_VERSION = '0.0.0';
 
 const spawnMock = vi.fn();
 const getDaemonStatusMock = vi.fn();
@@ -31,7 +35,7 @@ describe('daemon compatibility startup', () => {
   });
 
   it('reuses a compatible running daemon', async () => {
-    getDaemonStatusMock.mockResolvedValue({ ok: true, pid: 101, version: '0.8.0' });
+    getDaemonStatusMock.mockResolvedValue({ ok: true, pid: 101, version: CURRENT_VERSION });
 
     const { ensureDaemonRunning } = await import('../src/cli/daemon.js');
     await ensureDaemonRunning({ daemonPidFile: '/tmp/daemon.pid', daemonLogFile: '/tmp/daemon.log' } as never, false);
@@ -42,9 +46,9 @@ describe('daemon compatibility startup', () => {
 
   it('restarts an older daemon version before proceeding', async () => {
     getDaemonStatusMock
-      .mockResolvedValueOnce({ ok: true, pid: 101, version: '0.7.0' })
+      .mockResolvedValueOnce({ ok: true, pid: 101, version: INCOMPATIBLE_VERSION })
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ ok: true, pid: 202, version: '0.8.0' });
+      .mockResolvedValueOnce({ ok: true, pid: 202, version: CURRENT_VERSION });
 
     const { ensureDaemonRunning } = await import('../src/cli/daemon.js');
     const promise = ensureDaemonRunning({ daemonPidFile: '/tmp/daemon.pid', daemonLogFile: '/tmp/daemon.log' } as never, false);
@@ -56,7 +60,7 @@ describe('daemon compatibility startup', () => {
   });
 
   it('stops a running daemon using its reported pid', async () => {
-    getDaemonStatusMock.mockResolvedValue({ ok: true, pid: 101, version: '0.8.0' });
+    getDaemonStatusMock.mockResolvedValue({ ok: true, pid: 101, version: CURRENT_VERSION });
 
     const { stopDaemon } = await import('../src/cli/daemon.js');
     const result = await stopDaemon({ daemonPidFile: '/tmp/daemon.pid', daemonLogFile: '/tmp/daemon.log' } as never);
@@ -69,13 +73,13 @@ describe('daemon compatibility startup', () => {
     getDaemonStatusMock
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce({ ok: true, pid: 202, version: '0.8.0' })
-      .mockResolvedValueOnce({ ok: true, pid: 202, version: '0.8.0' });
+      .mockResolvedValueOnce({ ok: true, pid: 202, version: CURRENT_VERSION })
+      .mockResolvedValueOnce({ ok: true, pid: 202, version: CURRENT_VERSION });
 
     const { restartDaemon } = await import('../src/cli/daemon.js');
     const promise = restartDaemon({ daemonPidFile: '/tmp/daemon.pid', daemonLogFile: '/tmp/daemon.log' } as never, false);
     await vi.runAllTimersAsync();
-    await expect(promise).resolves.toEqual({ restarted: true, stopped: false, pid: 202, version: '0.8.0' });
+    await expect(promise).resolves.toEqual({ restarted: true, stopped: false, pid: 202, version: CURRENT_VERSION });
     expect(spawnMock).toHaveBeenCalledTimes(1);
   });
 });
