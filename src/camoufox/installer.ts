@@ -56,7 +56,7 @@ async function fetchJson<T>(url: string): Promise<T> {
 
   const response = await fetch(url, { headers });
   if (!response.ok) {
-    throw new InstallError(`GitHub request failed with ${response.status} for ${url}.`);
+    throw new InstallError(`GitHub request failed with ${response.status} for ${url}.`, { status: response.status, url });
   }
   return response.json() as Promise<T>;
 }
@@ -78,7 +78,18 @@ async function scanCompatibleReleases(options?: {
       : normalizedVersion
       ? `https://api.github.com/repos/${repo}/releases`
       : `https://api.github.com/repos/${repo}/releases`;
-    const payload = await fetchJson<GitHubRelease | GitHubRelease[]>(apiUrl);
+    let payload: GitHubRelease | GitHubRelease[];
+    try {
+      payload = await fetchJson<GitHubRelease | GitHubRelease[]>(apiUrl);
+    } catch (error) {
+      if (error instanceof InstallError && typeof (error.details as { status?: unknown } | undefined)?.status === 'number') {
+        const status = (error.details as { status: number }).status;
+        if (status === 404) {
+          continue;
+        }
+      }
+      throw error;
+    }
     const releases = Array.isArray(payload) ? payload : [payload];
 
     for (const release of releases) {

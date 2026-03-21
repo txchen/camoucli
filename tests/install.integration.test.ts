@@ -150,4 +150,42 @@ describe('installer integration', () => {
       },
     ]);
   });
+
+  it('ignores missing fallback release repos when listing remote versions', async () => {
+    const target = getPlatformTarget();
+    const compatibleAsset = buildExpectedAssetName('135.0.1-beta.24', target);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('daijro/camoufox')) {
+          return new Response(
+            JSON.stringify([
+              {
+                tag_name: 'v135.0.1-beta.24',
+                prerelease: false,
+                assets: [
+                  {
+                    name: compatibleAsset,
+                    browser_download_url: `https://example.com/${compatibleAsset}`,
+                  },
+                ],
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        return new Response('not found', { status: 404 });
+      }),
+    );
+
+    await expect(listRemoteCamoufoxReleases()).resolves.toMatchObject([
+      {
+        version: '135.0.1-beta.24',
+        tag: 'v135.0.1-beta.24',
+        prerelease: false,
+      },
+    ]);
+  });
 });

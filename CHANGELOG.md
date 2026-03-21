@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.6.1] - 2026-03-21
+
+### Fixed
+
+- Fixed `camou remote-versions` so missing fallback GitHub repos returning `404` no longer break remote version discovery.
+- Preserved real GitHub API failures while skipping absent fallback repos during remote release scans.
+
+
 ## [0.6.0] - 2026-03-21
 
 ### Added
