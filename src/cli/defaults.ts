@@ -394,7 +394,10 @@ const ACTION_REQUIRES_SESSION = new Set([
   'get.text',
   'get.value',
   'wait',
+  'eval',
   'session.stop',
+  'cookies.export',
+  'cookies.import',
   'tab.list',
   'tab.new',
   'tab.close',
@@ -422,6 +425,7 @@ const ACTION_REQUIRES_TAB = new Set([
   'get.text',
   'get.value',
   'wait',
+  'eval',
   'tab.new',
 ]);
 
@@ -447,6 +451,7 @@ const ACTION_SUPPORTS_LAUNCH_DEFAULTS = new Set([
   'get.text',
   'get.value',
   'wait',
+  'eval',
   'tab.new',
 ]);
 

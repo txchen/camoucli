@@ -329,6 +329,22 @@ describe('CLI output', () => {
     expect(output).toContain('- US America/New_York locales=en-US,es-US,en');
   });
 
+  it('prints eval cookies and close-all results', () => {
+    const output = captureStdout(() => {
+      printOutput('eval', { expression: 'document.title', result: 'Eval Page' }, false);
+      printOutput('cookies.export', { sessionName: 'work', count: 1, cookies: [{ name: 'sid', value: 'abc' }] }, false);
+      printOutput('cookies.export', { sessionName: 'work', count: 1, path: '/tmp/cookies.json' }, false);
+      printOutput('cookies.import', { sessionName: 'work', imported: 1, path: '/tmp/cookies.json' }, false);
+      printOutput('session.stopAll', { stopped: 2, sessionNames: ['one', 'two'] }, false);
+    });
+
+    expect(output).toContain('Eval Page');
+    expect(output).toContain('[');
+    expect(output).toContain('/tmp/cookies.json');
+    expect(output).toContain('Imported 1 cookies into work');
+    expect(output).toContain('Stopped 2 sessions');
+  });
+
   it('prints common browser actions in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

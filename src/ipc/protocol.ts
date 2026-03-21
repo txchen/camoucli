@@ -125,6 +125,25 @@ const waitRequestSchema = browserRequestBase.extend({
   timeoutMs: z.number().int().positive().optional(),
 });
 
+const evalRequestSchema = browserRequestBase.extend({
+  action: z.literal('eval'),
+  expression: z.string().min(1),
+});
+
+const cookiesExportRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('cookies.export'),
+  session: z.string().min(1).optional(),
+  path: z.string().optional(),
+});
+
+const cookiesImportRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('cookies.import'),
+  session: z.string().min(1).optional(),
+  path: z.string().min(1),
+});
+
 const sessionListRequestSchema = z.object({
   id: z.string(),
   action: z.literal('session.list'),
@@ -134,6 +153,11 @@ const sessionStopRequestSchema = z.object({
   id: z.string(),
   action: z.literal('session.stop'),
   session: z.string().min(1),
+});
+
+const sessionStopAllRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('session.stopAll'),
 });
 
 const tabListRequestSchema = z.object({
@@ -194,8 +218,12 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   getTextRequestSchema,
   getValueRequestSchema,
   waitRequestSchema,
+  evalRequestSchema,
+  cookiesExportRequestSchema,
+  cookiesImportRequestSchema,
   sessionListRequestSchema,
   sessionStopRequestSchema,
+  sessionStopAllRequestSchema,
   profileListRequestSchema,
   profileInspectRequestSchema,
   profileRemoveRequestSchema,

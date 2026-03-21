@@ -137,6 +137,37 @@ function formatQuoted(value: unknown): string {
   return JSON.stringify(String(value ?? ''));
 }
 
+function printEvalResult(data: Record<string, unknown>): void {
+  const result = data.result;
+  if (result === null || ['string', 'number', 'boolean'].includes(typeof result)) {
+    process.stdout.write(`${String(result ?? 'null')}
+`);
+    return;
+  }
+  process.stdout.write(`${JSON.stringify(result, null, 2)}
+`);
+}
+
+function printCookiesExportResult(data: Record<string, unknown>): void {
+  if (Array.isArray(data.cookies)) {
+    process.stdout.write(`${JSON.stringify(data.cookies, null, 2)}
+`);
+    return;
+  }
+  process.stdout.write(`Exported ${String(data.count ?? 0)} cookies from ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')}
+`);
+}
+
+function printCookiesImportResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Imported ${String(data.imported ?? 0)} cookies into ${String(data.sessionName ?? 'session')} from ${String(data.path ?? '')}
+`);
+}
+
+function printStopAllSessionsResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Stopped ${String(data.stopped ?? 0)} sessions
+`);
+}
+
 function printOpenResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const title = typeof data.title === 'string' && data.title.length > 0 ? ` ${formatQuoted(data.title)}` : '';
@@ -608,6 +639,18 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'doctor':
       printDoctorSummary(data as Record<string, unknown>);
+      return;
+    case 'eval':
+      printEvalResult(data as Record<string, unknown>);
+      return;
+    case 'cookies.export':
+      printCookiesExportResult(data as Record<string, unknown>);
+      return;
+    case 'cookies.import':
+      printCookiesImportResult(data as Record<string, unknown>);
+      return;
+    case 'session.stopAll':
+      printStopAllSessionsResult(data as Record<string, unknown>);
       return;
     case 'open':
       printOpenResult(data as Record<string, unknown>);

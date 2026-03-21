@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
 
 import type { Page } from 'playwright-core';
 
@@ -56,8 +57,10 @@ export class BrowserManager {
     return { stopped: true, sessionName };
   }
 
-  async stopAllSessions(): Promise<void> {
-    await Promise.all(Array.from(this.sessions.keys()).map((sessionName) => this.stopSession(sessionName)));
+  async stopAllSessions(): Promise<{ stopped: number; sessionNames: string[] }> {
+    const sessionNames = Array.from(this.sessions.keys());
+    await Promise.all(sessionNames.map((sessionName) => this.stopSession(sessionName)));
+    return { stopped: sessionNames.length, sessionNames };
   }
 
   async listStoredProfiles(): Promise<Array<Record<string, unknown>>> {
@@ -299,6 +302,16 @@ export class BrowserManager {
     };
   }
 
+  async eval(input: LaunchInput & { session: string; tabName: string; expression: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      expression: input.expression,
+      result: await tab.page.evaluate(() => undefined, input.expression),
+    };
+  }
+
   async screenshot(
     input: LaunchInput & { session: string; tabName: string; path?: string | undefined },
   ): Promise<Record<string, unknown>> {
@@ -340,6 +353,24 @@ export class BrowserManager {
       target: input.target,
       text,
     };
+  }
+
+  async exportCookies(input: { session: string; path?: string | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const cookies = await session.context.cookies();
+    if (input.path) {
+      await writeFile(input.path, `${JSON.stringify(cookies, null, 2)}
+`, 'utf8');
+      return { sessionName: session.name, count: cookies.length, path: input.path };
+    }
+    return { sessionName: session.name, count: cookies.length, cookies };
+  }
+
+  async importCookies(input: { session: string; path: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const cookies = JSON.parse(await readFile(input.path, 'utf8')) as Array<Record<string, unknown>>;
+    await session.context.addCookies(cookies as never);
+    return { sessionName: session.name, imported: cookies.length, path: input.path };
   }
 
   async getValue(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {

@@ -50,10 +50,18 @@ export class DaemonRouter {
         return this.browserManager.getValue(request);
       case 'wait':
         return this.browserManager.wait(request);
+      case 'eval':
+        return this.browserManager.eval(request);
+      case 'cookies.export':
+        return this.browserManager.exportCookies({ session: request.session ?? 'default', path: request.path });
+      case 'cookies.import':
+        return this.browserManager.importCookies({ session: request.session ?? 'default', path: request.path });
       case 'session.list':
         return this.browserManager.listSessions();
       case 'session.stop':
         return this.browserManager.stopSession(request.session);
+      case 'session.stopAll':
+        return this.browserManager.stopAllSessions();
       case 'profile.list':
         return this.browserManager.listStoredProfiles();
       case 'profile.inspect':

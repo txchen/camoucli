@@ -25,7 +25,19 @@ interface StoredPageState {
   elements: FakeElement[];
 }
 
-const profileStore = new Map<string, StoredPageState[]>();
+interface FakeCookie {
+  name: string;
+  value: string;
+  domain: string;
+  path: string;
+}
+
+interface StoredProfileState {
+  pages: StoredPageState[];
+  cookies: FakeCookie[];
+}
+
+const profileStore = new Map<string, StoredProfileState>();
 const launchLog: FakeLaunchRecord[] = [];
 
 function cloneState(state: StoredPageState): StoredPageState {
@@ -335,6 +347,16 @@ class FakePage extends EventEmitter {
   }
 
   async evaluate(_pageFunction: unknown, arg?: unknown): Promise<unknown> {
+    if (typeof arg === 'string') {
+      if (arg === 'document.title') {
+        return this.state.title;
+      }
+      if (arg === 'location.href' || arg === 'window.location.href') {
+        return this.state.url;
+      }
+      return undefined;
+    }
+
     if (!arg || typeof arg !== 'object') {
       this.refs.clear();
       return undefined;
@@ -390,11 +412,13 @@ class FakePage extends EventEmitter {
 
 export class FakeBrowserContext extends EventEmitter {
   private pagesList: FakePage[];
+  private cookiesList: FakeCookie[];
   private closed = false;
 
-  constructor(private readonly profileDir: string, initialPages: StoredPageState[]) {
+  constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[]) {
     super();
     this.pagesList = initialPages.map((state) => new FakePage(state));
+    this.cookiesList = initialCookies.map((cookie) => ({ ...cookie }));
   }
 
   pages(): FakePage[] {
@@ -407,25 +431,35 @@ export class FakeBrowserContext extends EventEmitter {
     return page;
   }
 
+  async cookies(): Promise<FakeCookie[]> {
+    return this.cookiesList.map((cookie) => ({ ...cookie }));
+  }
+
+  async addCookies(cookies: FakeCookie[]): Promise<void> {
+    this.cookiesList = cookies.map((cookie) => ({ ...cookie }));
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;
     }
 
     this.closed = true;
-    profileStore.set(
-      this.profileDir,
-      this.pages()
+    profileStore.set(this.profileDir, {
+      pages: this.pages()
         .map((page) => page.serialize())
         .filter((page) => page.url !== 'about:blank'),
-    );
+      cookies: this.cookiesList.map((cookie) => ({ ...cookie })),
+    });
     this.emit('close');
   }
 }
 
 export function createFakeBrowserContext(profileDir: string): FakeBrowserContext {
-  const initialPages = profileStore.get(profileDir) ?? [parsePageState('about:blank')];
-  return new FakeBrowserContext(profileDir, initialPages);
+  const stored = profileStore.get(profileDir);
+  const initialPages = stored?.pages ?? [parsePageState('about:blank')];
+  const initialCookies = stored?.cookies ?? [];
+  return new FakeBrowserContext(profileDir, initialPages, initialCookies);
 }
 
 export function resetFakeBrowserState(): void {
@@ -442,7 +476,7 @@ export function getFakeLaunchLog(): FakeLaunchRecord[] {
 }
 
 export function getProfileState(profileDir: string): StoredPageState[] | undefined {
-  return profileStore.get(profileDir)?.map((page) => ({
+  return profileStore.get(profileDir)?.pages.map((page) => ({
     url: page.url,
     title: page.title,
     elements: page.elements.map((element) => ({ ...element })),

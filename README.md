@@ -329,6 +329,8 @@ camou open https://example.com --session canary --browser 135.0.1-beta.24
 ```bash
 camou snapshot -i --json
 camou get title --json
+camou eval 'document.title' --json
+camou cookies export --json
 camou doctor --json
 camou remote-versions --json | jq -r '.remoteVersions[].version'
 ```
@@ -358,6 +360,7 @@ camou open <url>
 camou back
 camou forward
 camou reload
+camou eval <expression>
 camou snapshot [-i]
 camou click <selectorOrRef>
 camou hover <selectorOrRef>
@@ -386,6 +389,9 @@ camou session list
 camou profile list
 camou profile inspect <name>
 camou profile remove <name>
+camou cookies export [path]
+camou cookies import <path>
+camou close --all
 camou session stop [name]
 camou tab list
 camou tab new [url]

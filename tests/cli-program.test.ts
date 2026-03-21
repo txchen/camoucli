@@ -330,6 +330,102 @@ describe('CLI program parsing', () => {
     );
   });
 
+  it('routes eval to the page evaluation handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'eval', 'document.title', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'eval',
+      { action: 'eval', expression: 'document.title', session: undefined, tabName: undefined },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes cookies export to the cookie export handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'cookies', 'export', 'cookies.json', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'cookies.export',
+      { action: 'cookies.export', path: 'cookies.json', session: undefined },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes cookies import to the cookie import handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'cookies', 'import', 'cookies.json', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'cookies.import',
+      { action: 'cookies.import', path: 'cookies.json', session: undefined },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
+  it('routes close --all to the stop-all handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction,
+    });
+
+    await program.parseAsync(['node', 'camou', 'close', '--all', '--json'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'session.stopAll',
+      { action: 'session.stopAll' },
+      expect.objectContaining({ json: true, verbose: undefined }),
+    );
+  });
+
   it('leaves session stop unresolved so env/config defaults can apply later', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({

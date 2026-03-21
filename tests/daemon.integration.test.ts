@@ -152,6 +152,94 @@ describe('daemon integration', () => {
     expect(profiles.map((profile) => profile.profileName)).not.toContain('running-profile');
   });
 
+  it('evaluates JavaScript in the current tab', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'eval-session',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3EEval%20Page%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const result = (await sendDaemonRequest(paths, {
+      action: 'eval',
+      session: 'eval-session',
+      tabName: 'main',
+      expression: 'document.title',
+    })) as { result: unknown; expression: string };
+
+    expect(result).toMatchObject({ expression: 'document.title', result: 'Eval Page' });
+  });
+
+  it('exports and imports cookies for a session', async () => {
+    const cookiePath = path.join(rootDir, 'cookies.json');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'cookie-session',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ECookie%20Page%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'cookies.import',
+      session: 'cookie-session',
+      path: cookiePath,
+    }).catch(() => undefined);
+
+    await writeFile(cookiePath, JSON.stringify([{ name: 'sid', value: 'abc', domain: 'example.com', path: '/' }], null, 2), 'utf8');
+
+    const imported = (await sendDaemonRequest(paths, {
+      action: 'cookies.import',
+      session: 'cookie-session',
+      path: cookiePath,
+    })) as { imported: number };
+
+    const exported = (await sendDaemonRequest(paths, {
+      action: 'cookies.export',
+      session: 'cookie-session',
+    })) as { count: number; cookies: Array<{ name: string; value: string }> };
+
+    const fileExport = (await sendDaemonRequest(paths, {
+      action: 'cookies.export',
+      session: 'cookie-session',
+      path: cookiePath,
+    })) as { count: number; path: string };
+
+    expect(imported).toMatchObject({ imported: 1 });
+    expect(exported.count).toBe(1);
+    expect(exported.cookies).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'sid', value: 'abc' })]));
+    expect(fileExport).toMatchObject({ count: 1, path: cookiePath });
+  });
+
+  it('stops all running sessions through the public close-all action', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'one',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3EOne%3C%2Ftitle%3E',
+      headless: true,
+    });
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'two',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ETwo%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const closed = (await sendDaemonRequest(paths, {
+      action: 'session.stopAll',
+    })) as { stopped: number; sessionNames: string[] };
+    const sessions = (await sendDaemonRequest(paths, {
+      action: 'session.list',
+    })) as Array<unknown>;
+
+    expect(closed.stopped).toBe(2);
+    expect(closed.sessionNames.sort()).toEqual(['one', 'two']);
+    expect(sessions).toEqual([]);
+  });
+
   it('persists session pages across daemon restarts for the same profile', async () => {
     const pageUrl = 'data:text/html,%3Ctitle%3EPersisted%3C%2Ftitle%3E%3Cp%3Eremember%3C%2Fp%3E';
 

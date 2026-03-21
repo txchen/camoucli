@@ -109,11 +109,45 @@ Example:
 
 Then agents can just run `camou open ...`, `camou snapshot ...`, and so on without repeating `--session`, `--tabname`, `--browser`, `--headless`, or `--preset` every time.
 
+### Manage stored profiles explicitly
+
+Use `session` for live runtime state and `profile` for disk-backed browser data.
+
+```bash
+camou session list
+camou profile list
+camou profile inspect work
+camou profile remove work
+camou cookies export work.json
+camou cookies import work.json
+camou close --all
+```
+
+Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed.
+
+### Eval, cookies, and close-all
+
+Use these when you need lightweight scripting, cookie portability, or fast daemon cleanup.
+
+```bash
+camou eval 'document.title'
+camou cookies export cookies.json
+camou cookies import cookies.json
+camou close --all
+```
+
+Guidance:
+- `eval` runs in the current tab and should return JSON-serializable values
+- `cookies import/export` operate on session/browser-context state, not tab-local state
+- `close --all` stops every running daemon-owned session, but does not delete stored profiles on disk
+
 ### Use `--json` when output will be parsed
 
 ```bash
 camou snapshot -i --json
 camou get title --json
+camou eval 'document.title' --json
+camou cookies export --json
 camou doctor --json
 ```
 
@@ -200,6 +234,12 @@ camou presets
 camou version
 camou path
 camou doctor
+camou profile list
+camou profile inspect <name>
+camou profile remove <name>
+camou cookies export [path]
+camou cookies import <path>
+camou close --all
 ```
 
 ### Page automation
@@ -209,6 +249,7 @@ camou open <url>
 camou back
 camou forward
 camou reload
+camou eval <expression>
 camou snapshot [-i]
 camou click <selectorOrRef>
 camou hover <selectorOrRef>

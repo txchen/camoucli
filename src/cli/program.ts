@@ -239,6 +239,50 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
+      .command('eval <expression>')
+      .description('Evaluate JavaScript in the current tab')
+      .action(async (expression: string, options: SharedOptions) => {
+        const shared: SharedOptions = { ...options, json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('eval', { action: 'eval', expression, session: options.session, tabName: options.tabname }, shared);
+      }),
+  );
+
+  const cookiesCommand = program.command('cookies').description('Manage browser cookies for a session');
+  addSharedOutputOptions(
+    cookiesCommand
+      .command('export [path]')
+      .description('Export cookies from the current session')
+      .option('--session <name>', 'session name')
+      .action(async (filePath: string | undefined, options: OutputOptions & { session?: string | undefined }) => {
+        const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('cookies.export', { action: 'cookies.export', ...(filePath ? { path: filePath } : {}), ...(options.session ? { session: options.session } : {}) }, shared);
+      }),
+  );
+
+  addSharedOutputOptions(
+    cookiesCommand
+      .command('import <path>')
+      .description('Import cookies into the current session')
+      .option('--session <name>', 'session name')
+      .action(async (filePath: string, options: OutputOptions & { session?: string | undefined }) => {
+        const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('cookies.import', { action: 'cookies.import', path: filePath, ...(options.session ? { session: options.session } : {}) }, shared);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('close')
+      .description('Stop all running daemon-owned sessions')
+      .requiredOption('--all', 'stop all running sessions')
+      .action(async (options: OutputOptions & { all: boolean }) => {
+        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('session.stopAll', { action: 'session.stopAll' }, shared);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
       .command('open <url>')
       .description('Open a URL in the current tab')
       .action(async (url: string, options: SharedOptions) => {
