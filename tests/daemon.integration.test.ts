@@ -161,14 +161,22 @@ describe('daemon integration', () => {
       headless: true,
     });
 
-    const result = (await sendDaemonRequest(paths, {
+    const titleResult = (await sendDaemonRequest(paths, {
       action: 'eval',
       session: 'eval-session',
       tabName: 'main',
       expression: 'document.title',
     })) as { result: unknown; expression: string };
 
-    expect(result).toMatchObject({ expression: 'document.title', result: 'Eval Page' });
+    const mathResult = (await sendDaemonRequest(paths, {
+      action: 'eval',
+      session: 'eval-session',
+      tabName: 'main',
+      expression: '1+1',
+    })) as { result: unknown; expression: string };
+
+    expect(titleResult).toMatchObject({ expression: 'document.title', result: 'Eval Page' });
+    expect(mathResult).toMatchObject({ expression: '1+1', result: 2 });
   });
 
   it('exports and imports cookies for a session', async () => {

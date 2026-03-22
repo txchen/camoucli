@@ -348,13 +348,21 @@ class FakePage extends EventEmitter {
 
   async evaluate(_pageFunction: unknown, arg?: unknown): Promise<unknown> {
     if (typeof arg === 'string') {
-      if (arg === 'document.title') {
-        return this.state.title;
+      const location = { href: this.state.url };
+      const document = { title: this.state.title };
+      const window = { location, document };
+
+      try {
+        return Function('document', 'location', 'window', `return (${arg});`)(document, location, window);
+      } catch {
+        if (arg === 'document.title') {
+          return this.state.title;
+        }
+        if (arg === 'location.href' || arg === 'window.location.href') {
+          return this.state.url;
+        }
+        return undefined;
       }
-      if (arg === 'location.href' || arg === 'window.location.href') {
-        return this.state.url;
-      }
-      return undefined;
     }
 
     if (!arg || typeof arg !== 'object') {

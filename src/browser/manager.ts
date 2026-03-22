@@ -308,7 +308,7 @@ export class BrowserManager {
       sessionName: input.session,
       tabName: tab.name,
       expression: input.expression,
-      result: await tab.page.evaluate(() => undefined, input.expression),
+      result: await tab.page.evaluate((expression) => globalThis.eval(expression), input.expression),
     };
   }
 
