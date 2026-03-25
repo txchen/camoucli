@@ -336,6 +336,7 @@ describe('CLI output', () => {
       printOutput('cookies.export', { sessionName: 'work', count: 1, path: '/tmp/cookies.json' }, false);
       printOutput('cookies.import', { sessionName: 'work', imported: 1, path: '/tmp/cookies.json' }, false);
       printOutput('session.stopAll', { stopped: 2, sessionNames: ['one', 'two'] }, false);
+      printOutput('daemon.cleanup', { stoppedSessions: 2, stoppedDaemon: true, killedProcesses: 3 }, false);
     });
 
     expect(output).toContain('Eval Page');
@@ -343,6 +344,7 @@ describe('CLI output', () => {
     expect(output).toContain('/tmp/cookies.json');
     expect(output).toContain('Imported 1 cookies into work');
     expect(output).toContain('Stopped 2 sessions');
+    expect(output).toContain('Cleanup complete: stopped 2 sessions, stopped daemon, killed 3 Camoufox processes');
   });
 
   it('prints common browser actions in human-readable form', () => {

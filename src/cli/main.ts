@@ -11,7 +11,7 @@ import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, ValidationError, getExitCode, toErrorPayload, type CamoucliError } from '../util/errors.js';
 import { Logger } from '../util/log.js';
 import { sendDaemonRequest } from '../ipc/client.js';
-import { ensureDaemonRunning, restartDaemon, stopDaemon } from './daemon.js';
+import { cleanupDaemon, ensureDaemonRunning, restartDaemon, stopDaemon } from './daemon.js';
 import { applyCliDefaultsToPayload, resolveSharedOptions } from './defaults.js';
 import { printOutput } from './output.js';
 import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
@@ -207,6 +207,12 @@ export async function main(argv: string[] = process.argv): Promise<number> {
         await ensureBasePaths(paths);
         const data = await restartDaemon(paths, options.verbose ?? false);
         printOutput('daemon.restart', data, options.json ?? false);
+    },
+    onDaemonCleanup: async (options: OutputOptions) => {
+        const paths = getCamoucliPaths();
+        await ensureBasePaths(paths);
+        const data = await cleanupDaemon(paths);
+        printOutput('daemon.cleanup', data, options.json ?? false);
     },
   }, { quietErrors: asJson });
 

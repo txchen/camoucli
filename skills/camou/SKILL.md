@@ -123,9 +123,10 @@ camou cookies import work.json # Restore cookies from JSON
 camou close --all             # Stop every running session
 camou daemon stop             # Stop the local daemon process
 camou daemon restart          # Restart the local daemon process
+camou daemon cleanup          # Stop sessions, stop daemon, kill stray Camoufox processes
 ```
 
-Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed. Use `camou daemon restart` after CLI upgrades if an older daemon is still running.
+Prefer `camou profile remove <name>` over raw filesystem deletion so the daemon can stop a running session first when needed. Use `camou daemon restart` after CLI upgrades if an older daemon is still running. Use `camou daemon cleanup` when orphan Camoufox processes remain.
 
 ### Eval, cookies, and close-all
 
@@ -244,6 +245,7 @@ camou cookies import <path>       # Import cookies into session context
 camou close --all                 # Stop all running sessions
 camou daemon stop                 # Stop the local daemon process
 camou daemon restart              # Restart the local daemon process
+camou daemon cleanup              # Stop sessions, stop daemon, kill stray Camoufox processes
 ```
 
 ### Page automation

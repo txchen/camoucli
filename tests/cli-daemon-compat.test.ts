@@ -9,6 +9,9 @@ const getDaemonStatusMock = vi.fn();
 const cleanupStaleDaemonArtifactsMock = vi.fn();
 const readDaemonPidMock = vi.fn();
 const stopDaemonProcessMock = vi.fn();
+const sendDaemonRequestMock = vi.fn();
+const listInstalledBrowsersMock = vi.fn();
+const killCamoufoxProcessesMock = vi.fn();
 
 vi.mock('node:child_process', () => ({
   spawn: spawnMock,
@@ -16,12 +19,21 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('../src/ipc/client.js', () => ({
   getDaemonStatus: getDaemonStatusMock,
+  sendDaemonRequest: sendDaemonRequestMock,
 }));
 
 vi.mock('../src/daemon/runtime.js', () => ({
   cleanupStaleDaemonArtifacts: cleanupStaleDaemonArtifactsMock,
   readDaemonPid: readDaemonPidMock,
   stopDaemonProcess: stopDaemonProcessMock,
+}));
+
+vi.mock('../src/camoufox/registry.js', () => ({
+  listInstalledBrowsers: listInstalledBrowsersMock,
+}));
+
+vi.mock('../src/camoufox/processes.js', () => ({
+  killCamoufoxProcesses: killCamoufoxProcessesMock,
 }));
 
 describe('daemon compatibility startup', () => {
@@ -32,6 +44,9 @@ describe('daemon compatibility startup', () => {
     cleanupStaleDaemonArtifactsMock.mockResolvedValue({ pid: undefined, pidAlive: false, removedPidFile: false, removedSocket: false });
     readDaemonPidMock.mockResolvedValue(undefined);
     stopDaemonProcessMock.mockResolvedValue(true);
+    sendDaemonRequestMock.mockResolvedValue({ stopped: 0, sessionNames: [] });
+    listInstalledBrowsersMock.mockResolvedValue({ currentVersion: undefined, installs: [] });
+    killCamoufoxProcessesMock.mockResolvedValue({ matched: 0, killed: 0, processes: [] });
   });
 
   it('reuses a compatible running daemon', async () => {
@@ -81,5 +96,30 @@ describe('daemon compatibility startup', () => {
     await vi.runAllTimersAsync();
     await expect(promise).resolves.toEqual({ restarted: true, stopped: false, pid: 202, version: CURRENT_VERSION });
     expect(spawnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up sessions daemon and stray camoufox processes', async () => {
+    getDaemonStatusMock
+      .mockResolvedValueOnce({ ok: true, pid: 101, version: '0.9.1' })
+      .mockResolvedValueOnce({ ok: true, pid: 101, version: '0.9.1' });
+    sendDaemonRequestMock.mockResolvedValue({ stopped: 2, sessionNames: ['one', 'two'] });
+    killCamoufoxProcessesMock.mockResolvedValue({ matched: 2, killed: 2, processes: [{ pid: 201 }, { pid: 202 }] });
+
+    const { cleanupDaemon } = await import('../src/cli/daemon.js');
+    const result = await cleanupDaemon({ daemonPidFile: '/tmp/daemon.pid', daemonLogFile: '/tmp/daemon.log' } as never);
+
+    expect(sendDaemonRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { action: 'session.stopAll' },
+      20_000,
+    );
+    expect(stopDaemonProcessMock).toHaveBeenCalledWith(101);
+    expect(killCamoufoxProcessesMock).toHaveBeenCalled();
+    expect(result).toMatchObject({
+      stoppedSessions: 2,
+      stoppedDaemon: true,
+      killedProcesses: 2,
+      matchedProcesses: 2,
+    });
   });
 });

@@ -5,8 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 import packageJson from '../../package.json' with { type: 'json' };
 
+import { killCamoufoxProcesses } from '../camoufox/processes.js';
 import { cleanupStaleDaemonArtifacts, readDaemonPid, stopDaemonProcess } from '../daemon/runtime.js';
-import { getDaemonStatus } from '../ipc/client.js';
+import { getDaemonStatus, sendDaemonRequest } from '../ipc/client.js';
 import type { CamoucliPaths } from '../state/paths.js';
 import { DaemonStartError } from '../util/errors.js';
 
@@ -131,5 +132,46 @@ export async function restartDaemon(
     stopped: stopped.stopped,
     pid: daemonStatus?.pid,
     version: daemonStatus?.version,
+  };
+}
+
+
+export async function cleanupDaemon(paths: CamoucliPaths): Promise<{
+  stoppedSessions: number;
+  sessionNames: string[];
+  stoppedDaemon: boolean;
+  daemonPid?: number | undefined;
+  matchedProcesses: number;
+  killedProcesses: number;
+  processPids: number[];
+}> {
+  let stoppedSessions = 0;
+  let sessionNames: string[] = [];
+  const daemonStatus = await getDaemonStatus(paths);
+
+  if (daemonStatus && isCompatibleDaemonVersion(daemonStatus.version)) {
+    try {
+      const result = await sendDaemonRequest(paths, { action: 'session.stopAll' }, 20_000);
+      if (result && typeof result === 'object') {
+        const record = result as Record<string, unknown>;
+        stoppedSessions = typeof record.stopped === 'number' ? record.stopped : 0;
+        sessionNames = Array.isArray(record.sessionNames) ? record.sessionNames.map((value) => String(value)) : [];
+      }
+    } catch {
+      // Continue cleanup even if graceful stop fails.
+    }
+  }
+
+  const daemonStop = await stopDaemon(paths);
+  const processCleanup = await killCamoufoxProcesses(paths);
+
+  return {
+    stoppedSessions,
+    sessionNames,
+    stoppedDaemon: daemonStop.stopped,
+    daemonPid: daemonStop.pid,
+    matchedProcesses: processCleanup.matched,
+    killedProcesses: processCleanup.killed,
+    processPids: processCleanup.processes.map((processInfo) => processInfo.pid),
   };
 }

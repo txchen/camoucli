@@ -267,6 +267,13 @@ function printDaemonRestartResult(data: Record<string, unknown>): void {
   process.stdout.write(`Restarted daemon${pid}\n`);
 }
 
+function printDaemonCleanupResult(data: Record<string, unknown>): void {
+  const stoppedSessions = typeof data.stoppedSessions === 'number' ? data.stoppedSessions : 0;
+  const stoppedDaemon = Boolean(data.stoppedDaemon);
+  const killedProcesses = typeof data.killedProcesses === 'number' ? data.killedProcesses : 0;
+  process.stdout.write(`Cleanup complete: stopped ${stoppedSessions} sessions, ${stoppedDaemon ? 'stopped daemon' : 'daemon already stopped'}, killed ${killedProcesses} Camoufox processes\n`);
+}
+
 function printSessionStopResult(data: Record<string, unknown>): void {
   const sessionName = typeof data.sessionName === 'string' ? data.sessionName : 'session';
   const stopped = data.stopped === true;
@@ -721,6 +728,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'daemon.restart':
       printDaemonRestartResult(data as Record<string, unknown>);
+      return;
+    case 'daemon.cleanup':
+      printDaemonCleanupResult(data as Record<string, unknown>);
       return;
     case 'tab.new':
       printTabNewResult(data as Record<string, unknown>);

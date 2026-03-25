@@ -417,11 +417,35 @@ describe('CLI program parsing', () => {
       onDaemonAction: async () => undefined,
       onDaemonStop,
       onDaemonRestart: async () => undefined,
+      onDaemonCleanup: async () => undefined,
     });
 
     await program.parseAsync(['node', 'camou', 'daemon', 'stop', '--json'], { from: 'node' });
 
     expect(onDaemonStop).toHaveBeenCalledWith(expect.objectContaining({ json: true, verbose: undefined }));
+  });
+
+  it('routes daemon cleanup to the daemon cleanup handler', async () => {
+    const onDaemonCleanup = vi.fn(async () => undefined);
+    const program = createProgram({
+      onInstall: async () => undefined,
+      onRemove: async () => undefined,
+      onUse: async () => undefined,
+      onVersions: async () => undefined,
+      onPresets: async () => undefined,
+      onFingerprintProfiles: async () => undefined,
+      onPath: async () => undefined,
+      onVersion: async () => undefined,
+      onDoctor: async () => undefined,
+      onDaemonAction: async () => undefined,
+      onDaemonStop: async () => undefined,
+      onDaemonRestart: async () => undefined,
+      onDaemonCleanup,
+    });
+
+    await program.parseAsync(['node', 'camou', 'daemon', 'cleanup', '--json'], { from: 'node' });
+
+    expect(onDaemonCleanup).toHaveBeenCalledWith(expect.objectContaining({ json: true, verbose: undefined }));
   });
 
   it('routes daemon restart to the daemon restart handler', async () => {
@@ -439,6 +463,7 @@ describe('CLI program parsing', () => {
       onDaemonAction: async () => undefined,
       onDaemonStop: async () => undefined,
       onDaemonRestart,
+      onDaemonCleanup: async () => undefined,
     });
 
     await program.parseAsync(['node', 'camou', 'daemon', 'restart', '--json'], { from: 'node' });

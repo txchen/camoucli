@@ -342,9 +342,10 @@ Errors are also structured when `--json` is enabled.
 ```bash
 camou daemon stop             # Stop the local daemon process
 camou daemon restart          # Restart the daemon after upgrades or cleanup
+camou daemon cleanup          # Stop sessions, stop daemon, kill stray Camoufox processes
 ```
 
-Use `camou daemon restart` after upgrading the CLI if an older background daemon is still running.
+Use `camou daemon restart` after upgrading the CLI if an older background daemon is still running. Use `camou daemon cleanup` when the daemon is gone but orphan Camoufox processes remain.
 
 ## Command Reference
 
@@ -404,6 +405,7 @@ camou cookies import <path>   # Import cookies into session context
 camou close --all             # Stop all running sessions
 camou daemon stop             # Stop the local daemon process
 camou daemon restart          # Restart the local daemon process
+camou daemon cleanup          # Stop sessions, stop daemon, kill stray Camoufox processes
 camou session stop [name]     # Stop one session or the current session
 camou tab list                # List tabs in the current session
 camou tab new [url]           # Create a new tab, optionally opening a URL
