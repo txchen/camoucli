@@ -100,8 +100,8 @@ describe('daemon compatibility startup', () => {
 
   it('cleans up sessions daemon and stray camoufox processes', async () => {
     getDaemonStatusMock
-      .mockResolvedValueOnce({ ok: true, pid: 101, version: '0.9.1' })
-      .mockResolvedValueOnce({ ok: true, pid: 101, version: '0.9.1' });
+      .mockResolvedValueOnce({ ok: true, pid: 101, version: CURRENT_VERSION })
+      .mockResolvedValueOnce({ ok: true, pid: 101, version: CURRENT_VERSION });
     sendDaemonRequestMock.mockResolvedValue({ stopped: 2, sessionNames: ['one', 'two'] });
     killCamoufoxProcessesMock.mockResolvedValue({ matched: 2, killed: 2, processes: [{ pid: 201 }, { pid: 202 }] });
 
