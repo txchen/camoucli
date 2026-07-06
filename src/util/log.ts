@@ -10,6 +10,8 @@ export interface LoggerOptions {
   mirrorToStderr?: boolean;
 }
 
+export type LoggerHelperOptions = Partial<LoggerOptions>;
+
 function stringifyDetail(value: unknown): string {
   if (value === undefined) {
     return '';
@@ -91,4 +93,16 @@ export class Logger {
       process.stderr.write(`${line}\n`);
     }
   }
+}
+
+export function getLogger(options: boolean | LoggerHelperOptions = false): Logger {
+  const resolvedOptions = typeof options === 'boolean' ? { verbose: options } : options;
+  const verbose = resolvedOptions.verbose ?? false;
+
+  return new Logger({
+    name: resolvedOptions.name ?? 'camou',
+    filePath: resolvedOptions.filePath,
+    verbose,
+    mirrorToStderr: resolvedOptions.mirrorToStderr ?? verbose,
+  });
 }

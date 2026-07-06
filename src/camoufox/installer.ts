@@ -63,7 +63,6 @@ async function fetchJson<T>(url: string): Promise<T> {
 
 async function scanCompatibleReleases(options?: {
   version?: string | undefined;
-  latestOnly?: boolean | undefined;
 }): Promise<RemoteCamoufoxRelease[]> {
   const target = getPlatformTarget();
   const normalizedVersion = options?.version ? normalizeReleaseVersion(options.version) : undefined;
@@ -73,11 +72,7 @@ async function scanCompatibleReleases(options?: {
   const compatibleReleases = new Map<string, RemoteCamoufoxRelease>();
 
   for (const repo of DEFAULT_RELEASE_REPOS) {
-    const apiUrl = options?.latestOnly
-      ? `https://api.github.com/repos/${repo}/releases/latest`
-      : normalizedVersion
-      ? `https://api.github.com/repos/${repo}/releases`
-      : `https://api.github.com/repos/${repo}/releases`;
+    const apiUrl = `https://api.github.com/repos/${repo}/releases`;
     let payload: GitHubRelease | GitHubRelease[];
     try {
       payload = await fetchJson<GitHubRelease | GitHubRelease[]>(apiUrl);
@@ -113,7 +108,7 @@ async function scanCompatibleReleases(options?: {
         prerelease: release.prerelease ?? false,
       };
 
-      if (normalizedVersion || options?.latestOnly) {
+      if (normalizedVersion) {
         return [resolvedRelease];
       }
 
@@ -131,7 +126,7 @@ export async function listRemoteCamoufoxReleases(): Promise<RemoteCamoufoxReleas
 }
 
 export async function resolveRelease(version?: string): Promise<ResolvedRelease> {
-  const compatibleReleases = await scanCompatibleReleases({ version, latestOnly: !version });
+  const compatibleReleases = await scanCompatibleReleases({ version });
   const release = compatibleReleases[0];
   if (release) {
     return release;

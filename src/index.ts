@@ -64,6 +64,7 @@ export {
   toErrorPayload,
   type ErrorPayload,
 } from './util/errors.js';
+export { Logger, getLogger, type LoggerHelperOptions, type LoggerOptions } from './util/log.js';
 export type { LaunchInput, ResolvedLaunchConfig } from './camoufox/config.js';
 export type { BrowserLaunchProbe, LaunchedSession, PreparedPersistentCamoufoxLaunch } from './camoufox/launcher.js';
 export type { BrowserContext, Page } from 'playwright-core';

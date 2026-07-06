@@ -207,6 +207,8 @@ Useful exported helpers include:
 - `resolveCamoufoxLaunchSpec()`
 - `withCamoufox()`
 - `installCamoufox()`
+- `getLogger()`
+- `Logger`
 - `listInstalledBrowsers()`
 - `setCurrentBrowser()`
 - `doctorCamoufox()`
@@ -216,6 +218,18 @@ Notes:
 - install a browser first with `camou install` or `installCamoufox()`
 - use a dedicated `session` name in scripts if you do not want to share the default CLI profile
 - the returned context is a normal Playwright context, so you can use standard Playwright APIs from there
+
+Install with logs from Node:
+
+```ts
+import { ensureBasePaths, getCamoucliPaths, getLogger, installCamoufox } from 'camou';
+
+const paths = getCamoucliPaths();
+await ensureBasePaths(paths);
+
+const logger = getLogger({ name: 'installer', verbose: true });
+await installCamoufox(paths, { logger });
+```
 
 ## Recommended Agent Workflow
 

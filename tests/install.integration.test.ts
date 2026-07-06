@@ -89,6 +89,73 @@ describe('installer integration', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('installs the newest compatible release when the latest release lacks a platform asset', async () => {
+    const paths = createTestPaths(rootDir);
+    await ensureBasePaths(paths);
+    const target = getPlatformTarget();
+    const compatibleAsset = buildExpectedAssetName('135.0.1-beta.24', target);
+    const incompatibleAsset =
+      target.assetSuffix === 'win.x86_64'
+        ? 'camoufox-135.0.1-beta.25-lin.x86_64.zip'
+        : 'camoufox-135.0.1-beta.25-win.x86_64.zip';
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/releases/latest')) {
+        return new Response(
+          JSON.stringify({
+            tag_name: 'v135.0.1-beta.25',
+            prerelease: false,
+            assets: [
+              {
+                name: incompatibleAsset,
+                browser_download_url: 'https://example.com/incompatible.zip',
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+
+      if (url.endsWith('/releases')) {
+        return new Response(
+          JSON.stringify([
+            {
+              tag_name: 'v135.0.1-beta.25',
+              prerelease: false,
+              assets: [
+                {
+                  name: incompatibleAsset,
+                  browser_download_url: 'https://example.com/incompatible.zip',
+                },
+              ],
+            },
+            {
+              tag_name: 'v135.0.1-beta.24',
+              prerelease: false,
+              assets: [
+                {
+                  name: compatibleAsset,
+                  browser_download_url: `https://example.com/${compatibleAsset}`,
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      return new Response('archive-data', { status: 200 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const release = await installCamoufox(paths, { force: true });
+    const installed = await resolveInstalledBrowser(paths, release.version);
+
+    expect(release.version).toBe('135.0.1-beta.24');
+    expect(installed?.assetName).toBe(compatibleAsset);
+  });
+
   it('lists only remote releases compatible with the current machine', async () => {
     const target = getPlatformTarget();
     const compatibleAsset = buildExpectedAssetName('135.0.1-beta.24', target);

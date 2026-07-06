@@ -133,6 +133,21 @@ describe('public Node API', () => {
     expect(context).toBe(fakeContext);
   });
 
+  it('exports logging helpers for installer consumers', async () => {
+    const { Logger, getLogger } = await import('../src/index.js');
+
+    const logger = getLogger({ name: 'test-installer', verbose: true, mirrorToStderr: false });
+    const directLogger = new Logger({ name: 'direct-installer' });
+
+    expect(logger).toBeInstanceOf(Logger);
+    expect(logger.name).toBe('test-installer');
+    expect(logger.verbose).toBe(true);
+    expect(directLogger.name).toBe('direct-installer');
+
+    await logger.close();
+    await directLogger.close();
+  });
+
   it('exposes first-class helpers for launch resolution and Python-like wrappers', async () => {
     const fakePage = { goto: vi.fn(async () => undefined), title: vi.fn(async () => 'Example Domain') };
     const fakeContext = {
