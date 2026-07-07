@@ -334,6 +334,65 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'trace.stop', expect.objectContaining({ action: 'trace.stop', path: 'debug.zip' }), expect.any(Object));
   });
 
+  it('routes diff vitals pushstate and init script commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'diff', 'snapshot', '--text', 'old', '--interactive', '--path', 'snap.json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'diff', 'screenshot', '--baseline', '/tmp/base.png', '--selector', '#app', '--viewport', '--format', 'png'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'diff', 'url', 'example.com/a', 'example.com/b', '--mode', 'screenshot', '--full'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'vitals'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'web-vitals'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'pushstate', '/next'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'addinitscript', 'window.ready = true;'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'removeinitscript', 'init_1', '--session', 'work'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'diff.snapshot', expect.objectContaining({ action: 'diff.snapshot', baselineText: 'old', interactive: true, path: 'snap.json' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'diff.screenshot', expect.objectContaining({ action: 'diff.screenshot', baselinePath: '/tmp/base.png', target: '#app', fullPage: false, format: 'png' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'diff.url', expect.objectContaining({ action: 'diff.url', leftUrl: 'https://example.com/a', rightUrl: 'https://example.com/b', mode: 'screenshot', fullPage: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'vitals', expect.objectContaining({ action: 'vitals' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'vitals', expect.objectContaining({ action: 'vitals' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'pushstate', expect.objectContaining({ action: 'pushstate', url: '/next' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'addinitscript', expect.objectContaining({ action: 'addinitscript', source: 'window.ready = true;' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'removeinitscript', expect.objectContaining({ action: 'removeinitscript', session: 'work', scriptId: 'init_1' }), expect.any(Object));
+  });
+
+  it('rejects invalid diff command variants before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'diff', 'snapshot'], { from: 'node' })).rejects.toThrow('requires --baseline');
+    await expect(program.parseAsync(['node', 'camou', 'diff', 'snapshot', '--baseline', 'old.txt', '--text', 'old'], { from: 'node' })).rejects.toThrow('either --baseline or --text');
+    await expect(program.parseAsync(['node', 'camou', 'diff', 'url', 'a.test', 'b.test', '--mode', 'dom'], { from: 'node' })).rejects.toThrow('snapshot or screenshot');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
+  it('throws structured unsupported command errors for excluded compatibility surfaces', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'connect', '--cdp', '9222'], { from: 'node' })).rejects.toMatchObject({ code: 'unsupported_command' });
+    await expect(program.parseAsync(['node', 'camou', 'inspect'], { from: 'node' })).rejects.toMatchObject({ code: 'unsupported_command' });
+    await expect(program.parseAsync(['node', 'camou', 'profiler'], { from: 'node' })).rejects.toMatchObject({ code: 'unsupported_command' });
+    await expect(program.parseAsync(['node', 'camou', 'pdf', 'page.pdf'], { from: 'node' })).rejects.toMatchObject({ code: 'unsupported_command' });
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
+  it('throws structured unsupported errors for excluded migration flags on browser commands', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'open', 'example.com', '--cdp', '9222'], { from: 'node' })).rejects.toMatchObject({
+      code: 'unsupported_command',
+      details: expect.objectContaining({ flags: [expect.objectContaining({ flag: '--cdp', value: '9222' })] }),
+    });
+    await expect(program.parseAsync(['node', 'camou', 'screenshot', '--provider', 'browserbase'], { from: 'node' })).rejects.toMatchObject({
+      code: 'unsupported_command',
+      details: expect.objectContaining({ flags: [expect.objectContaining({ flag: '--provider', value: 'browserbase' })] }),
+    });
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
   it('rejects no-op network routes before contacting the daemon', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
@@ -357,6 +416,16 @@ describe('CLI program parsing', () => {
     expect(help).toContain('frame [options] <target>');
     expect(help).toContain('dialog');
     expect(help).toContain('read [options] [url]');
+    expect(help).toContain('diff');
+    expect(help).toContain('vitals');
+    expect(help).toContain('web-vitals');
+    expect(help).toContain('pushstate [options] <url>');
+    expect(help).toContain('addinitscript [options] <js>');
+    expect(help).toContain('removeinitscript [options] <id>');
+    expect(help).toContain('connect');
+    expect(help).toContain('inspect');
+    expect(help).toContain('profiler');
+    expect(help).toContain('pdf');
     const openHelp = program.commands.find((command) => command.name() === 'open')?.helpInformation();
     expect(openHelp).toContain('--headed');
     expect(openHelp).toContain('--proxy-bypass <hosts>');

@@ -156,3 +156,21 @@ Debug commands are daemon-owned runtime features. Console and page-error buffers
 | `trace stop [path]` | same | supported | Stops Playwright tracing and writes a trace zip artifact. Relative paths resolve under `profiles/<session>/artifacts/traces/`; omitted paths get a timestamped managed filename. |
 
 Default artifact directories are consistent by artifact family: screenshots use `artifacts/screenshots/`, traces use `artifacts/traces/`, HARs use `artifacts/har/`, and future diff, PDF, and video artifacts should use `artifacts/diffs/`, `artifacts/pdfs/`, and `artifacts/videos/`.
+
+## Diff, Vitals, Pushstate, Init Scripts, And Unsupported Surfaces
+
+Diff commands are daemon-owned debug/artifact features. Relative diff paths resolve under `profiles/<session>/artifacts/diffs/`. Screenshot diff intentionally uses a small Node-compatible byte comparison plus PNG/JPEG header metadata extraction, not a perceptual image-diff engine; baselines must be PNG or JPEG images.
+
+| Agent Browser command | Camoucli command | Status | Notes |
+| --- | --- | --- | --- |
+| `diff snapshot` | `diff snapshot --baseline <path>` / `diff snapshot --text <text>` | supported | Captures a fresh textual snapshot for the current tab and returns structured diff data plus human-readable unified lines. |
+| `diff screenshot` | `diff screenshot --baseline <path> [--selector <target>] [--full|--viewport]` | adapted | Captures a current PNG/JPEG screenshot, compares bytes to the baseline image, and reports image header metadata when available. |
+| `diff url <a> <b>` | `diff url <leftUrl> <rightUrl> [--mode snapshot|screenshot]` | supported | Navigates serially, captures each URL, reports final URL mutation, and writes a diff report. |
+| `vitals` / `web-vitals` | same | supported | Uses portable browser Performance APIs for navigation timing, paint entries, basic TTFB/FCP, and resource totals. It does not depend on a framework package. |
+| `pushstate <url>` | same | supported | Runs `history.pushState` in the current page and returns clear structured errors for invalid or cross-origin URLs. |
+| `addinitscript <js>` | same | adapted | Registers a daemon-owned context init script for future documents. |
+| `removeinitscript <id>` | same | adapted | Reports Playwright's limitation honestly: registered context init scripts cannot be removed from an existing context. Start a new session without the script. |
+| `connect`, CDP/provider attach flags | `connect ...`; hidden flags such as `--cdp`, `--provider`, `--executable-path`, `--engine`, `--extension`, `--restore-policy` | unsupported | Accepted as migration-facing inputs that return `unsupported_command` with the local Camoufox daemon alternative. |
+| `inspect` | `inspect ...` | unsupported | Chrome DevTools/CDP inspection is outside local Camoufox scope. Use `trace`, `console`, `errors`, `screenshot`, or `get` commands. |
+| `profiler` | `profiler ...` | unsupported | CDP profiler capture is unavailable through Camoufox Firefox Playwright. Use Playwright traces. |
+| `pdf` | `pdf ...` | unsupported | Left unsupported because this slice did not include a real Camoufox PDF smoke test proving support. |

@@ -657,6 +657,113 @@ describe('daemon integration', () => {
     expect(traceFile).toContain('fake trace zip');
   });
 
+  it('diffs snapshots screenshots and URLs, collects vitals, pushes history state, and reports init-script limits', async () => {
+    const baselineImagePath = path.join(rootDir, 'baseline.png');
+    await writeFile(
+      baselineImagePath,
+      Buffer.concat([
+        Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
+        Buffer.from([0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x08, 0x02, 0x00, 0x00, 0x00]),
+        Buffer.from('different baseline image\n', 'utf8'),
+      ]),
+    );
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'parity-debug',
+      tabName: 'main',
+      url: dataPage('<title>One</title><button id="target">One</button>'),
+      headless: true,
+    });
+
+    const snapshotDiff = (await sendDaemonRequest(paths, {
+      action: 'diff.snapshot',
+      session: 'parity-debug',
+      tabName: 'main',
+      baselineText: 'old snapshot',
+      interactive: true,
+    })) as { equal: boolean; changes: number; path: string; diff: { unified: string } };
+    const screenshotDiff = (await sendDaemonRequest(paths, {
+      action: 'diff.screenshot',
+      session: 'parity-debug',
+      tabName: 'main',
+      baselinePath: baselineImagePath,
+      format: 'png',
+    })) as { equal: boolean; bytesDifferent: number; path: string; actualPath: string; algorithm: string };
+    const urlDiff = (await sendDaemonRequest(paths, {
+      action: 'diff.url',
+      session: 'parity-debug',
+      tabName: 'main',
+      leftUrl: dataPage('<title>Left</title><p>Left text</p>'),
+      rightUrl: dataPage('<title>Right</title><p>Right text</p>'),
+      mode: 'snapshot',
+    })) as { equal: boolean; left: { finalUrl: string; mutated: boolean }; right: { finalUrl: string; mutated: boolean }; path: string };
+    const vitals = (await sendDaemonRequest(paths, {
+      action: 'vitals',
+      session: 'parity-debug',
+      tabName: 'main',
+    })) as { metrics: { webVitals: { ttfb: number; fcp: number } } };
+
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'parity-debug',
+      tabName: 'main',
+      url: 'https://example.com',
+    });
+    const pushed = (await sendDaemonRequest(paths, {
+      action: 'pushstate',
+      session: 'parity-debug',
+      tabName: 'main',
+      url: '/next',
+    })) as { before: string; after: string };
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'pushstate',
+        session: 'parity-debug',
+        tabName: 'main',
+        url: 'https://other.example/blocked',
+      }),
+    ).rejects.toMatchObject({ code: 'validation_error', message: expect.stringContaining('pushstate failed') });
+
+    const addedScript = (await sendDaemonRequest(paths, {
+      action: 'addinitscript',
+      session: 'parity-debug',
+      source: 'window.injected = true;',
+    })) as { id: string; sourceLength: number };
+    const context = getFakeContexts().at(-1);
+    const removedScript = (await sendDaemonRequest(paths, {
+      action: 'removeinitscript',
+      session: 'parity-debug',
+      scriptId: addedScript.id,
+    })) as { removed: boolean; unsupported: boolean; reason: string };
+
+    expect(snapshotDiff).toMatchObject({ equal: false, changes: expect.any(Number) });
+    expect(snapshotDiff.path).toContain(path.join('parity-debug', 'artifacts', 'diffs'));
+    expect(snapshotDiff.diff.unified).toContain('-old snapshot');
+    expect(screenshotDiff).toMatchObject({ equal: false, algorithm: 'byte-compare-with-image-header-metadata' });
+    expect(screenshotDiff.bytesDifferent).toBeGreaterThan(0);
+    await expect(stat(screenshotDiff.path)).resolves.toBeDefined();
+    await expect(stat(screenshotDiff.actualPath)).resolves.toBeDefined();
+    expect(urlDiff).toMatchObject({ equal: false, left: { mutated: false }, right: { mutated: false } });
+    await expect(stat(urlDiff.path)).resolves.toBeDefined();
+    expect(vitals.metrics.webVitals).toMatchObject({ ttfb: 5, fcp: 25 });
+    expect(pushed).toMatchObject({ before: 'https://example.com/', after: 'https://example.com/next' });
+    expect(addedScript.sourceLength).toBe('window.injected = true;'.length);
+    expect(context?.initScripts).toContain('window.injected = true;');
+    expect(removedScript).toMatchObject({ removed: false, unsupported: true });
+    expect(removedScript.reason).toContain('does not expose removal');
+
+    const nonImagePath = path.join(rootDir, 'baseline.txt');
+    await writeFile(nonImagePath, 'not an image\n', 'utf8');
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'diff.screenshot',
+        session: 'parity-debug',
+        tabName: 'main',
+        baselinePath: nonImagePath,
+      }),
+    ).rejects.toMatchObject({ code: 'validation_error', message: expect.stringContaining('PNG or JPEG') });
+  });
+
   it('manages portable state snapshots without deleting profiles', async () => {
     await ensureSessionPaths(paths, 'stored-profile');
     await sendDaemonRequest(paths, {

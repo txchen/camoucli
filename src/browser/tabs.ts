@@ -45,6 +45,11 @@ export interface SessionRuntime {
     active: boolean;
     startedAt?: string | undefined;
   } | undefined;
+  initScripts: Array<{
+    id: string;
+    source: string;
+    registeredAt: string;
+  }>;
 }
 
 export function createTabRuntime(name: string, tabId: string, page: Page): TabRuntime {

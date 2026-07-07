@@ -68,6 +68,37 @@ describe('CLI JSON errors', () => {
     expect(payload.error.message).toContain('Invalid base64');
     expect(result.stdout).toBe('');
   });
+
+  it('prints unsupported compatibility commands as structured JSON before starting the daemon', async () => {
+    const result = await runCli(['node', 'camou', 'connect', '--cdp', '9222', '--json'], rootDir);
+    const payload = JSON.parse(result.stderr) as {
+      success: boolean;
+      error: { code: string; message: string; details?: { command?: string; alternative?: string } };
+      exitCode: number;
+    };
+
+    expect(result.code).toBe(2);
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe('unsupported_command');
+    expect(payload.error.details?.command).toBe('connect');
+    expect(payload.error.details?.alternative).toContain('camou open');
+    expect(result.stdout).toBe('');
+  });
+
+  it('prints unsupported compatibility flags as structured JSON before starting the daemon', async () => {
+    const result = await runCli(['node', 'camou', 'open', 'example.com', '--cdp', '9222', '--json'], rootDir);
+    const payload = JSON.parse(result.stderr) as {
+      success: boolean;
+      error: { code: string; message: string; details?: { flags?: Array<{ flag: string; value: string }> } };
+      exitCode: number;
+    };
+
+    expect(result.code).toBe(2);
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe('unsupported_command');
+    expect(payload.error.details?.flags).toEqual([expect.objectContaining({ flag: '--cdp', value: '9222' })]);
+    expect(result.stdout).toBe('');
+  });
 });
 
 async function runCli(argv: string[], rootDir: string): Promise<CliResult> {

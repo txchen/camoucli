@@ -290,6 +290,25 @@ describe('CLI output', () => {
     expect(missingOutput).toContain('Profile missing was not found');
   });
 
+  it('prints diff vitals pushstate and init script results', () => {
+    const output = captureStdout(() => {
+      printOutput('diff.snapshot', { kind: 'snapshot', equal: false, changes: 1, path: '/tmp/diff.json', diff: { unified: '-old\n+new' } }, false);
+      printOutput('diff.url', { kind: 'url', equal: false, changes: 1, path: '/tmp/url.json', left: { finalUrl: 'https://example.com/' }, right: { finalUrl: 'https://example.com/next', mutated: true } }, false);
+      printOutput('vitals', { sessionName: 'work', tabName: 'main', metrics: { webVitals: { ttfb: 5, fcp: 25 } } }, false);
+      printOutput('pushstate', { sessionName: 'work', tabName: 'main', before: 'https://example.com/', after: 'https://example.com/next' }, false);
+      printOutput('addinitscript', { sessionName: 'work', id: 'init_1', sourceLength: 12 }, false);
+      printOutput('removeinitscript', { id: 'init_1', reason: 'Playwright does not expose removal' }, false);
+    });
+
+    expect(output).toContain('snapshot different: 1 changes');
+    expect(output).toContain('-old\n+new');
+    expect(output).toContain('Right: https://example.com/next (mutated)');
+    expect(output).toContain('Vitals for work/main');
+    expect(output).toContain('pushState work/main https://example.com/ -> https://example.com/next');
+    expect(output).toContain('Added init script init_1 to work');
+    expect(output).toContain('was not removed');
+  });
+
   it('prints tab list in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

@@ -16,6 +16,7 @@ import { frameLocatorForTarget, locatorForTarget, pageOrActiveFrame } from './ac
 import { resolveArtifactPath } from './artifacts.js';
 import { parseCookieInput, parseCookieJsonArray, validateCookieScope, type CookieInput } from './cookie-input.js';
 import { createDebugRuntime, pushBounded, serializeConsoleMessage, summarizePage } from './debug.js';
+import { diffImageBytes, diffText } from './diff.js';
 import {
   applyRouteBehavior,
   buildHar,
@@ -48,6 +49,14 @@ function stableJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function urlMutated(requestedUrl: string, finalUrl: string): boolean {
+  try {
+    return new URL(requestedUrl).href !== finalUrl;
+  } catch {
+    return requestedUrl !== finalUrl;
+  }
 }
 
 export class BrowserManager {
@@ -241,6 +250,163 @@ export class BrowserManager {
       count: result.entries.length,
       snapshot: result.text,
       entries: result.entries,
+    };
+  }
+
+  async diffSnapshot(
+    input: LaunchInput & {
+      session: string;
+      tabName?: string | undefined;
+      baselinePath?: string | undefined;
+      baselineText?: string | undefined;
+      interactive: boolean;
+      path?: string | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    const baseline = await this.readTextBaseline(input.baselinePath, input.baselineText, 'diff snapshot');
+    const snapshot = await takeSnapshot(tab.page, input.interactive);
+    tab.lastSnapshot = snapshot;
+    tab.refMap = new Map(Object.entries(snapshot.refs));
+    const diff = diffText(baseline.text, snapshot.text);
+    const artifactPath = resolveArtifactPath(session.paths, 'diffs', input.path, `${tab.name}-snapshot`);
+    await mkdir(path.dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, `${JSON.stringify({ kind: 'snapshot', baseline: baseline.source, diff }, null, 2)}\n`, 'utf8');
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      kind: 'snapshot',
+      equal: diff.equal,
+      changes: diff.changes,
+      baseline: baseline.source,
+      path: artifactPath,
+      diff,
+      snapshot: snapshot.text,
+      count: snapshot.entries.length,
+    };
+  }
+
+  async diffScreenshot(
+    input: LaunchInput & {
+      session: string;
+      tabName?: string | undefined;
+      baselinePath: string;
+      path?: string | undefined;
+      target?: string | undefined;
+      fullPage?: boolean | undefined;
+      format?: 'png' | 'jpeg' | undefined;
+      quality?: number | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    const format = input.format ?? (input.baselinePath.toLowerCase().endsWith('.jpg') || input.baselinePath.toLowerCase().endsWith('.jpeg') ? 'jpeg' : 'png');
+    const actualPath = resolveArtifactPath(session.paths, 'diffs', input.path, `${tab.name}-screenshot-actual`, format === 'jpeg' ? 'jpg' : 'png');
+    await mkdir(path.dirname(actualPath), { recursive: true });
+    const screenshotOptions = {
+      path: actualPath,
+      type: format,
+      ...(format === 'jpeg' && input.quality !== undefined ? { quality: input.quality } : {}),
+    } as const;
+    if (input.target) {
+      await locatorForTarget(tab.page, tab, input.target).screenshot(screenshotOptions);
+    } else {
+      await tab.page.screenshot({ ...screenshotOptions, fullPage: input.fullPage ?? true });
+    }
+
+    const [baseline, actual] = await Promise.all([readFile(input.baselinePath), readFile(actualPath)]);
+    const diff = diffImageBytes(baseline, actual);
+    if (diff.baseline.format === 'unknown') {
+      throw new ValidationError('diff screenshot baseline must be a PNG or JPEG image.', { baselinePath: input.baselinePath });
+    }
+    if (diff.actual.format === 'unknown') {
+      throw new ValidationError('diff screenshot capture did not produce a PNG or JPEG image.', { actualPath });
+    }
+    const reportPath = resolveArtifactPath(session.paths, 'diffs', undefined, `${tab.name}-screenshot`);
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await writeFile(
+      reportPath,
+      `${JSON.stringify({ kind: 'screenshot', baselinePath: input.baselinePath, actualPath, algorithm: 'byte-compare-with-image-header-metadata', diff }, null, 2)}\n`,
+      'utf8',
+    );
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      kind: 'screenshot',
+      equal: diff.equal,
+      bytesDifferent: diff.bytesDifferent,
+      baselinePath: input.baselinePath,
+      actualPath,
+      path: reportPath,
+      algorithm: 'byte-compare-with-image-header-metadata',
+      diff,
+    };
+  }
+
+  async diffUrl(
+    input: LaunchInput & {
+      session: string;
+      tabName?: string | undefined;
+      leftUrl: string;
+      rightUrl: string;
+      mode: 'snapshot' | 'screenshot';
+      path?: string | undefined;
+      fullPage?: boolean | undefined;
+      format?: 'png' | 'jpeg' | undefined;
+      quality?: number | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    await tab.page.goto(input.leftUrl, { waitUntil: 'domcontentloaded' });
+    const leftFinalUrl = tab.page.url();
+    const leftMutated = urlMutated(input.leftUrl, leftFinalUrl);
+    const leftTitle = await tab.page.title();
+    const leftCapture = input.mode === 'snapshot'
+      ? (await takeSnapshot(tab.page, false)).text
+      : await this.captureScreenshotBuffer(session, tab, `${tab.name}-left`, input);
+
+    await tab.page.goto(input.rightUrl, { waitUntil: 'domcontentloaded' });
+    const rightFinalUrl = tab.page.url();
+    const rightMutated = urlMutated(input.rightUrl, rightFinalUrl);
+    const rightTitle = await tab.page.title();
+    const rightCapture = input.mode === 'snapshot'
+      ? (await takeSnapshot(tab.page, false)).text
+      : await this.captureScreenshotBuffer(session, tab, `${tab.name}-right`, input);
+
+    const diff = input.mode === 'snapshot'
+      ? diffText(leftCapture as string, rightCapture as string)
+      : diffImageBytes(leftCapture as Buffer, rightCapture as Buffer);
+    const artifactPath = resolveArtifactPath(session.paths, 'diffs', input.path, `${tab.name}-url-${input.mode}`);
+    await mkdir(path.dirname(artifactPath), { recursive: true });
+    await writeFile(
+      artifactPath,
+      `${JSON.stringify(
+        {
+          kind: 'url',
+          mode: input.mode,
+          left: { requestedUrl: input.leftUrl, finalUrl: leftFinalUrl, mutated: leftMutated, title: leftTitle },
+          right: { requestedUrl: input.rightUrl, finalUrl: rightFinalUrl, mutated: rightMutated, title: rightTitle },
+          diff,
+        },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      kind: 'url',
+      mode: input.mode,
+      equal: diff.equal,
+      changes: 'changes' in diff ? diff.changes : undefined,
+      bytesDifferent: 'bytesDifferent' in diff ? diff.bytesDifferent : undefined,
+      path: artifactPath,
+      left: { requestedUrl: input.leftUrl, finalUrl: leftFinalUrl, mutated: leftMutated, title: leftTitle },
+      right: { requestedUrl: input.rightUrl, finalUrl: rightFinalUrl, mutated: rightMutated, title: rightTitle },
+      diff,
     };
   }
 
@@ -573,6 +739,105 @@ export class BrowserManager {
       tabName: tab.name,
       expression: input.expression,
       result: await tab.page.evaluate((expression) => globalThis.eval(expression), input.expression),
+    };
+  }
+
+  async vitals(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const metrics = await tab.page.evaluate(() => {
+      const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+      const paintEntries = Object.fromEntries(performance.getEntriesByType('paint').map((entry) => [entry.name, entry.startTime]));
+      const resources = performance.getEntriesByType('resource') as PerformanceResourceTiming[];
+      const firstContentfulPaint = typeof paintEntries['first-contentful-paint'] === 'number' ? paintEntries['first-contentful-paint'] : undefined;
+      return {
+        url: location.href,
+        timestamp: new Date().toISOString(),
+        navigation: navigation
+          ? {
+              startTime: navigation.startTime,
+              domContentLoaded: navigation.domContentLoadedEventEnd,
+              load: navigation.loadEventEnd,
+              responseStart: navigation.responseStart,
+              responseEnd: navigation.responseEnd,
+              transferSize: navigation.transferSize,
+            }
+          : undefined,
+        paints: paintEntries,
+        webVitals: {
+          ttfb: navigation ? Math.max(0, navigation.responseStart - navigation.startTime) : undefined,
+          fcp: firstContentfulPaint,
+        },
+        resources: {
+          count: resources.length,
+          transferSize: resources.reduce((total, resource) => total + (resource.transferSize || 0), 0),
+          decodedBodySize: resources.reduce((total, resource) => total + (resource.decodedBodySize || 0), 0),
+        },
+      };
+    });
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      metrics,
+    };
+  }
+
+  async pushState(input: LaunchInput & { session: string; tabName?: string | undefined; url: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const result = await tab.page.evaluate((url) => {
+      try {
+        const before = location.href;
+        history.pushState({}, '', url);
+        return { before, after: location.href };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
+    }, input.url);
+    if (result && typeof result === 'object' && 'error' in result) {
+      throw new ValidationError(`pushstate failed: ${String((result as { error?: unknown }).error)}`, { url: input.url });
+    }
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      requestedUrl: input.url,
+      ...(result as Record<string, unknown>),
+    };
+  }
+
+  async addInitScript(input: LaunchInput & { session: string; source: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, input);
+    const context = session.context as typeof session.context & { addInitScript?: (script: string) => Promise<void> };
+    if (typeof context.addInitScript !== 'function') {
+      throw new ValidationError('Init scripts are not supported by the installed Playwright context.');
+    }
+    await context.addInitScript(input.source);
+    const script = {
+      id: `init_${randomUUID()}`,
+      source: input.source,
+      registeredAt: new Date().toISOString(),
+    };
+    session.initScripts.push(script);
+    return {
+      sessionName: session.name,
+      id: script.id,
+      registeredAt: script.registeredAt,
+      sourceLength: script.source.length,
+      active: true,
+      note: 'Playwright applies init scripts to future documents in this context.',
+    };
+  }
+
+  async removeInitScript(input: { session: string; id: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const script = session.initScripts.find((entry) => entry.id === input.id);
+    if (!script) {
+      throw new ValidationError(`Init script ${input.id} was not found in session ${session.name}.`);
+    }
+    return {
+      sessionName: session.name,
+      id: input.id,
+      removed: false,
+      unsupported: true,
+      reason: 'Playwright does not expose removal for init scripts already registered on a browser context. Start a new session without the script.',
     };
   }
 
@@ -1714,6 +1979,7 @@ export class BrowserManager {
         startedAt: new Date().toISOString(),
         network: createNetworkRuntime(),
         debug: createDebugRuntime(),
+        initScripts: [],
       };
 
       const pages = session.context.pages();
@@ -1772,6 +2038,41 @@ export class BrowserManager {
 
     const page = await session.context.newPage();
     return this.trackPage(session, resolvedName, page);
+  }
+
+  private async readTextBaseline(
+    baselinePath: string | undefined,
+    baselineText: string | undefined,
+    command: string,
+  ): Promise<{ text: string; source: { type: 'file'; path: string } | { type: 'inline' } }> {
+    if (baselinePath && baselineText !== undefined) {
+      throw new ValidationError(`${command} accepts either --baseline or --text, not both.`);
+    }
+    if (baselinePath) {
+      return { text: await readFile(baselinePath, 'utf8'), source: { type: 'file', path: baselinePath } };
+    }
+    if (baselineText !== undefined) {
+      return { text: baselineText, source: { type: 'inline' } };
+    }
+    throw new ValidationError(`${command} requires --baseline <path> or --text <value>.`);
+  }
+
+  private async captureScreenshotBuffer(
+    session: SessionRuntime,
+    tab: TabRuntime,
+    basename: string,
+    input: { fullPage?: boolean | undefined; format?: 'png' | 'jpeg' | undefined; quality?: number | undefined },
+  ): Promise<Buffer> {
+    const format = input.format ?? 'png';
+    const filePath = resolveArtifactPath(session.paths, 'diffs', undefined, basename, format === 'jpeg' ? 'jpg' : 'png');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await tab.page.screenshot({
+      path: filePath,
+      type: format,
+      fullPage: input.fullPage ?? true,
+      ...(format === 'jpeg' && input.quality !== undefined ? { quality: input.quality } : {}),
+    });
+    return readFile(filePath);
   }
 
   private findRunningSessionByProfileName(profileName: string): SessionRuntime | undefined {

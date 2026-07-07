@@ -435,6 +435,59 @@ describe('CLI defaults resolution', () => {
     });
     expect(applyCliDefaultsToPayload('trace.stop', { action: 'trace.stop' }, resolved)).not.toHaveProperty('browser');
     expect(
+      applyCliDefaultsToPayload('diff.snapshot', { action: 'diff.snapshot', baselineText: 'old' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('diff.screenshot', { action: 'diff.screenshot', baselinePath: '/tmp/base.png' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('diff.url', { action: 'diff.url', leftUrl: 'https://a.test', rightUrl: 'https://b.test' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('vitals', { action: 'vitals' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('pushstate', { action: 'pushstate', url: '/next' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('addinitscript', { action: 'addinitscript', source: 'window.ready = true;' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('removeinitscript', { action: 'removeinitscript', scriptId: 'init_1' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+    });
+    expect(applyCliDefaultsToPayload('removeinitscript', { action: 'removeinitscript', scriptId: 'init_1' }, resolved)).not.toHaveProperty('browser');
+    expect(
       applyCliDefaultsToPayload('frame', { action: 'frame', target: '#child' }, resolved),
     ).toMatchObject({
       session: 'workspace',

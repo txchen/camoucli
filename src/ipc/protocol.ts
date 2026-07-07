@@ -183,6 +183,35 @@ const screenshotRequestSchema = browserRequestBase.extend({
   quality: z.number().int().min(0).max(100).optional(),
 });
 
+const diffSnapshotRequestSchema = browserRequestBase.extend({
+  action: z.literal('diff.snapshot'),
+  baselinePath: z.string().min(1).optional(),
+  baselineText: z.string().optional(),
+  interactive: z.boolean().default(false),
+  path: z.string().min(1).optional(),
+});
+
+const diffScreenshotRequestSchema = browserRequestBase.extend({
+  action: z.literal('diff.screenshot'),
+  baselinePath: z.string().min(1),
+  target: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  fullPage: z.boolean().optional(),
+  format: screenshotFormatSchema.optional(),
+  quality: z.number().int().min(0).max(100).optional(),
+});
+
+const diffUrlRequestSchema = browserRequestBase.extend({
+  action: z.literal('diff.url'),
+  leftUrl: z.string().min(1),
+  rightUrl: z.string().min(1),
+  mode: z.enum(['snapshot', 'screenshot']).default('snapshot'),
+  path: z.string().min(1).optional(),
+  fullPage: z.boolean().optional(),
+  format: screenshotFormatSchema.optional(),
+  quality: z.number().int().min(0).max(100).optional(),
+});
+
 const consoleEventsRequestSchema = z.object({
   id: z.string(),
   action: z.literal('console'),
@@ -364,6 +393,27 @@ const findRequestSchema = browserRequestBase.extend({
 const evalRequestSchema = browserRequestBase.extend({
   action: z.literal('eval'),
   expression: z.string().min(1),
+});
+
+const vitalsRequestSchema = browserRequestBase.extend({
+  action: z.literal('vitals'),
+});
+
+const pushStateRequestSchema = browserRequestBase.extend({
+  action: z.literal('pushstate'),
+  url: z.string().min(1),
+});
+
+const addInitScriptRequestSchema = browserRequestBase.extend({
+  action: z.literal('addinitscript'),
+  source: z.string().min(1),
+});
+
+const removeInitScriptRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('removeinitscript'),
+  session: z.string().min(1),
+  scriptId: z.string().min(1),
 });
 
 const networkRouteRequestSchema = browserRequestBase.extend({
@@ -624,6 +674,9 @@ export const daemonRequestSchema: z.ZodTypeAny = z.discriminatedUnion('action', 
   uploadRequestSchema,
   dragRequestSchema,
   screenshotRequestSchema,
+  diffSnapshotRequestSchema,
+  diffScreenshotRequestSchema,
+  diffUrlRequestSchema,
   consoleEventsRequestSchema,
   pageErrorsRequestSchema,
   highlightRequestSchema,
@@ -649,6 +702,10 @@ export const daemonRequestSchema: z.ZodTypeAny = z.discriminatedUnion('action', 
   readRequestSchema,
   findRequestSchema,
   evalRequestSchema,
+  vitalsRequestSchema,
+  pushStateRequestSchema,
+  addInitScriptRequestSchema,
+  removeInitScriptRequestSchema,
   networkRouteRequestSchema,
   networkUnrouteRequestSchema,
   networkRequestsRequestSchema,
@@ -735,6 +792,9 @@ export type DaemonRequest =
   | z.infer<typeof uploadRequestSchema>
   | z.infer<typeof dragRequestSchema>
   | z.infer<typeof screenshotRequestSchema>
+  | z.infer<typeof diffSnapshotRequestSchema>
+  | z.infer<typeof diffScreenshotRequestSchema>
+  | z.infer<typeof diffUrlRequestSchema>
   | z.infer<typeof consoleEventsRequestSchema>
   | z.infer<typeof pageErrorsRequestSchema>
   | z.infer<typeof highlightRequestSchema>
@@ -760,6 +820,10 @@ export type DaemonRequest =
   | z.infer<typeof readRequestSchema>
   | z.infer<typeof findRequestSchema>
   | z.infer<typeof evalRequestSchema>
+  | z.infer<typeof vitalsRequestSchema>
+  | z.infer<typeof pushStateRequestSchema>
+  | z.infer<typeof addInitScriptRequestSchema>
+  | z.infer<typeof removeInitScriptRequestSchema>
   | z.infer<typeof networkRouteRequestSchema>
   | z.infer<typeof networkUnrouteRequestSchema>
   | z.infer<typeof networkRequestsRequestSchema>

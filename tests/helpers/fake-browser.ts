@@ -860,8 +860,15 @@ class FakePage extends EventEmitter {
     return new FakeLocator(this, `testid=${testId}`);
   }
 
-  async screenshot(options: { path: string }): Promise<void> {
-    await writeFile(options.path, `fake screenshot for ${this.state.url}\n`, 'utf8');
+  async screenshot(options: { path: string; type?: string; fullPage?: boolean }): Promise<void> {
+    const content = options.type === 'jpeg'
+      ? Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x00, 0x10, 0x00, 0x10, 0x03, 0xff, 0xd9])
+      : Buffer.concat([
+          Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'),
+          Buffer.from([0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x08, 0x02, 0x00, 0x00, 0x00]),
+          Buffer.from(`fake screenshot for ${this.state.url}\n`, 'utf8'),
+        ]);
+    await writeFile(options.path, content);
   }
 
   async setViewportSize(viewport: { width: number; height: number }): Promise<void> {
@@ -892,6 +899,40 @@ class FakePage extends EventEmitter {
   async evaluate(_pageFunction: unknown, arg?: unknown): Promise<unknown> {
     if (String(_pageFunction).includes('document.hasFocus')) {
       return true;
+    }
+
+    if (String(_pageFunction).includes('performance.getEntriesByType')) {
+      return {
+        url: this.state.url,
+        timestamp: '2026-01-01T00:00:00.000Z',
+        navigation: {
+          startTime: 0,
+          domContentLoaded: 20,
+          load: 40,
+          responseStart: 5,
+          responseEnd: 15,
+          transferSize: 128,
+        },
+        paints: { 'first-contentful-paint': 25 },
+        webVitals: { ttfb: 5, fcp: 25 },
+        resources: { count: 0, transferSize: 0, decodedBodySize: 0 },
+      };
+    }
+
+    if (typeof arg === 'string' && String(_pageFunction).includes('history.pushState')) {
+      try {
+        const nextUrl = new URL(arg, this.state.url);
+        const currentUrl = new URL(this.state.url);
+        if (nextUrl.origin !== currentUrl.origin) {
+          throw new Error('SecurityError: cross-origin pushState is not allowed');
+        }
+        const before = this.state.url;
+        this.state = { ...this.state, url: nextUrl.href };
+        this.history[this.historyIndex] = cloneState(this.state);
+        return { before, after: this.state.url };
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) };
+      }
     }
 
     if (arg && typeof arg === 'object' && 'method' in arg) {
@@ -1123,6 +1164,7 @@ export class FakeBrowserContext extends EventEmitter {
   headers: Record<string, string> = {};
   credentials?: { origin?: string | undefined; username: string; password: string } | undefined;
   clipboardText = '';
+  initScripts: string[] = [];
   tracingStarted = false;
   tracingOptions?: { screenshots?: boolean; snapshots?: boolean; sources?: boolean } | undefined;
 
@@ -1209,6 +1251,10 @@ export class FakeBrowserContext extends EventEmitter {
 
   async setHTTPCredentials(credentials: { origin?: string | undefined; username: string; password: string }): Promise<void> {
     this.credentials = { ...credentials };
+  }
+
+  async addInitScript(script: string): Promise<void> {
+    this.initScripts.push(script);
   }
 
   async route(url: string, handler: (route: FakeRoute, request: FakeRequest) => Promise<void>): Promise<void> {

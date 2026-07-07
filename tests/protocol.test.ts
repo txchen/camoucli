@@ -181,6 +181,29 @@ describe('daemon IPC protocol', () => {
     });
   });
 
+  it('accepts diff vitals pushstate and init script requests', () => {
+    expect(daemonRequestSchema.parse({ ...base, action: 'diff.snapshot', baselineText: 'old', interactive: true })).toMatchObject({
+      action: 'diff.snapshot',
+      baselineText: 'old',
+      interactive: true,
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'diff.screenshot', baselinePath: '/tmp/base.png', format: 'png' })).toMatchObject({
+      action: 'diff.screenshot',
+      baselinePath: '/tmp/base.png',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'diff.url', leftUrl: 'https://a.test', rightUrl: 'https://b.test', mode: 'screenshot' })).toMatchObject({
+      action: 'diff.url',
+      mode: 'screenshot',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'vitals' })).toMatchObject({ action: 'vitals' });
+    expect(daemonRequestSchema.parse({ ...base, action: 'pushstate', url: '/next' })).toMatchObject({ action: 'pushstate', url: '/next' });
+    expect(daemonRequestSchema.parse({ ...base, action: 'addinitscript', source: 'window.ready = true;' })).toMatchObject({ action: 'addinitscript' });
+    expect(daemonRequestSchema.parse({ id: 'request-19', action: 'removeinitscript', session: 'default', scriptId: 'init_1' })).toMatchObject({
+      action: 'removeinitscript',
+      scriptId: 'init_1',
+    });
+  });
+
   it('rejects invalid direct automation request shapes', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'upload', target: '#file', files: [] })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();
@@ -190,6 +213,8 @@ describe('daemon IPC protocol', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'read', mode: 'markdown' })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'highlight', target: '#submit', durationMs: 0 })).toThrow();
     expect(() => daemonRequestSchema.parse({ id: 'bad-trace', action: 'trace.stop', session: 'default', path: '' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'diff.screenshot', baselinePath: '', format: 'gif' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'diff.url', leftUrl: 'https://a.test', rightUrl: 'https://b.test', mode: 'dom' })).toThrow();
   });
 
   it('rejects unsupported migration launch surfaces instead of stripping them', () => {

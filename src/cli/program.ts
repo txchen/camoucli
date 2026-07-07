@@ -1,11 +1,11 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { stdin as defaultStdin } from 'node:process';
 import type { Readable } from 'node:stream';
 
 import packageJson from '../../package.json' with { type: 'json' };
 
 import type { LaunchInput } from '../camoufox/config.js';
-import { ValidationError } from '../util/errors.js';
+import { UnsupportedCommandError, ValidationError } from '../util/errors.js';
 
 export interface SharedOptions {
   session?: string | undefined;
@@ -39,6 +39,12 @@ export interface SharedOptions {
   blockWebrtc?: boolean | undefined;
   blockWebgl?: boolean | undefined;
   disableCoop?: boolean | undefined;
+  cdp?: string | undefined;
+  provider?: string | undefined;
+  executablePath?: string | undefined;
+  engine?: string | undefined;
+  extension?: string | undefined;
+  restorePolicy?: string | undefined;
   width?: number | undefined;
   height?: number | undefined;
   json?: boolean | undefined;
@@ -98,6 +104,32 @@ interface TabNewOptions extends SharedOptions {
 
 interface ScreenshotOptions extends SharedOptions {
   selector?: string | undefined;
+  full?: boolean | undefined;
+  viewport?: boolean | undefined;
+  format?: 'png' | 'jpeg' | undefined;
+  quality?: number | undefined;
+}
+
+interface DiffSnapshotOptions extends SharedOptions {
+  baseline?: string | undefined;
+  text?: string | undefined;
+  interactive?: boolean | undefined;
+  path?: string | undefined;
+}
+
+interface DiffScreenshotOptions extends SharedOptions {
+  baseline?: string | undefined;
+  selector?: string | undefined;
+  path?: string | undefined;
+  full?: boolean | undefined;
+  viewport?: boolean | undefined;
+  format?: 'png' | 'jpeg' | undefined;
+  quality?: number | undefined;
+}
+
+interface DiffUrlOptions extends SharedOptions {
+  mode?: 'snapshot' | 'screenshot' | undefined;
+  path?: string | undefined;
   full?: boolean | undefined;
   viewport?: boolean | undefined;
   format?: 'png' | 'jpeg' | undefined;
@@ -224,10 +256,19 @@ function addSharedBrowserOptions(command: Command): Command {
     .option('--block-webrtc', 'disable WebRTC')
     .option('--block-webgl', 'disable WebGL')
     .option('--disable-coop', 'disable Cross-Origin-Opener-Policy isolation')
+    .addOption(new Option('--cdp <target>', 'unsupported CDP attach target').hideHelp())
+    .addOption(new Option('--provider <name>', 'unsupported provider browser mode').hideHelp())
+    .addOption(new Option('--executable-path <path>', 'unsupported arbitrary browser executable').hideHelp())
+    .addOption(new Option('--engine <name>', 'unsupported browser engine switch').hideHelp())
+    .addOption(new Option('--extension <path>', 'unsupported extension loading').hideHelp())
+    .addOption(new Option('--restore-policy <policy>', 'unsupported Agent Browser restore policy').hideHelp())
     .option('--width <width>', 'window width', parseInteger)
     .option('--height <height>', 'window height', parseInteger)
     .option('--json', 'JSON output')
-    .option('--verbose', 'verbose output');
+    .option('--verbose', 'verbose output')
+    .hook('preAction', (_thisCommand, actionCommand) => {
+      assertNoUnsupportedMigrationOptions(mergedCommandOptions<SharedOptions>(actionCommand));
+    });
 }
 
 function addSharedOutputOptions(command: Command): Command {
@@ -323,6 +364,42 @@ function readMode(options: ReadOptions): 'text' | 'raw' | 'outline' {
     throw new ValidationError('Choose only one read mode: --raw or --outline.');
   }
   return options.raw ? 'raw' : options.outline ? 'outline' : 'text';
+}
+
+function requireDiffBaseline(options: DiffSnapshotOptions | DiffScreenshotOptions, command: string): void {
+  if ('text' in options && options.baseline && options.text !== undefined) {
+    throw new ValidationError(`${command} accepts either --baseline or --text, not both.`);
+  }
+  if (!options.baseline && (!('text' in options) || options.text === undefined)) {
+    throw new ValidationError(`${command} requires --baseline <path>${'text' in options ? ' or --text <value>' : ''}.`);
+  }
+}
+
+function throwUnsupportedCommand(command: string, message: string, alternative: string): never {
+  throw new UnsupportedCommandError(message, { command, alternative });
+}
+
+function assertNoUnsupportedMigrationOptions(options: SharedOptions): void {
+  const unsupported = [
+    options.cdp ? { flag: '--cdp', value: options.cdp } : undefined,
+    options.provider ? { flag: '--provider', value: options.provider } : undefined,
+    options.executablePath ? { flag: '--executable-path', value: options.executablePath } : undefined,
+    options.engine ? { flag: '--engine', value: options.engine } : undefined,
+    options.extension ? { flag: '--extension', value: options.extension } : undefined,
+    options.restorePolicy ? { flag: '--restore-policy', value: options.restorePolicy } : undefined,
+  ].filter((item): item is { flag: string; value: string } => Boolean(item));
+  if (unsupported.length === 0) {
+    return;
+  }
+
+  const flags = unsupported.map((item) => item.flag).join(', ');
+  throw new UnsupportedCommandError(
+    `Unsupported compatibility flag${unsupported.length === 1 ? '' : 's'} ${flags}. CDP/provider/browser-engine surfaces are outside Camoucli local Camoufox daemon scope.`,
+    {
+      flags: unsupported,
+      alternative: 'Use camou open with managed local Camoufox sessions and supported launch options such as --browser, --proxy, --headers, --user-agent, --init-script, or --state.',
+    },
+  );
 }
 
 export function toLaunchInput(options: SharedOptions): LaunchInput {
@@ -1273,6 +1350,103 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
+  const diffCommand = program.command('diff').description('Compare snapshots, screenshots, or two URLs');
+  addSharedBrowserOptions(
+    diffCommand
+      .command('snapshot')
+      .description('Compare the current page snapshot with a baseline')
+      .option('--baseline <path>', 'baseline snapshot text file')
+      .option('--text <text>', 'inline baseline snapshot text')
+      .option('-i, --interactive', 'interactive elements only')
+      .option('--path <path>', 'write diff report path')
+      .action(async (options: DiffSnapshotOptions) => {
+        requireDiffBaseline(options, 'diff snapshot');
+        await handlers.onDaemonAction(
+          'diff.snapshot',
+          {
+            action: 'diff.snapshot',
+            baselinePath: options.baseline,
+            baselineText: options.text,
+            interactive: options.interactive ?? false,
+            path: options.path,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    diffCommand
+      .command('screenshot')
+      .description('Compare the current screenshot with a baseline image using byte comparison')
+      .requiredOption('--baseline <path>', 'baseline PNG or JPEG image')
+      .option('--selector <target>', 'selector or @ref to capture')
+      .option('--path <path>', 'actual screenshot output path')
+      .option('--full', 'capture the full page')
+      .option('--viewport', 'capture only the current viewport')
+      .option('--format <format>', 'image format: png or jpeg')
+      .option('--quality <quality>', 'JPEG quality from 0 to 100', parseInteger)
+      .action(async (options: DiffScreenshotOptions) => {
+        requireDiffBaseline(options, 'diff screenshot');
+        await handlers.onDaemonAction(
+          'diff.screenshot',
+          {
+            action: 'diff.screenshot',
+            baselinePath: options.baseline,
+            target: options.selector,
+            path: options.path,
+            ...(options.full ? { fullPage: true } : {}),
+            ...(options.viewport ? { fullPage: false } : {}),
+            ...(options.format ? { format: options.format } : {}),
+            ...(options.quality !== undefined ? { quality: options.quality } : {}),
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    diffCommand
+      .command('url <leftUrl> <rightUrl>')
+      .description('Serially compare two URLs by snapshot or screenshot')
+      .option('--mode <mode>', 'comparison mode: snapshot or screenshot')
+      .option('--path <path>', 'write diff report path')
+      .option('--full', 'capture full page screenshots')
+      .option('--viewport', 'capture only the current viewport for screenshots')
+      .option('--format <format>', 'screenshot format: png or jpeg')
+      .option('--quality <quality>', 'JPEG quality from 0 to 100', parseInteger)
+      .action(async (leftUrl: string, rightUrl: string, options: DiffUrlOptions) => {
+        const mode = options.mode ?? 'snapshot';
+        if (!['snapshot', 'screenshot'].includes(mode)) {
+          throw new ValidationError('diff url --mode must be snapshot or screenshot.');
+        }
+        await handlers.onDaemonAction(
+          'diff.url',
+          {
+            action: 'diff.url',
+            leftUrl: normalizeNavigationUrl(leftUrl),
+            rightUrl: normalizeNavigationUrl(rightUrl),
+            mode,
+            path: options.path,
+            ...(options.full ? { fullPage: true } : {}),
+            ...(options.viewport ? { fullPage: false } : {}),
+            ...(options.format ? { format: options.format } : {}),
+            ...(options.quality !== undefined ? { quality: options.quality } : {}),
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
   addSharedBrowserOptions(
     program
       .command('console')
@@ -1280,6 +1454,48 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .option('--clear', 'clear the console buffer after listing')
       .action(async (options: DebugListOptions) => {
         await handlers.onDaemonAction('console', { action: 'console', session: options.session, clear: options.clear ?? false }, options);
+      }),
+  );
+
+  const addVitalsCommand = (name: string): void => {
+    addSharedBrowserOptions(
+      program
+        .command(name)
+        .description('Collect portable browser performance vitals')
+        .action(async (options: SharedOptions) => {
+          await handlers.onDaemonAction('vitals', { action: 'vitals', session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+  };
+  addVitalsCommand('vitals');
+  addVitalsCommand('web-vitals');
+
+  addSharedBrowserOptions(
+    program
+      .command('pushstate <url>')
+      .description('Perform same-document History API pushState navigation')
+      .action(async (url: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('pushstate', { action: 'pushstate', url, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('addinitscript <js>')
+      .description('Register an init script for future documents in the current session')
+      .action(async (source: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('addinitscript', { action: 'addinitscript', source, session: options.session, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('removeinitscript <id>')
+      .description('Report Playwright init script removal limitations')
+      .option('--session <name>', 'session name')
+      .action(async (scriptId: string, options: OutputOptions & { session?: string | undefined }) => {
+        const shared = inheritedSharedOptions(options);
+        await handlers.onDaemonAction('removeinitscript', { action: 'removeinitscript', session: shared.session, scriptId }, shared);
       }),
   );
 
@@ -1304,6 +1520,47 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
           { action: 'highlight', target, durationMs: options.duration, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
           options,
         );
+      }),
+  );
+
+  addSharedOutputOptions(
+    program
+      .command('connect')
+      .description('Unsupported: CDP/provider connection modes are outside local Camoufox scope')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(() => {
+        throwUnsupportedCommand('connect', 'CDP/provider connection modes are outside Camoucli local Camoufox daemon scope.', 'Use camou open with a managed local session.');
+      }),
+  );
+  addSharedOutputOptions(
+    program
+      .command('inspect')
+      .description('Unsupported: DevTools/CDP inspect is outside local Camoufox scope')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(() => {
+        throwUnsupportedCommand('inspect', 'The inspect command depends on a Chrome DevTools/CDP target. Camoucli local Camoufox mode does not expose that surface.', 'Use trace, console, errors, screenshot, or get commands.');
+      }),
+  );
+  addSharedOutputOptions(
+    program
+      .command('profiler')
+      .description('Unsupported: CDP profiler capture is outside local Camoufox scope')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(() => {
+        throwUnsupportedCommand('profiler', 'CDP profiler capture is not available through Camoufox Firefox Playwright.', 'Use trace start and trace stop for portable Playwright traces.');
+      }),
+  );
+  addSharedOutputOptions(
+    program
+      .command('pdf')
+      .description('Unsupported until real Camoufox PDF smoke testing proves support')
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(() => {
+        throwUnsupportedCommand('pdf', 'PDF export has not been enabled because this slice did not smoke-test real Camoufox PDF support.', 'Use screenshot or Playwright directly after verifying PDF support in your environment.');
       }),
   );
 

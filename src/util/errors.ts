@@ -38,6 +38,12 @@ export class UnsupportedPlatformError extends CamoucliError {
   }
 }
 
+export class UnsupportedCommandError extends CamoucliError {
+  constructor(message: string, details?: unknown) {
+    super({ code: 'unsupported_command', message, details, exitCode: 2 });
+  }
+}
+
 export class BrowserNotInstalledError extends CamoucliError {
   constructor(message = 'Camoufox is not installed. Run `camou install`.') {
     super({ code: 'browser_not_installed', message, exitCode: 3 });

@@ -68,6 +68,12 @@ export class DaemonRouter {
         return this.browserManager.drag(request);
       case 'screenshot':
         return this.browserManager.screenshot(request);
+      case 'diff.snapshot':
+        return this.browserManager.diffSnapshot(request);
+      case 'diff.screenshot':
+        return this.browserManager.diffScreenshot(request);
+      case 'diff.url':
+        return this.browserManager.diffUrl(request);
       case 'console':
         return this.browserManager.consoleEvents(request);
       case 'errors':
@@ -121,6 +127,14 @@ export class DaemonRouter {
         return this.browserManager.find(request);
       case 'eval':
         return this.browserManager.eval(request);
+      case 'vitals':
+        return this.browserManager.vitals(request);
+      case 'pushstate':
+        return this.browserManager.pushState(request);
+      case 'addinitscript':
+        return this.browserManager.addInitScript(request);
+      case 'removeinitscript':
+        return this.browserManager.removeInitScript({ session: request.session, id: request.scriptId });
       case 'network.route':
         return this.browserManager.networkRoute(request);
       case 'network.unroute':

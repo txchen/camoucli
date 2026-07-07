@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Diff, Vitals, Pushstate, Init Scripts, And Unsupported Commands
@@ -15,17 +15,17 @@ Do not fake unsupported browser capabilities. Only add PDF if a real Camoufox sm
 
 ## Acceptance criteria
 
-- [ ] `diff snapshot` captures the current snapshot and compares it with a baseline file or inline text using structured and human-readable diff output.
-- [ ] `diff screenshot` compares a current screenshot with a baseline image only after an explicit small Node-compatible image diff approach is chosen.
-- [ ] `diff url` serially captures two URLs, reports any final active URL mutation, and supports snapshot or screenshot comparison as accepted.
-- [ ] `vitals` and `web-vitals` collect framework-agnostic metrics through portable browser performance APIs and return structured data.
-- [ ] `pushstate <url>` performs same-document History API navigation and reports browser errors clearly for invalid or cross-origin URLs.
-- [ ] `addinitscript <js>` registers daemon-owned init scripts for future documents.
-- [ ] `removeinitscript <id>` either implements the accepted limited registry behavior or is deferred with clear docs if that limitation is too surprising.
-- [ ] Unsupported compatibility commands and flags such as CDP/provider connect, inspect, profiler, and related excluded surfaces return structured unsupported errors with alternatives.
-- [ ] PDF support is either smoke-tested and implemented narrowly or left as a structured unsupported command.
-- [ ] The slice includes schema/parser/defaults/output/help/docs coverage, structured JSON error tests, and targeted fake-browser/helper tests for diff, vitals, pushstate, and init scripts.
-- [ ] `npm run build` and `npm test` pass.
+- [x] `diff snapshot` captures the current snapshot and compares it with a baseline file or inline text using structured and human-readable diff output.
+- [x] `diff screenshot` compares a current screenshot with a baseline image only after an explicit small Node-compatible image diff approach is chosen.
+- [x] `diff url` serially captures two URLs, reports any final active URL mutation, and supports snapshot or screenshot comparison as accepted.
+- [x] `vitals` and `web-vitals` collect framework-agnostic metrics through portable browser performance APIs and return structured data.
+- [x] `pushstate <url>` performs same-document History API navigation and reports browser errors clearly for invalid or cross-origin URLs.
+- [x] `addinitscript <js>` registers daemon-owned init scripts for future documents.
+- [x] `removeinitscript <id>` either implements the accepted limited registry behavior or is deferred with clear docs if that limitation is too surprising.
+- [x] Unsupported compatibility commands and flags such as CDP/provider connect, inspect, profiler, and related excluded surfaces return structured unsupported errors with alternatives.
+- [x] PDF support is either smoke-tested and implemented narrowly or left as a structured unsupported command.
+- [x] The slice includes schema/parser/defaults/output/help/docs coverage, structured JSON error tests, and targeted fake-browser/helper tests for diff, vitals, pushstate, and init scripts.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 

@@ -82,3 +82,5 @@ The generated markdown matrix summarizes:
 Camoucli's compatibility surface is intentionally limited to local Camoufox persistent-context options that map to Playwright or existing Camoufox config. Supported launch globals include headed/headless mode, proxy and proxy bypass, extra HTTP headers, user agent, HTTPS error handling, color scheme, reduced motion, launch init scripts, and launch storage state for new sessions.
 
 Unsupported Agent Browser launch surfaces such as arbitrary executable paths, browser engine switching, CDP/provider attach, Chrome extensions, and restore policies are not part of the local compatibility matrix.
+
+CDP/provider runtime surfaces are also intentionally unsupported in command parity mode. `connect`, `inspect`, `profiler`, `pdf`, and known migration flags such as `--cdp`, `--provider`, `--executable-path`, `--engine`, `--extension`, and `--restore-policy` are accepted only as migration-facing inputs that return structured `unsupported_command` errors with local Camoufox alternatives; PDF remains disabled until a real Camoufox smoke test proves support.

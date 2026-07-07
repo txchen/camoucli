@@ -360,6 +360,54 @@ function printTraceStopResult(data: Record<string, unknown>): void {
   process.stdout.write(`Wrote Playwright trace for ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')}\n`);
 }
 
+function printDiffResult(data: Record<string, unknown>): void {
+  const kind = String(data.kind ?? 'diff');
+  const equal = data.equal === true ? 'equal' : 'different';
+  const metric = typeof data.changes === 'number'
+    ? `${data.changes} changes`
+    : typeof data.bytesDifferent === 'number'
+      ? `${data.bytesDifferent} bytes different`
+      : 'compared';
+  process.stdout.write(`${kind} ${equal}: ${metric}\n`);
+  if (typeof data.path === 'string') {
+    process.stdout.write(`Report: ${data.path}\n`);
+  }
+  const diff = typeof data.diff === 'object' && data.diff ? (data.diff as Record<string, unknown>) : undefined;
+  if (typeof diff?.unified === 'string' && diff.unified.length > 0) {
+    process.stdout.write(`${diff.unified}\n`);
+  }
+  if (kind === 'url') {
+    const left = typeof data.left === 'object' && data.left ? (data.left as Record<string, unknown>) : undefined;
+    const right = typeof data.right === 'object' && data.right ? (data.right as Record<string, unknown>) : undefined;
+    if (left) {
+      process.stdout.write(`Left: ${String(left.finalUrl ?? '')}${left.mutated === true ? ' (mutated)' : ''}\n`);
+    }
+    if (right) {
+      process.stdout.write(`Right: ${String(right.finalUrl ?? '')}${right.mutated === true ? ' (mutated)' : ''}\n`);
+    }
+  }
+}
+
+function printVitalsResult(data: Record<string, unknown>): void {
+  const metrics = typeof data.metrics === 'object' && data.metrics ? (data.metrics as Record<string, unknown>) : {};
+  const webVitals = typeof metrics.webVitals === 'object' && metrics.webVitals ? (metrics.webVitals as Record<string, unknown>) : {};
+  process.stdout.write(`Vitals for ${formatSessionTab(data)}\n`);
+  process.stdout.write(`- ttfb: ${String(webVitals.ttfb ?? 'n/a')}\n`);
+  process.stdout.write(`- fcp: ${String(webVitals.fcp ?? 'n/a')}\n`);
+}
+
+function printPushStateResult(data: Record<string, unknown>): void {
+  process.stdout.write(`pushState ${formatSessionTab(data)} ${String(data.before ?? '')} -> ${String(data.after ?? '')}\n`);
+}
+
+function printAddInitScriptResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Added init script ${String(data.id ?? '')} to ${String(data.sessionName ?? 'session')} (${String(data.sourceLength ?? 0)} chars)\n`);
+}
+
+function printRemoveInitScriptResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Init script ${String(data.id ?? '')} was not removed: ${String(data.reason ?? 'unsupported')}\n`);
+}
+
 function printStopAllSessionsResult(data: Record<string, unknown>): void {
   process.stdout.write(`Stopped ${String(data.stopped ?? 0)} sessions
 `);
@@ -1164,6 +1212,23 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'trace.stop':
       printTraceStopResult(data as Record<string, unknown>);
+      return;
+    case 'diff.snapshot':
+    case 'diff.screenshot':
+    case 'diff.url':
+      printDiffResult(data as Record<string, unknown>);
+      return;
+    case 'vitals':
+      printVitalsResult(data as Record<string, unknown>);
+      return;
+    case 'pushstate':
+      printPushStateResult(data as Record<string, unknown>);
+      return;
+    case 'addinitscript':
+      printAddInitScriptResult(data as Record<string, unknown>);
+      return;
+    case 'removeinitscript':
+      printRemoveInitScriptResult(data as Record<string, unknown>);
       return;
     case 'session.stopAll':
       printStopAllSessionsResult(data as Record<string, unknown>);
