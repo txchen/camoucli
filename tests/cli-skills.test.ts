@@ -117,13 +117,29 @@ describe('camou skills command runtime', () => {
   });
 
   it('finds packaged production skills', () => {
-    const list = executeSkillsCommand(['list']);
-    expect(list.stdout).toContain('core');
-    expect(list.stdout).not.toContain('camou');
+    const json = JSON.parse(executeSkillsCommand(['list', '--json']).stdout) as {
+      success: boolean;
+      data: Array<{ name: string }>;
+    };
+    expect(json.success).toBe(true);
+    expect(json.data.map((skill) => skill.name)).toEqual([
+      'core',
+      'dogfood',
+      'migration',
+      'network-debug',
+      'node',
+    ]);
 
     const hidden = executeSkillsCommand(['get', 'camou']);
     expect(hidden.stdout).toContain('hidden: true');
     expect(hidden.stdout).toContain('camou skills get core');
+
+    const all = executeSkillsCommand(['get', '--all']);
+    expect(all.stdout).toContain('name: dogfood');
+    expect(all.stdout).toContain('name: migration');
+    expect(all.stdout).toContain('name: network-debug');
+    expect(all.stdout).toContain('name: node');
+    expect(all.stdout).not.toContain('name: camou');
   });
 });
 

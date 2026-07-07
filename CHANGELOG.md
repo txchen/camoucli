@@ -11,6 +11,7 @@ The format is loosely based on Keep a Changelog and uses semantic versioning.
 - Added the typed `CamouClient` daemon API for command-parity workflows without shelling out.
 - Added Agent Browser command-parity and migration documentation covering supported, adapted, unsupported, and out-of-scope command families.
 - Added `camou skills` to serve version-matched agent skill content without starting the daemon or requiring an installed browser.
+- Added runtime skills for `dogfood`, `migration`, `network-debug`, and `node` alongside the core Camou guide.
 
 ### Changed
 

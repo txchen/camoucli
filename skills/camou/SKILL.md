@@ -20,6 +20,12 @@ npm run dev -- skills get core --full
 
 The CLI-served skill content ships with the installed `camou` version, so command guidance stays aligned with the local CLI.
 
+List specialized runtime skills:
+
+```bash
+camou skills list
+```
+
 Emergency loop:
 
 ```bash

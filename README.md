@@ -94,6 +94,7 @@ The installed `camou` skill is intentionally small. It points agents at the vers
 ```bash
 camou skills get core
 camou skills get core --full
+camou skills list
 npx camou skills get core
 npx camou skills get core --full
 ```
@@ -451,6 +452,8 @@ camou skills get --all        # Print every visible skill
 camou skills path [name]      # Print searched skill dirs, or one skill dir
 ```
 
+Runtime skills currently include `core`, `dogfood`, `migration`, `network-debug`, and `node`. Agent Browser-only surfaces such as Electron, Slack, Vercel Sandbox, and AgentCore are intentionally not exposed as Camou skills because Camoucli does not support those workflows.
+
 `CAMOU_SKILLS_DIR` can point at one directory containing skill subdirectories, which is useful for tests and local skill development. `camou skills` does not start the daemon, check browser installs, launch Camoufox, or touch session/browser state.
 
 ### Page automation
@@ -778,6 +781,10 @@ npm run dev -- --help
 npm run dev -- skills list
 npm run dev -- skills get core
 npm run dev -- skills get core --full
+npm run dev -- skills get dogfood
+npm run dev -- skills get migration
+npm run dev -- skills get network-debug
+npm run dev -- skills get node
 npm run dev:daemon
 ```
 
