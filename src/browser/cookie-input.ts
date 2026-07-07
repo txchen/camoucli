@@ -149,7 +149,7 @@ export function validateCookieScope(cookie: CookieInput): void {
   if (cookie.url && cookie.domain) {
     throw new ValidationError('Cookie accepts either URL or domain, not both.');
   }
-  if (cookie.sameSite === 'None' && cookie.secure !== true) {
-    throw new ValidationError('Cookie SameSite=None requires secure=true.');
+  if (cookie.url && cookie.path) {
+    throw new ValidationError('Cookie path can only be used with domain-scoped cookies.');
   }
 }

@@ -2221,8 +2221,9 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     tabCommand
       .command('list')
       .description('List tabs in the current session')
-      .action(async (options: SharedOptions) => {
-        await handlers.onDaemonAction('tab.list', { action: 'tab.list', session: options.session }, options);
+      .action(async (_options: SharedOptions, command: Command) => {
+        const resolved = mergedCommandOptions<SharedOptions>(command);
+        await handlers.onDaemonAction('tab.list', { action: 'tab.list', session: resolved.session }, resolved);
       }),
   );
 
@@ -2231,11 +2232,12 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .command('new [url]')
       .description('Create a new named tab')
       .option('--label <name>', 'tab name to create')
-      .action(async (url: string | undefined, options: TabNewOptions) => {
+      .action(async (url: string | undefined, _options: TabNewOptions, command: Command) => {
+        const resolved = mergedCommandOptions<TabNewOptions>(command);
         await handlers.onDaemonAction(
           'tab.new',
-          { action: 'tab.new', session: options.session, tabName: options.label ?? options.tabname, label: options.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(options) },
-          options,
+          { action: 'tab.new', session: resolved.session, tabName: resolved.label ?? resolved.tabname, label: resolved.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(resolved) },
+          resolved,
         );
       }),
   );
@@ -2244,8 +2246,9 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     tabCommand
       .command('close [target]')
       .description('Close a tab by name, generated id, or zero-based index')
-      .action(async (target: string | undefined, options: SharedOptions) => {
-        await handlers.onDaemonAction('tab.close', { action: 'tab.close', session: options.session, target }, options);
+      .action(async (target: string | undefined, _options: SharedOptions, command: Command) => {
+        const resolved = mergedCommandOptions<SharedOptions>(command);
+        await handlers.onDaemonAction('tab.close', { action: 'tab.close', session: resolved.session, target }, resolved);
       }),
   );
 
@@ -2255,11 +2258,12 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .command('new [url]')
       .description('Create a new tracked page; not guaranteed to be a separate OS window')
       .option('--label <name>', 'tab name to assign to the tracked page')
-      .action(async (url: string | undefined, options: TabNewOptions) => {
+      .action(async (url: string | undefined, _options: TabNewOptions, command: Command) => {
+        const resolved = mergedCommandOptions<TabNewOptions>(command);
         await handlers.onDaemonAction(
           'window.new',
-          { action: 'window.new', session: options.session, tabName: options.tabname, label: options.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(options) },
-          options,
+          { action: 'window.new', session: resolved.session, tabName: resolved.tabname, label: resolved.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(resolved) },
+          resolved,
         );
       }),
   );

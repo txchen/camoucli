@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.12.1] - 2026-07-07
+
+### Fixed
+
+- Fixed command-parity smoke issues around browser-evaluated snapshots, URL-scoped cookies, reload tolerance, runtime media fallbacks, and tab/window shared option parsing.
+- Verified the new command-parity surface against local Camoufox `135.0.1-beta.24` and the public Node API.
+
 ## [0.12.0] - 2026-07-07
 
 ### Added

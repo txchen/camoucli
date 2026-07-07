@@ -229,7 +229,7 @@ export class BrowserManager {
 
   async reload(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    await tab.page.reload({ waitUntil: 'domcontentloaded' });
+    await tab.page.reload({ waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => null);
     return {
       sessionName: input.session,
       tabName: tab.name,
@@ -1332,10 +1332,23 @@ export class BrowserManager {
       if (runtime.colorScheme === undefined && runtime.reducedMotion === undefined) {
         throw new ValidationError('Runtime media setting requires colorScheme or reducedMotion.');
       }
-      await tab.page.emulateMedia({
-        ...(runtime.colorScheme !== undefined ? { colorScheme: runtime.colorScheme } : {}),
-        ...(runtime.reducedMotion !== undefined ? { reducedMotion: runtime.reducedMotion } : {}),
-      });
+      try {
+        await tab.page.emulateMedia({
+          ...(runtime.colorScheme !== undefined ? { colorScheme: runtime.colorScheme } : {}),
+          ...(runtime.reducedMotion !== undefined ? { reducedMotion: runtime.reducedMotion } : {}),
+        });
+      } catch (error) {
+        return {
+          sessionName: input.session,
+          tabName: tab.name,
+          setting: runtime.setting,
+          lifetime: 'tab',
+          unsupported: true,
+          reason: error instanceof Error ? error.message : String(error),
+          ...(runtime.colorScheme !== undefined ? { colorScheme: runtime.colorScheme } : {}),
+          ...(runtime.reducedMotion !== undefined ? { reducedMotion: runtime.reducedMotion } : {}),
+        };
+      }
       return {
         sessionName: input.session,
         tabName: tab.name,
@@ -1434,7 +1447,7 @@ export class BrowserManager {
     const context = pageOrActiveFrame(tab.page, tab);
     const result = await context.evaluate(
       ({ mode: readMode, filter }) => {
-        const matchesFilter = (value: string): boolean => !filter || value.toLowerCase().includes(filter.toLowerCase());
+        const normalizedFilter = filter?.toLowerCase();
         if (readMode === 'raw') {
           return {
             content: document.documentElement.outerHTML,
@@ -1452,7 +1465,7 @@ export class BrowserManager {
             const href = element instanceof HTMLAnchorElement ? element.href : undefined;
             const label = [tag, text, href].filter(Boolean).join(' ');
             return { tag, text, href, label };
-          }).filter((item) => matchesFilter(item.label));
+          }).filter((item) => !normalizedFilter || item.label.toLowerCase().includes(normalizedFilter));
           return {
             content: items.map((item) => `${item.tag}${item.text ? ` ${item.text}` : ''}${item.href ? ` ${item.href}` : ''}`).join('\n'),
             items,
@@ -1461,7 +1474,7 @@ export class BrowserManager {
 
         const text = (document.body?.innerText ?? document.documentElement.textContent ?? '').trim();
         const lines = text.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
-        const filtered = filter ? lines.filter(matchesFilter) : lines;
+        const filtered = normalizedFilter ? lines.filter((line) => line.toLowerCase().includes(normalizedFilter)) : lines;
         return {
           content: filtered.join('\n'),
           items: filtered.map((line) => ({ text: line })),
@@ -2516,10 +2529,12 @@ export class BrowserManager {
   private applyCookieDefaults(cookie: CookieInput, tab: TabRuntime): CookieInput {
     const defaulted = {
       ...cookie,
-      ...(cookie.path ? {} : { path: '/' }),
     };
     if (!defaulted.url && !defaulted.domain) {
       defaulted.url = this.currentHttpUrl(tab, 'Cookie defaulting');
+    }
+    if (!defaulted.url && !defaulted.path) {
+      defaulted.path = '/';
     }
     validateCookieScope(defaulted);
     return defaulted;

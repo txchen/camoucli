@@ -59,45 +59,38 @@ export async function takeSnapshot(page: Page, interactiveOnly: boolean): Promis
 
       const selectors = interactiveOnly ? interactiveSelectors : broadSelectors;
 
-      function isVisible(element: Element): element is HTMLElement {
-        if (!(element instanceof HTMLElement)) {
-          return false;
-        }
-
-        const style = window.getComputedStyle(element);
-        const rect = element.getBoundingClientRect();
-        return (
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          style.opacity !== '0' &&
-          rect.width > 0 &&
-          rect.height > 0
-        );
-      }
-
-      function summarizeText(element: HTMLElement): string {
-        const directText =
-          element.getAttribute('aria-label') ||
-          element.getAttribute('alt') ||
-          ('value' in element ? String((element as HTMLInputElement).value || '') : '') ||
-          ('placeholder' in element ? String((element as HTMLInputElement).placeholder || '') : '') ||
-          element.innerText ||
-          element.textContent ||
-          '';
-
-        return directText.replace(/\s+/g, ' ').trim().slice(0, 140);
-      }
-
       return Array.from(document.querySelectorAll(selectors.join(',')))
         .filter((element, index, list) => list.indexOf(element) === index)
-        .filter(isVisible)
+        .filter((element): element is HTMLElement => {
+          if (!(element instanceof HTMLElement)) {
+            return false;
+          }
+
+          const style = window.getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return (
+            style.display !== 'none' &&
+            style.visibility !== 'hidden' &&
+            style.opacity !== '0' &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        })
         .map((element, index) => {
           const refId = `e${index + 1}`;
           element.setAttribute(attributeName, refId);
           const tag = element.tagName.toLowerCase();
           const role = element.getAttribute('role') || undefined;
           const inputType = element instanceof HTMLInputElement ? element.type || 'text' : undefined;
-          const text = summarizeText(element) || tag;
+          const directText =
+            element.getAttribute('aria-label') ||
+            element.getAttribute('alt') ||
+            ('value' in element ? String((element as HTMLInputElement).value || '') : '') ||
+            ('placeholder' in element ? String((element as HTMLInputElement).placeholder || '') : '') ||
+            element.innerText ||
+            element.textContent ||
+            '';
+          const text = directText.replace(/\s+/g, ' ').trim().slice(0, 140) || tag;
           return {
             ref: `@${refId}`,
             selector: `[${attributeName}="${refId}"]`,

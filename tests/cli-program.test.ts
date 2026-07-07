@@ -256,6 +256,7 @@ describe('CLI program parsing', () => {
     await program.parseAsync(['node', 'camou', 'cookies'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'cookies', 'get', '--session', 'work', 'https://example.com'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'cookies', 'set', 'sid', 'secret', '--domain', 'example.com', '--path', '/', '--http-only'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'cookies', 'set', 'urlsid', 'secret', '--url', 'https://example.com'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'cookies', 'set', '--curl', '/tmp/cookies.txt'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'cookies', 'clear', '--session', 'work'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'storage', 'local', 'set', 'token', 'secret'], { from: 'node' });
@@ -273,19 +274,20 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'cookies.get', expect.objectContaining({ action: 'cookies.get' }), expect.any(Object));
     expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'cookies.get', expect.objectContaining({ urls: ['https://example.com'], session: 'work' }), expect.any(Object));
     expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'cookies.set', expect.objectContaining({ name: 'sid', value: 'secret', domain: 'example.com', path: '/', httpOnly: true }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'cookies.set', expect.objectContaining({ curlPath: '/tmp/cookies.txt' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'cookies.clear', expect.objectContaining({ session: 'work' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'storage.local', expect.objectContaining({ operation: 'set', key: 'token', value: 'secret' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'storage.session', expect.objectContaining({ operation: 'get', key: 'token' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'storage.local', expect.objectContaining({ operation: 'clear' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'state.save', expect.objectContaining({ path: 'auth', session: 'work' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(10, 'state.load', expect.objectContaining({ path: 'auth' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(11, 'state.list', expect.objectContaining({ action: 'state.list' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(12, 'state.show', expect.objectContaining({ path: 'auth' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(13, 'state.clear', expect.objectContaining({ path: 'auth' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(14, 'state.clear', expect.objectContaining({ all: true }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(15, 'state.clean', expect.objectContaining({ action: 'state.clean' }), expect.any(Object));
-    expect(onDaemonAction).toHaveBeenNthCalledWith(16, 'state.rename', expect.objectContaining({ from: 'old', to: 'new' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'cookies.set', expect.objectContaining({ name: 'urlsid', value: 'secret', url: 'https://example.com' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'cookies.set', expect.objectContaining({ curlPath: '/tmp/cookies.txt' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'cookies.clear', expect.objectContaining({ session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'storage.local', expect.objectContaining({ operation: 'set', key: 'token', value: 'secret' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'storage.session', expect.objectContaining({ operation: 'get', key: 'token' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'storage.local', expect.objectContaining({ operation: 'clear' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(10, 'state.save', expect.objectContaining({ path: 'auth', session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(11, 'state.load', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(12, 'state.list', expect.objectContaining({ action: 'state.list' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(13, 'state.show', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(14, 'state.clear', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(15, 'state.clear', expect.objectContaining({ all: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(16, 'state.clean', expect.objectContaining({ action: 'state.clean' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(17, 'state.rename', expect.objectContaining({ from: 'old', to: 'new' }), expect.any(Object));
   });
 
   it('routes network commands to daemon actions', async () => {
@@ -1208,16 +1210,16 @@ describe('CLI program parsing', () => {
     const program = createProgram(createHandlers(onDaemonAction));
 
     await program.parseAsync(['node', 'camou', 'tab'], { from: 'node' });
-    await program.parseAsync(['node', 'camou', 'tab', 'new', '--label', 'docs', 'example.com'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'tab', 'new', '--label', 'docs', 'example.com', '--session', 'work', '--headless'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'tab', 'docs'], { from: 'node' });
-    await program.parseAsync(['node', 'camou', 'tab', 'close'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'tab', 'close', '--session', 'work'], { from: 'node' });
 
     expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'tab.list', expect.objectContaining({ action: 'tab.list' }), expect.any(Object));
     expect(onDaemonAction).toHaveBeenNthCalledWith(
       2,
       'tab.new',
-      expect.objectContaining({ action: 'tab.new', tabName: 'docs', url: 'https://example.com' }),
-      expect.any(Object),
+      expect.objectContaining({ action: 'tab.new', session: 'work', tabName: 'docs', url: 'https://example.com', headless: true }),
+      expect.objectContaining({ session: 'work', headless: true }),
     );
     expect(onDaemonAction).toHaveBeenNthCalledWith(
       3,
@@ -1225,7 +1227,7 @@ describe('CLI program parsing', () => {
       expect.objectContaining({ action: 'tab.activate', target: 'docs' }),
       expect.any(Object),
     );
-    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'tab.close', expect.objectContaining({ action: 'tab.close' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'tab.close', expect.objectContaining({ action: 'tab.close', session: 'work' }), expect.objectContaining({ session: 'work' }));
   });
 
   it('routes click new-tab and window new commands', async () => {
@@ -1233,7 +1235,7 @@ describe('CLI program parsing', () => {
     const program = createProgram(createHandlers(onDaemonAction));
 
     await program.parseAsync(['node', 'camou', 'click', '#launch', '--new-tab', '--label', 'launched', '--timeout', '250'], { from: 'node' });
-    await program.parseAsync(['node', 'camou', 'window', 'new', 'example.com', '--label', 'win'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'window', 'new', 'example.com', '--label', 'win', '--session', 'work', '--headless'], { from: 'node' });
 
     expect(onDaemonAction).toHaveBeenNthCalledWith(
       1,
@@ -1244,8 +1246,8 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).toHaveBeenNthCalledWith(
       2,
       'window.new',
-      expect.objectContaining({ action: 'window.new', url: 'https://example.com', label: 'win' }),
-      expect.any(Object),
+      expect.objectContaining({ action: 'window.new', session: 'work', url: 'https://example.com', label: 'win', headless: true }),
+      expect.objectContaining({ session: 'work', headless: true }),
     );
   });
 
