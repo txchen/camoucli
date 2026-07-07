@@ -68,6 +68,12 @@ export class SessionError extends CamoucliError {
   }
 }
 
+export class TimeoutError extends CamoucliError {
+  constructor(message: string, details?: unknown, cause?: unknown) {
+    super({ code: 'timeout_error', message, details, cause, exitCode: 9 });
+  }
+}
+
 export class RefNotFoundError extends CamoucliError {
   constructor(ref: string) {
     super({

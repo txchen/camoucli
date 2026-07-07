@@ -70,6 +70,19 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).not.toHaveBeenCalled();
   });
 
+  it('routes URL-less open without requiring navigation', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'open', '--session', 'work'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'open',
+      expect.objectContaining({ action: 'open', session: 'work', url: undefined }),
+      expect.any(Object),
+    );
+  });
+
   it('rejects unsupported explicit navigation schemes before contacting the daemon', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
@@ -144,14 +157,26 @@ describe('CLI program parsing', () => {
     const program = createProgram(createHandlers(async () => undefined));
     const help = program.helpInformation();
 
+    expect(help).toContain('open [options] [url]');
     expect(help).toContain('goto [options] <url>');
     expect(help).toContain('navigate [options] <url>');
     expect(help).toContain('key [options] <key>');
     expect(help).toContain('scrollinto [options] <target>');
+    expect(help).toContain('window');
 
     const evalHelp = program.commands.find((command) => command.name() === 'eval')?.helpInformation();
     expect(evalHelp).toContain('--base64 <script>');
     expect(evalHelp).toContain('--stdin');
+    const closeHelp = program.commands.find((command) => command.name() === 'close')?.helpInformation();
+    expect(closeHelp).toContain('--all');
+    expect(closeHelp).toContain('--session <name>');
+    const sessionHelp = program.commands.find((command) => command.name() === 'session')?.helpInformation();
+    expect(sessionHelp).toContain('id [options]');
+    expect(sessionHelp).toContain('info [options]');
+    const tabNewHelp = program.commands.find((command) => command.name() === 'tab')?.commands.find((command) => command.name() === 'new')?.helpInformation();
+    expect(tabNewHelp).toContain('--label <name>');
+    const windowNewHelp = program.commands.find((command) => command.name() === 'window')?.commands.find((command) => command.name() === 'new')?.helpInformation();
+    expect(windowNewHelp).toContain('not guaranteed to be a separate OS window');
   });
 
   it('maps open command flags into a daemon payload', async () => {
@@ -758,6 +783,54 @@ describe('CLI program parsing', () => {
     );
   });
 
+  it('routes close quit and exit to the current session stop handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'close', '--session', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'quit'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'exit'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'session.stop',
+      expect.objectContaining({ action: 'session.stop', session: 'work' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'session.stop',
+      expect.objectContaining({ action: 'session.stop' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'session.stop',
+      expect.objectContaining({ action: 'session.stop' }),
+      expect.any(Object),
+    );
+  });
+
+  it('routes session helpers through local handlers', async () => {
+    const onSessionCurrent = vi.fn(async () => undefined);
+    const onSessionId = vi.fn(async () => undefined);
+    const onSessionInfo = vi.fn(async () => undefined);
+    const program = createProgram({
+      ...createHandlers(async () => undefined),
+      onSessionCurrent,
+      onSessionId,
+      onSessionInfo,
+    });
+
+    await program.parseAsync(['node', 'camou', 'session', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'session', 'id', '--scope', 'cwd', '--prefix', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'session', 'info', '--session', 'work'], { from: 'node' });
+
+    expect(onSessionCurrent).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
+    expect(onSessionId).toHaveBeenCalledWith(expect.objectContaining({ scope: 'cwd', prefix: 'work' }));
+    expect(onSessionInfo).toHaveBeenCalledWith(expect.objectContaining({ session: 'work' }));
+  });
+
   it('leaves session stop unresolved so env/config defaults can apply later', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({
@@ -779,6 +852,52 @@ describe('CLI program parsing', () => {
       'session.stop',
       { action: 'session.stop' },
       expect.objectContaining({ json: undefined, verbose: undefined }),
+    );
+  });
+
+  it('routes tab lifecycle commands including labels and active switching', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'tab'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'tab', 'new', '--label', 'docs', 'example.com'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'tab', 'docs'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'tab', 'close'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'tab.list', expect.objectContaining({ action: 'tab.list' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'tab.new',
+      expect.objectContaining({ action: 'tab.new', tabName: 'docs', url: 'https://example.com' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'tab.activate',
+      expect.objectContaining({ action: 'tab.activate', target: 'docs' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'tab.close', expect.objectContaining({ action: 'tab.close' }), expect.any(Object));
+  });
+
+  it('routes click new-tab and window new commands', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'click', '#launch', '--new-tab', '--label', 'launched', '--timeout', '250'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'window', 'new', 'example.com', '--label', 'win'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'click',
+      expect.objectContaining({ action: 'click', target: '#launch', newTab: true, label: 'launched', timeoutMs: 250 }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'window.new',
+      expect.objectContaining({ action: 'window.new', url: 'https://example.com', label: 'win' }),
+      expect.any(Object),
     );
   });
 

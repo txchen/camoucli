@@ -14,7 +14,7 @@ Statuses:
 
 | Agent Browser command | Camoucli command | Status | Notes |
 | --- | --- | --- | --- |
-| `open <url>` | `open <url>` | adapted | Uses the existing daemon-owned current tab. Bare hosts are normalized to `https://`; explicit `http:`, `https:`, `about:`, `data:`, `file:`, `chrome:`, and `chrome-extension:` URLs are preserved. URL-less `open` is deferred. |
+| `open [url]` | `open [url]` | adapted | Uses the daemon-resolved current tab. Bare hosts are normalized to `https://`; explicit `http:`, `https:`, `about:`, `data:`, `file:`, `chrome:`, and `chrome-extension:` URLs are preserved. URL-less `open` ensures the session/tab exists without navigating. |
 | `goto <url>` | `goto <url>` | supported | CLI alias that sends the existing `open` daemon action after URL normalization. Requires a URL. |
 | `navigate <url>` | `navigate <url>` | supported | CLI alias that sends the existing `open` daemon action after URL normalization. Requires a URL. |
 | `key <key>` | `key <key>` | supported | CLI alias for the existing `press` daemon action. |
@@ -23,7 +23,7 @@ Statuses:
 | `eval -b <script>` / `eval --base64 <script>` | `eval -b <script>` / `eval --base64 <script>` | supported | Decodes UTF-8 JavaScript in the CLI and rejects invalid base64 before contacting the daemon. |
 | `eval --stdin` | `eval --stdin` | supported | Reads JavaScript from stdin in the CLI and sends the existing eval daemon action. |
 
-Later parity slices will add session and tab lifecycle compatibility, launch option compatibility, state/storage/network commands, and debug/artifact commands.
+Later parity slices will add launch option compatibility, state/storage/network commands, and debug/artifact commands.
 
 ## Direct Playwright Automation Commands
 
@@ -61,4 +61,24 @@ These commands operate on the current resolved session/tab and keep using Camouc
 | `find text|label|placeholder|alt|title|testid <value>` | same | supported | Supports `--exact` where Playwright exposes it and the same narrow subactions. |
 | `find first|last <target>` / `find nth <target> <index>` | same | supported | Applies a narrow subaction to the selected locator position. |
 
-Still deferred from the broader core automation plan: downloads, `wait --download`, frame context, dialogs, URL-less `open`, `click --new-tab`, `window new`, runtime `set`, local-DOM `read`, PDF, screenshot annotation, and debug event buffers.
+## Session And Tab Lifecycle
+
+These commands add daemon-owned active-tab behavior while preserving explicit `--session` and `--tabname` workflows. Browser commands resolve tabs in this order: explicit `--tabname`, configured tab defaults from env/config, daemon active tab, then `main`.
+
+| Agent Browser command | Camoucli command | Status | Notes |
+| --- | --- | --- | --- |
+| `session` | `session` | adapted | Prints the resolved current Camoucli session name without starting a browser session. |
+| `session id [--scope worktree|cwd|git-root] [--prefix <text>]` | same | adapted | Generates a stable sanitized session name locally without starting the daemon. |
+| `session info` | `session info` | adapted | Reports daemon/runtime state when the daemon is running and profile/path state when it is not. |
+| `close` | `close` | adapted | Stops the resolved current session. |
+| `close --all` | `close --all` | supported | Keeps the Camoucli cleanup behavior for stopping all running sessions. |
+| `quit` / `exit` | `quit` / `exit` | adapted | Aliases for current-session close. |
+| `tab` / `tab list` | same | adapted | Lists tabs in the resolved session and marks the active tab. |
+| `tab new [url]` | `tab new [url]` | adapted | Creates a tracked tab. If no name is supplied, Camoucli generates `tN`. |
+| `tab new --label <name> [url]` | same | adapted | Treats the label as the Camoucli tab name. |
+| `tab <target>` | same | adapted | Switches the session's active tab by tab name, generated `tN` id, or zero-based index. |
+| `tab close [target]` | same | adapted | Closes the target tab, or the active tab when omitted, then selects a deterministic remaining active tab. |
+| `click <target> --new-tab [--label <name>]` | same | adapted | Waits for a popup/new page, tracks it as a tab, switches active tab, and returns a structured timeout error if no page opens. |
+| `window new [url] [--label <name>]` | same | adapted | Creates a new tracked Playwright page. Firefox/Playwright does not guarantee this is a separate OS window. |
+
+Still deferred from the broader core automation plan: downloads, `wait --download`, frame context, dialogs, runtime `set`, local-DOM `read`, PDF, screenshot annotation, and debug event buffers.

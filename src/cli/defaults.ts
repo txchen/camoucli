@@ -53,6 +53,7 @@ const CONFIG_FILE_NAMES = ['.camou.json', 'camou.json'] as const;
 export interface ResolvedCliDefaults {
   session: string;
   tabname: string;
+  tabnameSource: 'cli' | 'env' | 'config' | 'builtin';
   browser?: string | undefined;
   headless?: boolean | undefined;
   preset?: string[] | undefined;
@@ -276,11 +277,10 @@ export async function resolveSharedOptions(
     configDefaults.session ??
     'default';
 
-  const tabname =
-    trimValue(options.tabname) ??
-    readEnvDefault(env, 'CAMOU_TAB', 'CAMOU_TABNAME', 'CAMOUCLI_TAB', 'CAMOUCLI_TABNAME') ??
-    configDefaults.tabname ??
-    'main';
+  const cliTabname = trimValue(options.tabname);
+  const envTabname = readEnvDefault(env, 'CAMOU_TAB', 'CAMOU_TABNAME', 'CAMOUCLI_TAB', 'CAMOUCLI_TABNAME');
+  const tabname = cliTabname ?? envTabname ?? configDefaults.tabname ?? 'main';
+  const tabnameSource = cliTabname ? 'cli' : envTabname ? 'env' : configDefaults.tabname ? 'config' : 'builtin';
 
   const browser =
     trimValue(options.browser) ??
@@ -351,6 +351,7 @@ export async function resolveSharedOptions(
     ...options,
     session,
     tabname,
+    tabnameSource,
     ...(browser ? { browser } : {}),
     ...(headless !== undefined ? { headless } : {}),
     ...(preset ? { preset } : {}),
@@ -379,28 +380,52 @@ const ACTION_REQUIRES_SESSION = new Set([
   'reload',
   'snapshot',
   'click',
+  'dblclick',
   'hover',
+  'focus',
   'fill',
   'type',
   'check',
   'uncheck',
   'select',
   'press',
+  'keyboard.down',
+  'keyboard.up',
+  'keyboard.type',
+  'keyboard.insertText',
+  'mouse.move',
+  'mouse.down',
+  'mouse.up',
+  'mouse.wheel',
   'scroll',
   'scroll.intoView',
+  'upload',
+  'drag',
   'screenshot',
   'get.url',
   'get.title',
   'get.text',
   'get.value',
+  'get.html',
+  'get.attr',
+  'get.count',
+  'get.box',
+  'get.styles',
+  'is.visible',
+  'is.enabled',
+  'is.checked',
   'wait',
+  'find',
   'eval',
   'session.stop',
+  'session.info',
   'cookies.export',
   'cookies.import',
   'tab.list',
   'tab.new',
   'tab.close',
+  'tab.activate',
+  'window.new',
 ]);
 
 const ACTION_REQUIRES_TAB = new Set([
@@ -410,23 +435,43 @@ const ACTION_REQUIRES_TAB = new Set([
   'reload',
   'snapshot',
   'click',
+  'dblclick',
   'hover',
+  'focus',
   'fill',
   'type',
   'check',
   'uncheck',
   'select',
   'press',
+  'keyboard.down',
+  'keyboard.up',
+  'keyboard.type',
+  'keyboard.insertText',
+  'mouse.move',
+  'mouse.down',
+  'mouse.up',
+  'mouse.wheel',
   'scroll',
   'scroll.intoView',
+  'upload',
+  'drag',
   'screenshot',
   'get.url',
   'get.title',
   'get.text',
   'get.value',
+  'get.html',
+  'get.attr',
+  'get.count',
+  'get.box',
+  'get.styles',
+  'is.visible',
+  'is.enabled',
+  'is.checked',
   'wait',
+  'find',
   'eval',
-  'tab.new',
 ]);
 
 const ACTION_SUPPORTS_LAUNCH_DEFAULTS = new Set([
@@ -436,23 +481,45 @@ const ACTION_SUPPORTS_LAUNCH_DEFAULTS = new Set([
   'reload',
   'snapshot',
   'click',
+  'dblclick',
   'hover',
+  'focus',
   'fill',
   'type',
   'check',
   'uncheck',
   'select',
   'press',
+  'keyboard.down',
+  'keyboard.up',
+  'keyboard.type',
+  'keyboard.insertText',
+  'mouse.move',
+  'mouse.down',
+  'mouse.up',
+  'mouse.wheel',
   'scroll',
   'scroll.intoView',
+  'upload',
+  'drag',
   'screenshot',
   'get.url',
   'get.title',
   'get.text',
   'get.value',
+  'get.html',
+  'get.attr',
+  'get.count',
+  'get.box',
+  'get.styles',
+  'is.visible',
+  'is.enabled',
+  'is.checked',
   'wait',
+  'find',
   'eval',
   'tab.new',
+  'window.new',
 ]);
 
 export function applyCliDefaultsToPayload(
@@ -466,12 +533,8 @@ export function applyCliDefaultsToPayload(
     nextPayload.session = options.session;
   }
 
-  if (ACTION_REQUIRES_TAB.has(action) && nextPayload.tabName === undefined) {
+  if (ACTION_REQUIRES_TAB.has(action) && nextPayload.tabName === undefined && options.tabnameSource !== 'builtin') {
     nextPayload.tabName = options.tabname;
-  }
-
-  if (action === 'tab.close' && nextPayload.target === undefined) {
-    nextPayload.target = options.tabname;
   }
 
   if (ACTION_SUPPORTS_LAUNCH_DEFAULTS.has(action)) {

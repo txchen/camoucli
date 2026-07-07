@@ -19,6 +19,17 @@ export interface RemovedStoredSessionProfile {
   removed: boolean;
 }
 
+export interface StoppedSessionInfo {
+  sessionName: string;
+  profileName: string;
+  active: false;
+  found: boolean;
+  rootDir: string;
+  profileDir: string;
+  downloadsDir: string;
+  artifactsDir: string;
+}
+
 export function resolveStoredSessionProfile(paths: CamoucliPaths, profileName: string): StoredSessionProfile {
   const safeProfileName = sanitizeName(profileName);
   const rootDir = path.join(paths.profilesDir, safeProfileName);
@@ -55,6 +66,21 @@ export async function inspectStoredSessionProfile(
   }
 
   return { ...record, found: true };
+}
+
+export async function inspectStoppedSessionInfo(paths: CamoucliPaths, sessionName: string): Promise<StoppedSessionInfo> {
+  const record = resolveStoredSessionProfile(paths, sessionName);
+  const inspected = await inspectStoredSessionProfile(paths, sessionName);
+  return {
+    sessionName,
+    profileName: record.profileName,
+    active: false,
+    found: inspected.found,
+    rootDir: record.rootDir,
+    profileDir: record.profileDir,
+    downloadsDir: record.downloadsDir,
+    artifactsDir: record.artifactsDir,
+  };
 }
 
 export async function removeStoredSessionProfile(

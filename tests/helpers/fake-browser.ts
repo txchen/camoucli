@@ -171,6 +171,10 @@ class FakeLocator {
     }
 
     if (element.href && element.href !== '#') {
+      if (element.attributes?.target === '_blank') {
+        await this.page.openPopup(element.href);
+        return;
+      }
       await this.page.goto(element.href);
     }
   }
@@ -396,7 +400,7 @@ class FakePage extends EventEmitter {
     wheel: async (_deltaX: number, _deltaY: number) => undefined,
   };
 
-  constructor(initialState: StoredPageState) {
+  constructor(initialState: StoredPageState, private readonly context?: FakeBrowserContext | undefined) {
     super();
     this.state = cloneState(initialState);
     this.history = [cloneState(initialState)];
@@ -415,6 +419,29 @@ class FakePage extends EventEmitter {
     this.state = cloneState(nextState);
     this.refs.clear();
     this.emit('framenavigated', this.mainFrameRef);
+  }
+
+  async waitForEvent(eventName: 'popup', options?: { timeout?: number }): Promise<FakePage> {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.off(eventName, onEvent);
+        reject(new Error(`Timed out waiting for ${eventName}`));
+      }, options?.timeout ?? 30_000);
+      const onEvent = (page: FakePage) => {
+        clearTimeout(timeout);
+        resolve(page);
+      };
+      this.once(eventName, onEvent);
+    });
+  }
+
+  async openPopup(url: string): Promise<FakePage> {
+    const popup = await this.context?.newPage(url);
+    if (!popup) {
+      throw new Error('Fake page is not attached to a context');
+    }
+    this.emit('popup', popup);
+    return popup;
   }
 
   async goBack(): Promise<FakePage | null> {
@@ -651,7 +678,7 @@ export class FakeBrowserContext extends EventEmitter {
 
   constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[]) {
     super();
-    this.pagesList = initialPages.map((state) => new FakePage(state));
+    this.pagesList = initialPages.map((state) => new FakePage(state, this));
     this.cookiesList = initialCookies.map((cookie) => ({ ...cookie }));
   }
 
@@ -659,8 +686,8 @@ export class FakeBrowserContext extends EventEmitter {
     return this.pagesList.filter((page) => !page.isClosed());
   }
 
-  async newPage(): Promise<FakePage> {
-    const page = new FakePage(parsePageState('about:blank'));
+  async newPage(url = 'about:blank'): Promise<FakePage> {
+    const page = new FakePage(parsePageState(url), this);
     this.pagesList.push(page);
     return page;
   }

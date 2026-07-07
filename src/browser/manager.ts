@@ -6,8 +6,8 @@ import type { Locator, Page } from 'playwright-core';
 import { hasLaunchFingerprintHelpers, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
-import { inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
-import { SessionError, ValidationError } from '../util/errors.js';
+import { inspectStoppedSessionInfo, inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
+import { SessionError, TimeoutError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { locatorForTarget } from './actions.js';
 import { clearSnapshotRefs, takeSnapshot } from './snapshot.js';
@@ -38,10 +38,8 @@ export class BrowserManager {
       downloadsDir: session.paths.downloadsDir,
       artifactsDir: session.paths.artifactsDir,
       headless: session.resolvedConfig.headless,
-      tabs: Array.from(session.tabs.values()).map((tab) => ({
-        tabName: tab.name,
-        url: tab.page.url(),
-      })),
+      activeTabName: session.activeTabName,
+      tabs: this.tabListSummaries(session),
     }));
   }
 
@@ -78,7 +76,8 @@ export class BrowserManager {
               status: runningSession.status,
               browserVersion: runningSession.browserVersion,
               headless: runningSession.resolvedConfig.headless,
-              tabs: Array.from(runningSession.tabs.values()).map((tab) => ({ tabName: tab.name, url: tab.page.url() })),
+              activeTabName: runningSession.activeTabName,
+              tabs: this.tabListSummaries(runningSession),
             }
           : {}),
       };
@@ -106,7 +105,8 @@ export class BrowserManager {
             status: runningSession.status,
             browserVersion: runningSession.browserVersion,
             headless: runningSession.resolvedConfig.headless,
-            tabs: Array.from(runningSession.tabs.values()).map((tab) => ({ tabName: tab.name, url: tab.page.url() })),
+            activeTabName: runningSession.activeTabName,
+            tabs: this.tabListSummaries(runningSession),
           }
         : {}),
     };
@@ -123,9 +123,38 @@ export class BrowserManager {
     };
   }
 
-  async open(input: LaunchInput & { session: string; tabName: string; url: string }): Promise<Record<string, unknown>> {
+  async sessionInfo(sessionName: string): Promise<Record<string, unknown>> {
+    const session = this.sessions.get(sessionName);
+    if (!session) {
+      return {
+        daemon: { running: true },
+        ...(await inspectStoppedSessionInfo(this.paths, sessionName)),
+      };
+    }
+
+    return {
+      sessionName: session.name,
+      profileName: session.paths.safeSessionName,
+      active: true,
+      daemon: { running: true, pid: process.pid },
+      status: session.status,
+      browserVersion: session.browserVersion,
+      headless: session.resolvedConfig.headless,
+      launch: this.launchSummary(session),
+      activeTabName: session.activeTabName,
+      rootDir: session.paths.rootDir,
+      profileDir: session.paths.profileDir,
+      downloadsDir: session.paths.downloadsDir,
+      artifactsDir: session.paths.artifactsDir,
+      tabs: await this.tabSummaries(session),
+    };
+  }
+
+  async open(input: LaunchInput & { session: string; tabName?: string | undefined; url?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    await tab.page.goto(input.url, { waitUntil: 'domcontentloaded' });
+    if (input.url) {
+      await tab.page.goto(input.url, { waitUntil: 'domcontentloaded' });
+    }
     return {
       sessionName: input.session,
       tabName: tab.name,
@@ -134,7 +163,7 @@ export class BrowserManager {
     };
   }
 
-  async back(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+  async back(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => null);
     return {
@@ -145,7 +174,7 @@ export class BrowserManager {
     };
   }
 
-  async forward(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+  async forward(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.goForward({ waitUntil: 'domcontentloaded' }).catch(() => null);
     return {
@@ -156,7 +185,7 @@ export class BrowserManager {
     };
   }
 
-  async reload(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+  async reload(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.reload({ waitUntil: 'domcontentloaded' });
     return {
@@ -167,7 +196,7 @@ export class BrowserManager {
     };
   }
 
-  async snapshot(input: LaunchInput & { session: string; tabName: string; interactive: boolean }): Promise<Record<string, unknown>> {
+  async snapshot(input: LaunchInput & { session: string; tabName?: string | undefined; interactive: boolean }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const result = await takeSnapshot(tab.page, input.interactive);
     tab.lastSnapshot = result;
@@ -182,8 +211,35 @@ export class BrowserManager {
     };
   }
 
-  async click(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async click(input: LaunchInput & { session: string; tabName?: string | undefined; target: string; newTab?: boolean | undefined; label?: string | undefined; timeoutMs?: number | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
+    if (input.newTab) {
+      const session = await this.ensureSession(input.session, input);
+      const timeoutMs = input.timeoutMs ?? 5_000;
+      const popupPromise = tab.page.waitForEvent('popup', { timeout: timeoutMs }).catch((error: unknown) => {
+        throw new TimeoutError(`Timed out waiting for a new tab after clicking ${input.target}.`, { timeoutMs, target: input.target }, error);
+      });
+      const [popup] = await Promise.all([
+        popupPromise,
+        locatorForTarget(tab.page, tab, input.target).click().then(() => undefined),
+      ]);
+      const newTabName = input.label ?? this.nextGeneratedTabName(session);
+      if (session.tabs.has(newTabName)) {
+        throw new SessionError(`Tab ${newTabName} already exists in session ${input.session}.`);
+      }
+      const tracked = this.trackPage(session, newTabName, popup);
+      return {
+        sessionName: input.session,
+        oldTabName: tab.name,
+        tabName: tab.name,
+        newTabName: tracked.name,
+        newTabId: tracked.tabId,
+        target: input.target,
+        url: tracked.page.url(),
+        title: await tracked.page.title(),
+      };
+    }
+
     await locatorForTarget(tab.page, tab, input.target).click();
     return {
       sessionName: input.session,
@@ -193,7 +249,7 @@ export class BrowserManager {
     };
   }
 
-  async dblclick(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async dblclick(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).dblclick();
     return {
@@ -204,7 +260,7 @@ export class BrowserManager {
     };
   }
 
-  async hover(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async hover(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).hover();
     return {
@@ -214,7 +270,7 @@ export class BrowserManager {
     };
   }
 
-  async focus(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async focus(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).focus();
     return {
@@ -224,7 +280,7 @@ export class BrowserManager {
     };
   }
 
-  async fill(input: LaunchInput & { session: string; tabName: string; target: string; text: string }): Promise<Record<string, unknown>> {
+  async fill(input: LaunchInput & { session: string; tabName?: string | undefined; target: string; text: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).fill(input.text);
     return {
@@ -236,7 +292,7 @@ export class BrowserManager {
   }
 
   async type(
-    input: LaunchInput & { session: string; tabName: string; target: string; text: string; clear?: boolean | undefined; delayMs?: number | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; target: string; text: string; clear?: boolean | undefined; delayMs?: number | undefined },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const locator = locatorForTarget(tab.page, tab, input.target);
@@ -254,7 +310,7 @@ export class BrowserManager {
     };
   }
 
-  async check(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async check(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).check();
     return {
@@ -265,7 +321,7 @@ export class BrowserManager {
     };
   }
 
-  async uncheck(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async uncheck(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).uncheck();
     return {
@@ -276,7 +332,7 @@ export class BrowserManager {
     };
   }
 
-  async select(input: LaunchInput & { session: string; tabName: string; target: string; value: string | string[] }): Promise<Record<string, unknown>> {
+  async select(input: LaunchInput & { session: string; tabName?: string | undefined; target: string; value: string | string[] }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).selectOption(input.value);
     return {
@@ -287,7 +343,7 @@ export class BrowserManager {
     };
   }
 
-  async press(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
+  async press(input: LaunchInput & { session: string; tabName?: string | undefined; key: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.press(input.key);
     return {
@@ -297,7 +353,7 @@ export class BrowserManager {
     };
   }
 
-  async keyboardDown(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
+  async keyboardDown(input: LaunchInput & { session: string; tabName?: string | undefined; key: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.down(input.key);
     return {
@@ -307,7 +363,7 @@ export class BrowserManager {
     };
   }
 
-  async keyboardUp(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
+  async keyboardUp(input: LaunchInput & { session: string; tabName?: string | undefined; key: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.up(input.key);
     return {
@@ -318,7 +374,7 @@ export class BrowserManager {
   }
 
   async keyboardType(
-    input: LaunchInput & { session: string; tabName: string; text: string; delayMs?: number | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; text: string; delayMs?: number | undefined },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.type(input.text, input.delayMs !== undefined ? { delay: input.delayMs } : undefined);
@@ -330,7 +386,7 @@ export class BrowserManager {
     };
   }
 
-  async keyboardInsertText(input: LaunchInput & { session: string; tabName: string; text: string }): Promise<Record<string, unknown>> {
+  async keyboardInsertText(input: LaunchInput & { session: string; tabName?: string | undefined; text: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.keyboard.insertText(input.text);
     return {
@@ -340,7 +396,7 @@ export class BrowserManager {
     };
   }
 
-  async mouseMove(input: LaunchInput & { session: string; tabName: string; x: number; y: number }): Promise<Record<string, unknown>> {
+  async mouseMove(input: LaunchInput & { session: string; tabName?: string | undefined; x: number; y: number }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.mouse.move(input.x, input.y);
     return {
@@ -352,7 +408,7 @@ export class BrowserManager {
   }
 
   async mouseDown(
-    input: LaunchInput & { session: string; tabName: string; button?: 'left' | 'right' | 'middle' | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; button?: 'left' | 'right' | 'middle' | undefined },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.mouse.down(input.button ? { button: input.button } : undefined);
@@ -364,7 +420,7 @@ export class BrowserManager {
   }
 
   async mouseUp(
-    input: LaunchInput & { session: string; tabName: string; button?: 'left' | 'right' | 'middle' | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; button?: 'left' | 'right' | 'middle' | undefined },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.mouse.up(input.button ? { button: input.button } : undefined);
@@ -375,7 +431,7 @@ export class BrowserManager {
     };
   }
 
-  async mouseWheel(input: LaunchInput & { session: string; tabName: string; deltaX: number; deltaY: number }): Promise<Record<string, unknown>> {
+  async mouseWheel(input: LaunchInput & { session: string; tabName?: string | undefined; deltaX: number; deltaY: number }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await tab.page.mouse.wheel(input.deltaX, input.deltaY);
     return {
@@ -388,7 +444,7 @@ export class BrowserManager {
   }
 
   async scroll(
-    input: LaunchInput & { session: string; tabName: string; direction?: 'up' | 'down' | 'left' | 'right' | undefined; amount?: number | undefined; target?: string | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; direction?: 'up' | 'down' | 'left' | 'right' | undefined; amount?: number | undefined; target?: string | undefined },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const direction = input.direction ?? 'down';
@@ -420,7 +476,7 @@ export class BrowserManager {
     };
   }
 
-  async scrollIntoView(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async scrollIntoView(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).scrollIntoViewIfNeeded();
     return {
@@ -430,7 +486,7 @@ export class BrowserManager {
     };
   }
 
-  async upload(input: LaunchInput & { session: string; tabName: string; target: string; files: string[] }): Promise<Record<string, unknown>> {
+  async upload(input: LaunchInput & { session: string; tabName?: string | undefined; target: string; files: string[] }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).setInputFiles(input.files);
     return {
@@ -442,7 +498,7 @@ export class BrowserManager {
     };
   }
 
-  async drag(input: LaunchInput & { session: string; tabName: string; source: string; target: string }): Promise<Record<string, unknown>> {
+  async drag(input: LaunchInput & { session: string; tabName?: string | undefined; source: string; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.source).dragTo(locatorForTarget(tab.page, tab, input.target));
     return {
@@ -453,7 +509,7 @@ export class BrowserManager {
     };
   }
 
-  async eval(input: LaunchInput & { session: string; tabName: string; expression: string }): Promise<Record<string, unknown>> {
+  async eval(input: LaunchInput & { session: string; tabName?: string | undefined; expression: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     return {
       sessionName: input.session,
@@ -466,7 +522,7 @@ export class BrowserManager {
   async screenshot(
     input: LaunchInput & {
       session: string;
-      tabName: string;
+      tabName?: string | undefined;
       target?: string | undefined;
       path?: string | undefined;
       fullPage?: boolean | undefined;
@@ -503,7 +559,7 @@ export class BrowserManager {
     };
   }
 
-  async getUrl(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+  async getUrl(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     return {
       sessionName: input.session,
@@ -512,7 +568,7 @@ export class BrowserManager {
     };
   }
 
-  async getTitle(input: LaunchInput & { session: string; tabName: string }): Promise<Record<string, unknown>> {
+  async getTitle(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     return {
       sessionName: input.session,
@@ -521,7 +577,7 @@ export class BrowserManager {
     };
   }
 
-  async getText(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getText(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const text = await locatorForTarget(tab.page, tab, input.target).innerText();
     return {
@@ -550,7 +606,7 @@ export class BrowserManager {
     return { sessionName: session.name, imported: cookies.length, path: input.path };
   }
 
-  async getValue(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getValue(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const value = await locatorForTarget(tab.page, tab, input.target).inputValue();
     return {
@@ -561,7 +617,7 @@ export class BrowserManager {
     };
   }
 
-  async getHtml(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getHtml(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const html = await locatorForTarget(tab.page, tab, input.target).innerHTML();
     return {
@@ -573,7 +629,7 @@ export class BrowserManager {
   }
 
   async getAttribute(
-    input: LaunchInput & { session: string; tabName: string; target: string; attribute: string },
+    input: LaunchInput & { session: string; tabName?: string | undefined; target: string; attribute: string },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const value = await locatorForTarget(tab.page, tab, input.target).getAttribute(input.attribute);
@@ -586,7 +642,7 @@ export class BrowserManager {
     };
   }
 
-  async getCount(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getCount(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const count = await locatorForTarget(tab.page, tab, input.target).count();
     return {
@@ -597,7 +653,7 @@ export class BrowserManager {
     };
   }
 
-  async getBox(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getBox(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const box = await locatorForTarget(tab.page, tab, input.target).boundingBox();
     return {
@@ -608,7 +664,7 @@ export class BrowserManager {
     };
   }
 
-  async getStyles(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+  async getStyles(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const styles = await locatorForTarget(tab.page, tab, input.target).evaluate((element) => {
       const computed = window.getComputedStyle(element);
@@ -623,7 +679,7 @@ export class BrowserManager {
   }
 
   async elementPredicate(
-    input: LaunchInput & { action: 'is.visible' | 'is.enabled' | 'is.checked'; session: string; tabName: string; target: string },
+    input: LaunchInput & { action: 'is.visible' | 'is.enabled' | 'is.checked'; session: string; tabName?: string | undefined; target: string },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const locator = locatorForTarget(tab.page, tab, input.target);
@@ -645,7 +701,7 @@ export class BrowserManager {
   async wait(
     input: LaunchInput & {
       session: string;
-      tabName: string;
+      tabName?: string | undefined;
       ms?: number | undefined;
       target?: string | undefined;
       text?: string | undefined;
@@ -701,7 +757,7 @@ export class BrowserManager {
   async find(
     input: LaunchInput & {
       session: string;
-      tabName: string;
+      tabName?: string | undefined;
       locatorType: 'role' | 'text' | 'label' | 'placeholder' | 'alt' | 'title' | 'testid' | 'first' | 'last' | 'nth';
       value?: string | undefined;
       target?: string | undefined;
@@ -748,27 +804,21 @@ export class BrowserManager {
   }
 
   async listTabs(sessionName: string): Promise<Array<Record<string, unknown>>> {
-    const session = await this.ensureSession(sessionName, { headless: false });
-    return Promise.all(
-      Array.from(session.tabs.values()).map(async (tab, index) => ({
-        index,
-        tabName: tab.name,
-        url: tab.page.url(),
-        title: tab.page.isClosed() ? '' : await tab.page.title(),
-      })),
-    );
+    const session = await this.ensureSession(sessionName, {});
+    return this.tabSummaries(session);
   }
 
   async newTab(
-    input: LaunchInput & { session: string; tabName: string; url?: string | undefined },
+    input: LaunchInput & { session: string; tabName?: string | undefined; url?: string | undefined; label?: string | undefined },
   ): Promise<Record<string, unknown>> {
     const session = await this.ensureSession(input.session, input);
-    if (session.tabs.has(input.tabName)) {
-      throw new SessionError(`Tab ${input.tabName} already exists in session ${input.session}.`);
+    const tabName = input.label ?? input.tabName ?? this.nextGeneratedTabName(session);
+    if (session.tabs.has(tabName)) {
+      throw new SessionError(`Tab ${tabName} already exists in session ${input.session}.`);
     }
 
     const page = await session.context.newPage();
-    const tab = this.trackPage(session, input.tabName, page);
+    const tab = this.trackPage(session, tabName, page);
     if (input.url) {
       await page.goto(input.url, { waitUntil: 'domcontentloaded' });
     }
@@ -776,27 +826,51 @@ export class BrowserManager {
     return {
       sessionName: input.session,
       tabName: tab.name,
+      tabId: tab.tabId,
       url: page.url(),
+      title: await page.title(),
     };
   }
 
-  async closeTab(sessionName: string, target: string): Promise<{ closed: boolean; tabName?: string; target: string }> {
+  async newWindow(input: LaunchInput & { session: string; tabName?: string | undefined; url?: string | undefined; label?: string | undefined }): Promise<Record<string, unknown>> {
+    const result = await this.newTab(input);
+    return {
+      ...result,
+      page: true,
+      window: false,
+    };
+  }
+
+  async activateTab(sessionName: string, target: string): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(sessionName, {});
+    const tab = this.findTab(session, target);
+    if (!tab || tab.page.isClosed()) {
+      throw new SessionError(`Tab ${target} was not found in session ${sessionName}.`);
+    }
+
+    session.activeTabName = tab.name;
+    return this.tabSummary(session, tab, Array.from(session.tabs.values()).indexOf(tab));
+  }
+
+  async closeTab(sessionName: string, target?: string | undefined): Promise<{ closed: boolean; tabName?: string; target?: string | undefined; activeTabName?: string | undefined }> {
     const session = this.sessions.get(sessionName);
     if (!session) {
       return { closed: false, target };
     }
 
-    const tab = this.findTab(session, target);
+    const tab = target ? this.findTab(session, target) : this.resolveExistingTab(session, undefined);
     if (!tab) {
       return { closed: false, target };
     }
 
     await tab.page.close();
     session.tabs.delete(tab.name);
+    this.ensureActiveTabAfterClose(session, tab.name);
     return {
       closed: true,
       tabName: tab.name,
       target,
+      activeTabName: session.activeTabName,
     };
   }
 
@@ -819,6 +893,7 @@ export class BrowserManager {
         status: 'running',
         context: launched.context,
         tabs: new Map<string, TabRuntime>(),
+        nextTabSequence: 1,
         browserVersion: launched.browserVersion,
         installPath: launched.installPath,
         paths: launched.sessionPaths,
@@ -830,12 +905,13 @@ export class BrowserManager {
       const pages = session.context.pages();
       if (pages.length === 0) {
         const page = await session.context.newPage();
-        this.trackPage(session, 'main', page);
+        this.trackPage(session, 'main', page, false);
       } else {
         pages.forEach((page, index) => {
-          this.trackPage(session, index === 0 ? 'main' : `restored-${index + 1}`, page);
+          this.trackPage(session, index === 0 ? 'main' : `restored-${index + 1}`, page, false);
         });
       }
+      session.activeTabName = session.tabs.has('main') ? 'main' : Array.from(session.tabs.keys())[0];
 
       session.context.on('close', () => {
         session.status = 'stopped';
@@ -859,19 +935,28 @@ export class BrowserManager {
     }
   }
 
-  private async ensureTab(sessionName: string, tabName: string, input: LaunchInput): Promise<TabRuntime> {
+  private async ensureTab(sessionName: string, tabName: string | undefined, input: LaunchInput): Promise<TabRuntime> {
     const session = await this.ensureSession(sessionName, input);
-    const existing = session.tabs.get(tabName);
+    const resolvedExisting = this.resolveExistingTab(session, tabName);
+    if (resolvedExisting) {
+      if (tabName) {
+        session.activeTabName = resolvedExisting.name;
+      }
+      return resolvedExisting;
+    }
+
+    const resolvedName = tabName ?? session.activeTabName ?? 'main';
+    const existing = session.tabs.get(resolvedName);
     if (existing && !existing.page.isClosed()) {
       return existing;
     }
 
     if (existing?.page.isClosed()) {
-      session.tabs.delete(tabName);
+      session.tabs.delete(existing.name);
     }
 
     const page = await session.context.newPage();
-    return this.trackPage(session, tabName, page);
+    return this.trackPage(session, resolvedName, page);
   }
 
   private findRunningSessionByProfileName(profileName: string): SessionRuntime | undefined {
@@ -923,8 +1008,8 @@ export class BrowserManager {
     }
   }
 
-  private trackPage(session: SessionRuntime, tabName: string, page: Page): TabRuntime {
-    const tab = createTabRuntime(tabName, page);
+  private trackPage(session: SessionRuntime, tabName: string, page: Page, activate = true): TabRuntime {
+    const tab = createTabRuntime(tabName, `t${session.nextTabSequence++}`, page);
 
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) {
@@ -936,9 +1021,13 @@ export class BrowserManager {
 
     page.on('close', () => {
       session.tabs.delete(tab.name);
+      this.ensureActiveTabAfterClose(session, tab.name);
     });
 
     session.tabs.set(tabName, tab);
+    if (activate) {
+      session.activeTabName = tab.name;
+    }
     return tab;
   }
 
@@ -947,12 +1036,122 @@ export class BrowserManager {
       return session.tabs.get(target);
     }
 
+    const byId = Array.from(session.tabs.values()).find((tab) => tab.tabId === target);
+    if (byId) {
+      return byId;
+    }
+
     const numericIndex = Number(target);
     if (Number.isInteger(numericIndex)) {
       return Array.from(session.tabs.values())[numericIndex];
     }
 
     return undefined;
+  }
+
+  private resolveExistingTab(session: SessionRuntime, tabName: string | undefined): TabRuntime | undefined {
+    if (tabName) {
+      const tab = session.tabs.get(tabName);
+      if (tab && !tab.page.isClosed()) {
+        return tab;
+      }
+      if (tab?.page.isClosed()) {
+        session.tabs.delete(tab.name);
+      }
+      return undefined;
+    }
+
+    const activeTab = session.activeTabName ? session.tabs.get(session.activeTabName) : undefined;
+    if (activeTab && !activeTab.page.isClosed()) {
+      return activeTab;
+    }
+
+    const mainTab = session.tabs.get('main');
+    if (mainTab && !mainTab.page.isClosed()) {
+      session.activeTabName = mainTab.name;
+      return mainTab;
+    }
+
+    const firstOpenTab = Array.from(session.tabs.values()).find((tab) => !tab.page.isClosed());
+    if (firstOpenTab) {
+      session.activeTabName = firstOpenTab.name;
+      return firstOpenTab;
+    }
+
+    return undefined;
+  }
+
+  private ensureActiveTabAfterClose(session: SessionRuntime, closedTabName: string): void {
+    if (session.activeTabName && session.activeTabName !== closedTabName && session.tabs.has(session.activeTabName)) {
+      return;
+    }
+
+    const mainTab = session.tabs.get('main');
+    if (mainTab && !mainTab.page.isClosed()) {
+      session.activeTabName = mainTab.name;
+      return;
+    }
+
+    const remainingTabs = Array.from(session.tabs.values()).filter((tab) => !tab.page.isClosed());
+    session.activeTabName = remainingTabs.at(-1)?.name;
+  }
+
+  private nextGeneratedTabName(session: SessionRuntime): string {
+    let index = session.nextTabSequence;
+    while (session.tabs.has(`t${index}`)) {
+      index += 1;
+    }
+    return `t${index}`;
+  }
+
+  private async tabSummary(session: SessionRuntime, tab: TabRuntime, index: number): Promise<Record<string, unknown>> {
+    return {
+      index,
+      tabId: tab.tabId,
+      tabName: tab.name,
+      active: tab.name === session.activeTabName,
+      url: tab.page.url(),
+      title: tab.page.isClosed() ? '' : await tab.page.title(),
+    };
+  }
+
+  private async tabSummaries(session: SessionRuntime): Promise<Array<Record<string, unknown>>> {
+    return Promise.all(Array.from(session.tabs.values()).map((tab, index) => this.tabSummary(session, tab, index)));
+  }
+
+  private tabListSummary(session: SessionRuntime, tab: TabRuntime): Record<string, unknown> {
+    return {
+      tabId: tab.tabId,
+      tabName: tab.name,
+      active: tab.name === session.activeTabName,
+      url: tab.page.url(),
+    };
+  }
+
+  private tabListSummaries(session: SessionRuntime): Array<Record<string, unknown>> {
+    return Array.from(session.tabs.values()).map((tab) => this.tabListSummary(session, tab));
+  }
+
+  private launchSummary(session: SessionRuntime): Record<string, unknown> {
+    const viewport = session.resolvedConfig.viewport;
+    return {
+      browser: session.browserVersion,
+      headless: session.resolvedConfig.headless,
+      ...(session.launchInput.configPath ? { configPath: session.launchInput.configPath } : {}),
+      ...(session.launchInput.prefsPath ? { prefsPath: session.launchInput.prefsPath } : {}),
+      ...(session.launchInput.preset?.length ? { preset: session.launchInput.preset } : {}),
+      ...(session.resolvedConfig.proxy ? { proxy: session.resolvedConfig.proxy.server } : {}),
+      ...(session.resolvedConfig.locale ? { locale: session.resolvedConfig.locale } : {}),
+      ...(session.resolvedConfig.timezoneId ? { timezone: session.resolvedConfig.timezoneId } : {}),
+      ...(viewport ? { viewport: { width: viewport.width, height: viewport.height } } : {}),
+      ...(session.launchInput.region ? { region: session.launchInput.region } : {}),
+      ...(session.launchInput.screenProfile ? { screenProfile: session.launchInput.screenProfile } : {}),
+      ...(session.launchInput.windowProfile ? { windowProfile: session.launchInput.windowProfile } : {}),
+      ...(session.launchInput.blockImages !== undefined ? { blockImages: session.launchInput.blockImages } : {}),
+      ...(session.launchInput.blockWebRtc !== undefined ? { blockWebRtc: session.launchInput.blockWebRtc } : {}),
+      ...(session.launchInput.blockWebGl !== undefined ? { blockWebGl: session.launchInput.blockWebGl } : {}),
+      ...(session.launchInput.disableCoop !== undefined ? { disableCoop: session.launchInput.disableCoop } : {}),
+    };
   }
 
   private locatorForFind(

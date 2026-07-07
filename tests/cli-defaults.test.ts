@@ -143,13 +143,39 @@ describe('CLI defaults resolution', () => {
 
     expect(resolved.session).toBe('default');
     expect(resolved.tabname).toBe('main');
+    expect(resolved.tabnameSource).toBe('builtin');
     expect(resolved.defaultsFilePath).toBeUndefined();
+  });
+
+  it('leaves browser tab selection to the daemon when only the built-in tab default applies', async () => {
+    const resolved = await resolveSharedOptions({}, { cwd: rootDir, env: {} });
+
+    expect(
+      applyCliDefaultsToPayload('get.title', { action: 'get.title' }, resolved),
+    ).toMatchObject({
+      session: 'default',
+    });
+    expect(applyCliDefaultsToPayload('get.title', { action: 'get.title' }, resolved)).not.toHaveProperty('tabName');
+  });
+
+  it('keeps configured tab defaults ahead of daemon active-tab fallback', async () => {
+    await writeFile(path.join(rootDir, '.camou.json'), `${JSON.stringify({ tabname: 'docs' })}\n`, 'utf8');
+    const resolved = await resolveSharedOptions({}, { cwd: rootDir, env: {} });
+
+    expect(resolved.tabnameSource).toBe('config');
+    expect(
+      applyCliDefaultsToPayload('get.title', { action: 'get.title' }, resolved),
+    ).toMatchObject({
+      session: 'default',
+      tabName: 'docs',
+    });
   });
 
   it('applies resolved defaults to browser payloads only when values are absent', () => {
     const resolved = {
       session: 'workspace',
       tabname: 'assistant',
+      tabnameSource: 'config' as const,
       browser: '135.0.1-beta.24',
       headless: true,
       preset: ['cache'],
@@ -217,6 +243,7 @@ describe('CLI defaults resolution', () => {
     const resolved = {
       session: 'workspace',
       tabname: 'assistant',
+      tabnameSource: 'config' as const,
       browser: '135.0.1-beta.24',
       headless: true,
     };

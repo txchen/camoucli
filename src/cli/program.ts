@@ -54,6 +54,9 @@ export interface CliHandlers {
   onVersion: (options: OutputOptions) => Promise<void>;
   onDoctor: (options: OutputOptions) => Promise<void>;
   onDaemonAction: (action: string, payload: Record<string, unknown>, options: SharedOptions) => Promise<void>;
+  onSessionCurrent?: (options: SharedOptions) => Promise<void>;
+  onSessionId?: (options: OutputOptions & { scope?: 'worktree' | 'cwd' | 'git-root' | undefined; prefix?: string | undefined }) => Promise<void>;
+  onSessionInfo?: (options: SharedOptions) => Promise<void>;
   onDaemonStop?: (options: OutputOptions) => Promise<void>;
   onDaemonRestart?: (options: OutputOptions) => Promise<void>;
   onDaemonCleanup?: (options: OutputOptions) => Promise<void>;
@@ -72,6 +75,16 @@ interface EvalOptions extends SharedOptions {
 interface TypeOptions extends SharedOptions {
   clear?: boolean | undefined;
   delay?: number | undefined;
+}
+
+interface ClickOptions extends SharedOptions {
+  newTab?: boolean | undefined;
+  label?: string | undefined;
+  timeout?: number | undefined;
+}
+
+interface TabNewOptions extends SharedOptions {
+  label?: string | undefined;
 }
 
 interface ScreenshotOptions extends SharedOptions {
@@ -238,6 +251,18 @@ async function readStream(stream: Readable): Promise<string> {
   }
 
   return Buffer.concat(chunks).toString('utf8');
+}
+
+function parsedOptions<T>(options: T): T {
+  const maybeCommand = options as T & { opts?: () => unknown };
+  return typeof maybeCommand.opts === 'function' ? maybeCommand.opts() as T : options;
+}
+
+function mergedCommandOptions<T>(command: Command): T {
+  return {
+    ...(command.parent?.opts() ?? {}),
+    ...command.opts(),
+  } as T;
 }
 
 async function resolveEvalExpression(expression: string | undefined, options: EvalOptions, stdin: Readable): Promise<string> {
@@ -412,26 +437,37 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  addSharedOutputOptions(
-    program
-      .command('close')
-      .description('Stop all running daemon-owned sessions')
-      .requiredOption('--all', 'stop all running sessions')
-      .action(async (options: OutputOptions & { all: boolean }) => {
-        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
-        await handlers.onDaemonAction('session.stopAll', { action: 'session.stopAll' }, shared);
-      }),
-  );
+  const addCloseCommand = (name: string, description: string): void => {
+    addSharedOutputOptions(
+      program
+        .command(name)
+        .description(description)
+        .option('--session <name>', 'session name')
+        .option('--all', 'stop all running sessions')
+        .action(async (options: OutputOptions & { session?: string | undefined; all?: boolean | undefined }) => {
+          const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
+          if (options.all) {
+            await handlers.onDaemonAction('session.stopAll', { action: 'session.stopAll' }, shared);
+            return;
+          }
+          await handlers.onDaemonAction('session.stop', { action: 'session.stop', ...(options.session ? { session: options.session } : {}) }, shared);
+        }),
+    );
+  };
+
+  addCloseCommand('close', 'Stop the current session, or all running sessions with --all');
+  addCloseCommand('quit', 'Alias for close: stop the current session');
+  addCloseCommand('exit', 'Alias for close: stop the current session');
 
   const addNavigationCommand = (name: string, description: string): void => {
     addSharedBrowserOptions(
       program
-        .command(`${name} <url>`)
-        .description(description)
-        .action(async (url: string, options: SharedOptions) => {
+      .command(name === 'open' ? `${name} [url]` : `${name} <url>`)
+      .description(description)
+        .action(async (url: string | undefined, options: SharedOptions) => {
           await handlers.onDaemonAction(
             'open',
-            { action: 'open', url: normalizeNavigationUrl(url), session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+            { action: 'open', url: url ? normalizeNavigationUrl(url) : undefined, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
             options,
           );
         }),
@@ -487,8 +523,24 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     program
       .command('click <target>')
       .description('Click a selector or @ref')
-      .action(async (target: string, options: SharedOptions) => {
-        await handlers.onDaemonAction('click', { action: 'click', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      .option('--new-tab', 'wait for and switch to a newly opened tab')
+      .option('--label <name>', 'tab name to assign when --new-tab opens a page')
+      .option('--timeout <ms>', 'new-tab wait timeout in milliseconds', parseInteger)
+      .action(async (target: string, options: ClickOptions) => {
+        await handlers.onDaemonAction(
+          'click',
+          {
+            action: 'click',
+            target,
+            session: options.session,
+            tabName: options.tabname,
+            newTab: options.newTab ?? false,
+            label: options.label,
+            timeoutMs: options.timeout,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
       }),
   );
 
@@ -1041,13 +1093,53 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  const sessionCommand = program.command('session').description('Manage daemon-owned browser sessions');
+  const sessionCommand = addSharedOutputOptions(
+    program
+      .command('session')
+      .description('Manage daemon-owned browser sessions')
+      .option('--session <name>', 'session name')
+      .action(async (options: SharedOptions) => {
+        if (!handlers.onSessionCurrent) {
+          throw new Error('Session current handler not configured');
+        }
+        await handlers.onSessionCurrent(parsedOptions(options));
+      }),
+  );
+
+  addSharedOutputOptions(
+    sessionCommand
+      .command('id')
+      .description('Print a stable session name for this worktree, cwd, or git root')
+      .option('--scope <scope>', 'scope: worktree, cwd, or git-root')
+      .option('--prefix <text>', 'session name prefix')
+      .action(async (_options: OutputOptions & { scope?: 'worktree' | 'cwd' | 'git-root' | undefined; prefix?: string | undefined }, command: Command) => {
+        if (!handlers.onSessionId) {
+          throw new Error('Session id handler not configured');
+        }
+        await handlers.onSessionId(mergedCommandOptions<OutputOptions & { scope?: 'worktree' | 'cwd' | 'git-root' | undefined; prefix?: string | undefined }>(command));
+      }),
+  );
+
+  addSharedOutputOptions(
+    sessionCommand
+      .command('info')
+      .description('Inspect current session runtime and profile paths')
+      .option('--session <name>', 'session name')
+      .action(async (_options: SharedOptions, command: Command) => {
+        if (!handlers.onSessionInfo) {
+          throw new Error('Session info handler not configured');
+        }
+        await handlers.onSessionInfo(mergedCommandOptions<SharedOptions>(command));
+      }),
+  );
+
   addSharedOutputOptions(
     sessionCommand
       .command('list')
       .description('List running sessions')
-      .action(async (options: OutputOptions) => {
-        const shared: SharedOptions = { json: options.json, verbose: options.verbose };
+      .action(async (_options: OutputOptions, command: Command) => {
+        const resolved = mergedCommandOptions<OutputOptions>(command);
+        const shared: SharedOptions = { json: resolved.json, verbose: resolved.verbose };
         await handlers.onDaemonAction('session.list', { action: 'session.list' }, shared);
       }),
   );
@@ -1056,8 +1148,9 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     sessionCommand
       .command('stop [name]')
       .description('Stop a running session')
-      .action(async (name: string | undefined, options: OutputOptions) => {
-        const shared: SharedOptions = { ...(name ? { session: name } : {}), json: options.json, verbose: options.verbose };
+      .action(async (name: string | undefined, _options: OutputOptions, command: Command) => {
+        const resolved = mergedCommandOptions<OutputOptions>(command);
+        const shared: SharedOptions = { ...(name ? { session: name } : {}), json: resolved.json, verbose: resolved.verbose };
         await handlers.onDaemonAction('session.stop', { action: 'session.stop', ...(name ? { session: name } : {}) }, shared);
       }),
   );
@@ -1133,7 +1226,18 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  const tabCommand = program.command('tab').description('Manage named tabs within a session');
+  const tabCommand = addSharedBrowserOptions(
+    program
+      .command('tab [target]')
+      .description('Manage named tabs within a session')
+      .action(async (target: string | undefined, options: SharedOptions) => {
+        if (target) {
+          await handlers.onDaemonAction('tab.activate', { action: 'tab.activate', session: options.session, target }, options);
+          return;
+        }
+        await handlers.onDaemonAction('tab.list', { action: 'tab.list', session: options.session }, options);
+      }),
+  );
   addSharedBrowserOptions(
     tabCommand
       .command('list')
@@ -1147,17 +1251,37 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     tabCommand
       .command('new [url]')
       .description('Create a new named tab')
-      .action(async (url: string | undefined, options: SharedOptions) => {
-        await handlers.onDaemonAction('tab.new', { action: 'tab.new', session: options.session, tabName: options.tabname, url, ...toLaunchInput(options) }, options);
+      .option('--label <name>', 'tab name to create')
+      .action(async (url: string | undefined, options: TabNewOptions) => {
+        await handlers.onDaemonAction(
+          'tab.new',
+          { action: 'tab.new', session: options.session, tabName: options.label ?? options.tabname, label: options.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(options) },
+          options,
+        );
       }),
   );
 
   addSharedBrowserOptions(
     tabCommand
       .command('close [target]')
-      .description('Close a tab by name or zero-based index')
+      .description('Close a tab by name, generated id, or zero-based index')
       .action(async (target: string | undefined, options: SharedOptions) => {
-        await handlers.onDaemonAction('tab.close', { action: 'tab.close', session: options.session, target: target ?? options.tabname }, options);
+        await handlers.onDaemonAction('tab.close', { action: 'tab.close', session: options.session, target }, options);
+      }),
+  );
+
+  const windowCommand = program.command('window').description('Manage tracked top-level pages');
+  addSharedBrowserOptions(
+    windowCommand
+      .command('new [url]')
+      .description('Create a new tracked page; not guaranteed to be a separate OS window')
+      .option('--label <name>', 'tab name to assign to the tracked page')
+      .action(async (url: string | undefined, options: TabNewOptions) => {
+        await handlers.onDaemonAction(
+          'window.new',
+          { action: 'window.new', session: options.session, tabName: options.tabname, label: options.label, url: url ? normalizeNavigationUrl(url) : undefined, ...toLaunchInput(options) },
+          options,
+        );
       }),
   );
 

@@ -8,7 +8,7 @@ import type { ErrorPayload } from '../util/errors.js';
 const browserRequestBase = launchInputSchema.extend({
   id: z.string(),
   session: z.string().min(1),
-  tabName: z.string().min(1),
+  tabName: z.string().min(1).optional(),
 });
 
 const pingRequestSchema = z.object({
@@ -18,7 +18,7 @@ const pingRequestSchema = z.object({
 
 const openRequestSchema = browserRequestBase.extend({
   action: z.literal('open'),
-  url: z.string().min(1),
+  url: z.string().min(1).optional(),
 });
 
 const backRequestSchema = browserRequestBase.extend({
@@ -41,6 +41,9 @@ const snapshotRequestSchema = browserRequestBase.extend({
 const clickRequestSchema = browserRequestBase.extend({
   action: z.literal('click'),
   target: z.string().min(1),
+  newTab: z.boolean().default(false),
+  label: z.string().min(1).optional(),
+  timeoutMs: z.number().int().positive().optional(),
 });
 
 const dblclickRequestSchema = browserRequestBase.extend({
@@ -285,6 +288,12 @@ const sessionStopAllRequestSchema = z.object({
   action: z.literal('session.stopAll'),
 });
 
+const sessionInfoRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('session.info'),
+  session: z.string().min(1),
+});
+
 const tabListRequestSchema = z.object({
   id: z.string(),
   action: z.literal('tab.list'),
@@ -311,13 +320,27 @@ const profileRemoveRequestSchema = z.object({
 const tabNewRequestSchema = browserRequestBase.extend({
   action: z.literal('tab.new'),
   url: z.string().min(1).optional(),
+  label: z.string().min(1).optional(),
 });
 
 const tabCloseRequestSchema = z.object({
   id: z.string(),
   action: z.literal('tab.close'),
   session: z.string().min(1),
+  target: z.string().min(1).optional(),
+});
+
+const tabActivateRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('tab.activate'),
+  session: z.string().min(1),
   target: z.string().min(1),
+});
+
+const windowNewRequestSchema = browserRequestBase.extend({
+  action: z.literal('window.new'),
+  url: z.string().min(1).optional(),
+  label: z.string().min(1).optional(),
 });
 
 export const daemonRequestSchema = z.discriminatedUnion('action', [
@@ -368,12 +391,15 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   sessionListRequestSchema,
   sessionStopRequestSchema,
   sessionStopAllRequestSchema,
+  sessionInfoRequestSchema,
   profileListRequestSchema,
   profileInspectRequestSchema,
   profileRemoveRequestSchema,
   tabListRequestSchema,
   tabNewRequestSchema,
   tabCloseRequestSchema,
+  tabActivateRequestSchema,
+  windowNewRequestSchema,
 ]);
 
 const successResponseSchema = z.object({

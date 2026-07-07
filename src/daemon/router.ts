@@ -104,6 +104,8 @@ export class DaemonRouter {
         return this.browserManager.stopSession(request.session);
       case 'session.stopAll':
         return this.browserManager.stopAllSessions();
+      case 'session.info':
+        return this.browserManager.sessionInfo(request.session);
       case 'profile.list':
         return this.browserManager.listStoredProfiles();
       case 'profile.inspect':
@@ -116,6 +118,10 @@ export class DaemonRouter {
         return this.browserManager.newTab(request);
       case 'tab.close':
         return this.browserManager.closeTab(request.session, request.target);
+      case 'tab.activate':
+        return this.browserManager.activateTab(request.session, request.target);
+      case 'window.new':
+        return this.browserManager.newWindow(request);
     }
   }
 }

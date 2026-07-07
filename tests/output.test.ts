@@ -141,6 +141,35 @@ describe('CLI output', () => {
     expect(output).toContain('  - main https://example.com/');
   });
 
+  it('prints current session and session info in human-readable form', () => {
+    const currentOutput = captureStdout(() => {
+      printOutput('session.current', { sessionName: 'work' }, false);
+    });
+    const infoOutput = captureStdout(() => {
+      printOutput(
+        'session.info',
+        {
+          sessionName: 'work',
+          active: true,
+          daemon: { running: true, pid: 123 },
+          browserVersion: '135.0.1-beta.24',
+          launch: { browser: '135.0.1-beta.24', headless: false },
+          activeTabName: 'docs',
+          profileDir: '/tmp/profiles/work/user-data',
+          tabs: [{ tabName: 'docs', active: true, url: 'https://example.com/' }],
+        },
+        false,
+      );
+    });
+
+    expect(currentOutput).toBe('work\n');
+    expect(infoOutput).toContain('Session work running');
+    expect(infoOutput).toContain('Daemon: running 123');
+    expect(infoOutput).toContain('Launch: browser=135.0.1-beta.24 headless=false');
+    expect(infoOutput).toContain('Active tab: docs');
+    expect(infoOutput).toContain('Tab: docs active https://example.com/');
+  });
+
   it('prints profile list in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(
@@ -284,6 +313,19 @@ describe('CLI output', () => {
 
     expect(output).toContain('0 main "Example Domain" https://example.com/');
     expect(output).toContain('1 docs https://docs.example.com/');
+  });
+
+  it('prints active tab and tracked window results in human-readable form', () => {
+    const activeOutput = captureStdout(() => {
+      printOutput('tab.activate', { sessionName: 'work', tabName: 'docs', url: 'https://example.com/' }, false);
+    });
+    const windowOutput = captureStdout(() => {
+      printOutput('window.new', { sessionName: 'work', tabName: 'win', page: true, window: false, url: 'about:blank' }, false);
+    });
+
+    expect(activeOutput).toContain('Active tab work/docs https://example.com/');
+    expect(windowOutput).toContain('Created page work/win');
+    expect(windowOutput).toContain('not guaranteed OS window');
   });
 
   it('prints fingerprint profiles in human-readable form', () => {

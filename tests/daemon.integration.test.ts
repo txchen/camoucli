@@ -125,6 +125,46 @@ describe('daemon integration', () => {
     expect(missing).toMatchObject({ profileName: 'missing', found: false, running: false });
   });
 
+  it('reports running and stopped session info without launching stopped sessions', async () => {
+    await ensureSessionPaths(paths, 'stored-only');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'running-info',
+      tabName: 'main',
+      url: 'data:text/html,%3Ctitle%3ERunning%3C%2Ftitle%3E',
+      headless: true,
+    });
+
+    const running = (await sendDaemonRequest(paths, {
+      action: 'session.info',
+      session: 'running-info',
+    })) as { sessionName: string; active: boolean; activeTabName?: string; launch?: { browser?: string; headless?: boolean }; tabs?: Array<{ tabName: string }> };
+    const stopped = (await sendDaemonRequest(paths, {
+      action: 'session.info',
+      session: 'stored-only',
+    })) as { sessionName: string; active: boolean; profileName: string; profileDir: string };
+
+    expect(running).toMatchObject({
+      sessionName: 'running-info',
+      active: true,
+      activeTabName: 'main',
+      launch: {
+        browser: '135.0.1-beta.24',
+        headless: true,
+      },
+    });
+    expect(running.tabs).toEqual(expect.arrayContaining([expect.objectContaining({ tabName: 'main' })]));
+    expect(stopped).toMatchObject({
+      sessionName: 'stored-only',
+      profileName: 'stored-only',
+      active: false,
+      profileDir: path.join(paths.profilesDir, 'stored-only', 'user-data'),
+      downloadsDir: path.join(paths.profilesDir, 'stored-only', 'downloads'),
+      artifactsDir: path.join(paths.profilesDir, 'stored-only', 'artifacts'),
+    });
+    expect(getFakeLaunchLog().map((launch) => launch.sessionName)).not.toContain('stored-only');
+  });
+
   it('removes a stored profile and stops the running session if needed', async () => {
     await sendDaemonRequest(paths, {
       action: 'open',
@@ -328,8 +368,157 @@ describe('daemon integration', () => {
         target: '@e1',
       }),
     ).rejects.toMatchObject({
-      code: 'ipc_error',
+      code: 'invalid_ref',
       message: 'Reference @e1 is not available for the current tab. Run snapshot again.',
+    });
+  });
+
+  it('supports URL-less open and active tab selection without explicit tab names', async () => {
+    const launchOnly = (await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'lifecycle',
+      headless: true,
+    })) as { sessionName: string; tabName: string; url: string };
+
+    expect(launchOnly).toMatchObject({ sessionName: 'lifecycle', tabName: 'main', url: 'about:blank' });
+
+    await sendDaemonRequest(paths, {
+      action: 'tab.new',
+      session: 'lifecycle',
+      tabName: 'docs',
+      url: dataPage('<title>Docs</title>'),
+      headless: true,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'tab.activate',
+      session: 'lifecycle',
+      target: 'docs',
+    });
+
+    const activeTitle = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'lifecycle',
+    })) as { tabName: string; title: string };
+
+    expect(activeTitle).toMatchObject({ tabName: 'docs', title: 'Docs' });
+
+    const explicitMainTitle = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'lifecycle',
+      tabName: 'main',
+    })) as { tabName: string; title: string };
+
+    expect(explicitMainTitle).toMatchObject({ tabName: 'main', title: 'about:blank' });
+  });
+
+  it('generates tab names, switches tabs, and chooses a deterministic active tab after close', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'tabs',
+      headless: true,
+    });
+
+    const generated = (await sendDaemonRequest(paths, {
+      action: 'tab.new',
+      session: 'tabs',
+      url: dataPage('<title>Generated</title>'),
+      headless: true,
+    })) as { tabName: string };
+
+    expect(generated.tabName).toBe('t2');
+
+    const active = (await sendDaemonRequest(paths, {
+      action: 'tab.activate',
+      session: 'tabs',
+      target: 'main',
+    })) as { tabName: string };
+    expect(active.tabName).toBe('main');
+
+    const closed = (await sendDaemonRequest(paths, {
+      action: 'tab.close',
+      session: 'tabs',
+    })) as { closed: boolean; tabName: string; activeTabName?: string };
+
+    expect(closed).toMatchObject({ closed: true, tabName: 'main', activeTabName: 't2' });
+
+    const activeTitle = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'tabs',
+    })) as { tabName: string; title: string };
+    expect(activeTitle).toMatchObject({ tabName: 't2', title: 'Generated' });
+  });
+
+  it('creates tracked pages through window new', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'windows',
+      headless: true,
+    });
+
+    const created = (await sendDaemonRequest(paths, {
+      action: 'window.new',
+      session: 'windows',
+      label: 'child',
+      url: dataPage('<title>Child</title>'),
+      headless: true,
+    })) as { tabName: string; page: boolean; window: boolean; title: string };
+
+    expect(created).toMatchObject({ tabName: 'child', page: true, window: false, title: 'Child' });
+
+    const activeTitle = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'windows',
+    })) as { tabName: string; title: string };
+    expect(activeTitle).toMatchObject({ tabName: 'child', title: 'Child' });
+  });
+
+  it('tracks click --new-tab popups and reports timeout when no page opens', async () => {
+    const popupUrl = dataPage('<title>Popup</title>');
+    const openerUrl = dataPage(`<title>Opener</title><a id="popup" href="${popupUrl}" target="_blank">Open popup</a><button id="stay">Stay</button>`);
+
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'popups',
+      tabName: 'main',
+      url: openerUrl,
+      headless: true,
+    });
+
+    const popup = (await sendDaemonRequest(paths, {
+      action: 'click',
+      session: 'popups',
+      target: '#popup',
+      newTab: true,
+      label: 'popup',
+      timeoutMs: 250,
+    })) as { oldTabName: string; newTabName: string; title: string };
+
+    expect(popup).toMatchObject({ oldTabName: 'main', newTabName: 'popup', title: 'Popup' });
+
+    const activeTitle = (await sendDaemonRequest(paths, {
+      action: 'get.title',
+      session: 'popups',
+    })) as { tabName: string; title: string };
+    expect(activeTitle).toMatchObject({ tabName: 'popup', title: 'Popup' });
+
+    await sendDaemonRequest(paths, {
+      action: 'tab.activate',
+      session: 'popups',
+      target: 'main',
+    });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'click',
+        session: 'popups',
+        target: '#stay',
+        newTab: true,
+        timeoutMs: 10,
+      }),
+    ).rejects.toMatchObject({
+      code: 'timeout_error',
+      message: 'Timed out waiting for a new tab after clicking #stay.',
     });
   });
 

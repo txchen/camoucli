@@ -46,6 +46,31 @@ describe('daemon IPC protocol', () => {
     });
   });
 
+  it('accepts lifecycle requests with daemon-resolved active tabs', () => {
+    expect(daemonRequestSchema.parse({ id: 'request-2', action: 'open', session: 'default' })).toMatchObject({
+      action: 'open',
+      session: 'default',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-3', action: 'click', session: 'default', target: '#launch', newTab: true })).toMatchObject({
+      action: 'click',
+      session: 'default',
+      target: '#launch',
+      newTab: true,
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-4', action: 'tab.activate', session: 'default', target: 'docs' })).toMatchObject({
+      action: 'tab.activate',
+      target: 'docs',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-5', action: 'window.new', session: 'default', label: 'popup' })).toMatchObject({
+      action: 'window.new',
+      label: 'popup',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-6', action: 'session.info', session: 'default' })).toMatchObject({
+      action: 'session.info',
+      session: 'default',
+    });
+  });
+
   it('rejects invalid direct automation request shapes', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'upload', target: '#file', files: [] })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();

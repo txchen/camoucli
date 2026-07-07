@@ -40,7 +40,7 @@ describe('CLI JSON errors', () => {
   });
 
   it('prints parse failures as structured JSON when --json is enabled', async () => {
-    const result = await runCli(['node', 'camou', 'open', '--json'], rootDir);
+    const result = await runCli(['node', 'camou', 'goto', '--json'], rootDir);
     const payload = JSON.parse(result.stderr) as {
       success: boolean;
       error: { code: string; message: string };

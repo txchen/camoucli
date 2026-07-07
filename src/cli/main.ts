@@ -7,14 +7,16 @@ import { doctorCamoufox, inspectCamoufoxInstall, installCamoufox, listRemoteCamo
 import { describeFingerprintRegionProfiles, describeFingerprintScreenProfiles, describeFingerprintWindowProfiles } from '../camoufox/fingerprint.js';
 import { listCamoufoxPresets } from '../camoufox/presets.js';
 import { listInstalledBrowsers, requireInstalledBrowser, resolveInstalledBrowser, setCurrentBrowser } from '../camoufox/registry.js';
+import { inspectStoppedSessionInfo } from '../state/session-profiles.js';
 import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, ValidationError, getExitCode, toErrorPayload, type CamoucliError } from '../util/errors.js';
 import { getLogger } from '../util/log.js';
-import { sendDaemonRequest } from '../ipc/client.js';
+import { getDaemonStatus, sendDaemonRequest } from '../ipc/client.js';
 import { cleanupDaemon, ensureDaemonRunning, restartDaemon, stopDaemon } from './daemon.js';
 import { applyCliDefaultsToPayload, resolveSharedOptions } from './defaults.js';
 import { printOutput } from './output.js';
 import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
+import { resolveSessionId, type SessionIdScope } from './session.js';
 
 async function runDaemonAction(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<void> {
   const paths = getCamoucliPaths();
@@ -24,6 +26,40 @@ async function runDaemonAction(action: string, payload: Record<string, unknown>,
   const normalizedPayload = applyCliDefaultsToPayload(action, payload, resolvedOptions);
   const data = await sendDaemonRequest(paths, normalizedPayload as never);
   printOutput(action, data, options.json ?? false);
+}
+
+async function runSessionCurrent(options: SharedOptions): Promise<void> {
+  const resolvedOptions = await resolveSharedOptions(options);
+  printOutput('session.current', { sessionName: resolvedOptions.session }, options.json ?? false);
+}
+
+async function runSessionId(options: OutputOptions & { scope?: SessionIdScope | undefined; prefix?: string | undefined }): Promise<void> {
+  if (options.scope && !['worktree', 'cwd', 'git-root'].includes(options.scope)) {
+    throw new ValidationError('session id --scope must be one of: worktree, cwd, git-root.');
+  }
+  const sessionName = await resolveSessionId({ scope: options.scope, prefix: options.prefix });
+  printOutput('session.id', { sessionName }, options.json ?? false);
+}
+
+async function runSessionInfo(options: SharedOptions): Promise<void> {
+  const paths = getCamoucliPaths();
+  await ensureBasePaths(paths);
+  const resolvedOptions = await resolveSharedOptions(options);
+  const status = await getDaemonStatus(paths);
+  if (status) {
+    const data = await sendDaemonRequest(paths, { action: 'session.info', session: resolvedOptions.session } as never);
+    printOutput('session.info', data, options.json ?? false);
+    return;
+  }
+
+  printOutput(
+    'session.info',
+    {
+      daemon: { running: false },
+      ...(await inspectStoppedSessionInfo(paths, resolvedOptions.session)),
+    },
+    options.json ?? false,
+  );
 }
 
 function wantsJsonOutput(argv: string[]): boolean {
@@ -192,6 +228,9 @@ export async function main(argv: string[] = process.argv): Promise<number> {
         printOutput('doctor', data, options.json ?? false);
     },
     onDaemonAction: runDaemonAction,
+    onSessionCurrent: runSessionCurrent,
+    onSessionId: runSessionId,
+    onSessionInfo: runSessionInfo,
     onDaemonStop: async (options: OutputOptions) => {
         const paths = getCamoucliPaths();
         await ensureBasePaths(paths);

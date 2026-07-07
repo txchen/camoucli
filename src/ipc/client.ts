@@ -1,7 +1,7 @@
 import net from 'node:net';
 
 import type { CamoucliPaths } from '../state/paths.js';
-import { IpcError, ValidationError } from '../util/errors.js';
+import { CamoucliError, IpcError, ValidationError } from '../util/errors.js';
 import {
   createRequestId,
   daemonResponseSchema,
@@ -74,7 +74,12 @@ export async function sendDaemonRequest(
   });
 
   if (!response.success) {
-    throw new IpcError(response.error.message, response.error.details);
+    throw new CamoucliError({
+      code: response.error.code,
+      message: response.error.message,
+      details: response.error.details,
+      exitCode: response.error.code === 'validation_error' ? 2 : response.error.code === 'timeout_error' ? 9 : 6,
+    });
   }
 
   return response.data;

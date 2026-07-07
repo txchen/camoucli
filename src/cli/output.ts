@@ -307,10 +307,81 @@ function printSessionStopResult(data: Record<string, unknown>): void {
   process.stdout.write(stopped ? `Stopped session ${sessionName}\n` : `Session ${sessionName} is not running\n`);
 }
 
+function printSessionCurrentResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String(data.sessionName ?? 'default')}\n`);
+}
+
+function printSessionInfoResult(data: Record<string, unknown>): void {
+  const sessionName = String(data.sessionName ?? 'session');
+  const active = data.active === true;
+  process.stdout.write(`Session ${sessionName} ${active ? 'running' : 'stopped'}\n`);
+
+  const daemon = typeof data.daemon === 'object' && data.daemon ? (data.daemon as Record<string, unknown>) : undefined;
+  if (daemon) {
+    const daemonRunning = daemon.running === true;
+    const pid = typeof daemon.pid === 'number' ? ` ${daemon.pid}` : '';
+    process.stdout.write(`Daemon: ${daemonRunning ? 'running' : 'stopped'}${pid}\n`);
+  }
+
+  if (typeof data.browserVersion === 'string') {
+    process.stdout.write(`Browser: ${data.browserVersion}${data.headless === true ? ' headless' : data.headless === false ? ' headed' : ''}\n`);
+  }
+  const launch = typeof data.launch === 'object' && data.launch ? (data.launch as Record<string, unknown>) : undefined;
+  if (launch) {
+    const details = ['browser', 'headless', 'preset', 'proxy', 'locale', 'timezone', 'region', 'screenProfile', 'windowProfile']
+      .filter((key) => launch[key] !== undefined)
+      .map((key) => {
+        const value = Array.isArray(launch[key]) ? (launch[key] as unknown[]).map(String).join(',') : String(launch[key]);
+        return `${key}=${value}`;
+      })
+      .join(' ');
+    if (details) {
+      process.stdout.write(`Launch: ${details}\n`);
+    }
+  }
+  if (typeof data.activeTabName === 'string') {
+    process.stdout.write(`Active tab: ${data.activeTabName}\n`);
+  }
+  if (typeof data.rootDir === 'string') {
+    process.stdout.write(`Root: ${data.rootDir}\n`);
+  }
+  if (typeof data.profileDir === 'string') {
+    process.stdout.write(`User data: ${data.profileDir}\n`);
+  }
+  if (typeof data.downloadsDir === 'string') {
+    process.stdout.write(`Downloads: ${data.downloadsDir}\n`);
+  }
+  if (typeof data.artifactsDir === 'string') {
+    process.stdout.write(`Artifacts: ${data.artifactsDir}\n`);
+  }
+
+  const tabs = Array.isArray(data.tabs) ? data.tabs : [];
+  for (const tab of tabs) {
+    if (!tab || typeof tab !== 'object') {
+      continue;
+    }
+    const record = tab as Record<string, unknown>;
+    const state = record.active === true ? ' active' : '';
+    process.stdout.write(`Tab: ${String(record.tabName ?? 'unknown')}${state} ${String(record.url ?? '')}\n`);
+  }
+}
+
 function printTabNewResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const url = typeof data.url === 'string' ? data.url : '';
   process.stdout.write(`Created tab ${location}${url ? ` ${url}` : ''}\n`);
+}
+
+function printTabActivateResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const url = typeof data.url === 'string' ? data.url : '';
+  process.stdout.write(`Active tab ${location}${url ? ` ${url}` : ''}\n`);
+}
+
+function printWindowNewResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const url = typeof data.url === 'string' ? data.url : '';
+  process.stdout.write(`Created page ${location}${url ? ` ${url}` : ''} (not guaranteed OS window)\n`);
 }
 
 function printTabCloseResult(data: Record<string, unknown>): void {
@@ -715,6 +786,13 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'session.list':
       printSessionList(data);
       return;
+    case 'session.current':
+    case 'session.id':
+      printSessionCurrentResult(data as Record<string, unknown>);
+      return;
+    case 'session.info':
+      printSessionInfoResult(data as Record<string, unknown>);
+      return;
     case 'profile.list':
       printProfileList(data);
       return;
@@ -840,6 +918,12 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'tab.new':
       printTabNewResult(data as Record<string, unknown>);
+      return;
+    case 'tab.activate':
+      printTabActivateResult(data as Record<string, unknown>);
+      return;
+    case 'window.new':
+      printWindowNewResult(data as Record<string, unknown>);
       return;
     case 'tab.close':
       printTabCloseResult(data as Record<string, unknown>);

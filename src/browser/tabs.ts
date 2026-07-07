@@ -8,6 +8,7 @@ export type SessionStatus = 'stopped' | 'starting' | 'running' | 'error';
 
 export interface TabRuntime {
   name: string;
+  tabId: string;
   page: Page;
   refMap: Map<string, string>;
   lastSnapshot?: SnapshotResult | undefined;
@@ -18,6 +19,8 @@ export interface SessionRuntime {
   status: SessionStatus;
   context: BrowserContext;
   tabs: Map<string, TabRuntime>;
+  activeTabName?: string | undefined;
+  nextTabSequence: number;
   browserVersion: string;
   installPath: string;
   paths: SessionPaths;
@@ -26,9 +29,10 @@ export interface SessionRuntime {
   startedAt: string;
 }
 
-export function createTabRuntime(name: string, page: Page): TabRuntime {
+export function createTabRuntime(name: string, tabId: string, page: Page): TabRuntime {
   return {
     name,
+    tabId,
     page,
     refMap: new Map<string, string>(),
   };
