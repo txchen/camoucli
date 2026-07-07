@@ -107,10 +107,33 @@ export class DaemonRouter {
         return this.browserManager.find(request);
       case 'eval':
         return this.browserManager.eval(request);
+      case 'cookies.get':
+        return this.browserManager.getCookies({ session: request.session ?? 'default', urls: request.urls });
+      case 'cookies.set':
+        return this.browserManager.setCookie(request);
+      case 'cookies.clear':
+        return this.browserManager.clearCookies({ session: request.session ?? 'default' });
       case 'cookies.export':
         return this.browserManager.exportCookies({ session: request.session ?? 'default', path: request.path });
       case 'cookies.import':
         return this.browserManager.importCookies({ session: request.session ?? 'default', path: request.path });
+      case 'storage.local':
+      case 'storage.session':
+        return this.browserManager.storage(request);
+      case 'state.save':
+        return this.browserManager.saveState({ session: request.session ?? 'default', path: request.path });
+      case 'state.load':
+        return this.browserManager.loadState({ session: request.session ?? 'default', path: request.path });
+      case 'state.list':
+        return this.browserManager.listStates();
+      case 'state.show':
+        return this.browserManager.showState(request.path);
+      case 'state.clear':
+        return this.browserManager.clearState({ path: request.path, all: request.all });
+      case 'state.clean':
+        return this.browserManager.cleanStates();
+      case 'state.rename':
+        return this.browserManager.renameState(request.from, request.to);
       case 'session.list':
         return this.browserManager.listSessions();
       case 'session.stop':

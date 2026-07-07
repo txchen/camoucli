@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { getCamoucliPaths, sanitizeName } from '../src/state/paths.js';
+import { resolveStateSnapshotPath } from '../src/state/states.js';
 
 describe('path resolution', () => {
   it('resolves Linux XDG paths', () => {
@@ -42,5 +43,20 @@ describe('path resolution', () => {
   it('sanitizes session names for filesystem use', () => {
     expect(sanitizeName('work/github bot')).toBe('work-github-bot');
     expect(sanitizeName('@@@')).toBe('default');
+  });
+
+  it('resolves managed and explicit state snapshot paths', () => {
+    const paths = getCamoucliPaths(
+      {
+        XDG_DATA_HOME: '/tmp/data-home',
+        XDG_STATE_HOME: '/tmp/state-home',
+        XDG_CACHE_HOME: '/tmp/cache-home',
+      },
+      'linux',
+    );
+
+    expect(resolveStateSnapshotPath(paths, 'auth state')).toBe('/tmp/data-home/camoucli/states/auth-state.json');
+    expect(resolveStateSnapshotPath(paths, 'auth.json')).toBe('/tmp/data-home/camoucli/states/auth.json');
+    expect(resolveStateSnapshotPath(paths, './auth.json')).toMatch(/auth\.json$/u);
   });
 });

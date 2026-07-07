@@ -8,9 +8,12 @@ import { hasLaunchFingerprintHelpers, parseExtraHTTPHeaders, parseProxyString, r
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
 import { inspectStoppedSessionInfo, inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
+import { cleanStateSnapshots, listStateSnapshots, readStateSnapshot, removeAllManagedStateSnapshots, removeStateSnapshot, renameStateSnapshot, writeStateSnapshot, type StorageStateSnapshot } from '../state/state-snapshots.js';
+import { resolveStateSnapshotPath } from '../state/states.js';
 import { SessionError, TimeoutError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { frameLocatorForTarget, locatorForTarget, pageOrActiveFrame } from './actions.js';
+import { parseCookieInput, parseCookieJsonArray, validateCookieScope, type CookieInput } from './cookie-input.js';
 import { clearSnapshotRefs, takeSnapshot } from './snapshot.js';
 import { createTabRuntime, type SessionRuntime, type TabRuntime } from './tabs.js';
 
@@ -557,6 +560,58 @@ export class BrowserManager {
     };
   }
 
+  async getCookies(input: { session: string; urls?: string[] | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const cookies = input.urls && input.urls.length > 0
+      ? await session.context.cookies(input.urls)
+      : await session.context.cookies();
+    return { sessionName: session.name, count: cookies.length, cookies };
+  }
+
+  async setCookie(
+    input: LaunchInput & {
+      session: string;
+      tabName?: string | undefined;
+      name?: string | undefined;
+      value?: string | undefined;
+      url?: string | undefined;
+      domain?: string | undefined;
+      path?: string | undefined;
+      expires?: number | undefined;
+      httpOnly?: boolean | undefined;
+      secure?: boolean | undefined;
+      sameSite?: 'Strict' | 'Lax' | 'None' | undefined;
+      curlPath?: string | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    const cookies = input.curlPath
+      ? parseCookieInput(await readFile(input.curlPath, 'utf8'))
+      : [this.cookieFromSetInput(input)];
+    const scopedCookies = cookies.map((cookie) => this.applyCookieDefaults(cookie, tab));
+    await session.context.addCookies(scopedCookies as never);
+    return {
+      sessionName: session.name,
+      tabName: tab.name,
+      count: scopedCookies.length,
+      names: scopedCookies.map((cookie) => cookie.name),
+      source: input.curlPath ? 'curl' : 'args',
+    };
+  }
+
+  async clearCookies(input: { session: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const context = session.context as typeof session.context & { clearCookies?: () => Promise<void> };
+    const before = await session.context.cookies();
+    if (typeof context.clearCookies === 'function') {
+      await context.clearCookies();
+    } else {
+      await session.context.addCookies([] as never);
+    }
+    return { sessionName: session.name, cleared: before.length };
+  }
+
   async screenshot(
     input: LaunchInput & {
       session: string;
@@ -639,9 +694,137 @@ export class BrowserManager {
 
   async importCookies(input: { session: string; path: string }): Promise<Record<string, unknown>> {
     const session = await this.ensureSession(input.session, {});
-    const cookies = JSON.parse(await readFile(input.path, 'utf8')) as Array<Record<string, unknown>>;
+    const cookies = parseCookieJsonArray(await readFile(input.path, 'utf8'));
     await session.context.addCookies(cookies as never);
     return { sessionName: session.name, imported: cookies.length, path: input.path };
+  }
+
+  async storage(
+    input: LaunchInput & {
+      action: 'storage.local' | 'storage.session';
+      session: string;
+      tabName?: string | undefined;
+      operation: 'get' | 'set' | 'clear';
+      key?: string | undefined;
+      value?: string | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const origin = this.currentHttpOrigin(tab);
+    const storageKind = input.action === 'storage.local' ? 'localStorage' : 'sessionStorage';
+    if (input.operation === 'set') {
+      if (!input.key) {
+        throw new ValidationError('storage set requires a key.');
+      }
+      if (input.value === undefined) {
+        throw new ValidationError('storage set requires a string value.');
+      }
+      await tab.page.evaluate(({ kind, key, value }) => {
+        const storage = kind === 'localStorage' ? localStorage : sessionStorage;
+        storage.setItem(key, value);
+      }, { kind: storageKind, key: input.key, value: input.value });
+      return { sessionName: input.session, tabName: tab.name, storage: storageKind, operation: 'set', origin, key: input.key, valueLength: input.value.length };
+    }
+
+    if (input.operation === 'clear') {
+      if (input.key) {
+        await tab.page.evaluate(({ kind, key }) => {
+          const storage = kind === 'localStorage' ? localStorage : sessionStorage;
+          storage.removeItem(key);
+        }, { kind: storageKind, key: input.key });
+      } else {
+        await tab.page.evaluate((kind) => {
+          const storage = kind === 'localStorage' ? localStorage : sessionStorage;
+          storage.clear();
+        }, storageKind);
+      }
+      return { sessionName: input.session, tabName: tab.name, storage: storageKind, operation: 'clear', origin, ...(input.key ? { key: input.key } : {}) };
+    }
+
+    const result = await tab.page.evaluate(({ kind, key }) => {
+      const storage = kind === 'localStorage' ? localStorage : sessionStorage;
+      if (key !== undefined) {
+        return { [key]: storage.getItem(key) };
+      }
+      return Object.fromEntries(Array.from({ length: storage.length }, (_item, index) => {
+        const itemKey = storage.key(index) ?? '';
+        return [itemKey, storage.getItem(itemKey)];
+      }));
+    }, { kind: storageKind, key: input.key });
+    return { sessionName: input.session, tabName: tab.name, storage: storageKind, operation: 'get', origin, values: result };
+  }
+
+  async saveState(input: { session: string; path: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const filePath = resolveStateSnapshotPath(this.paths, input.path);
+    const context = session.context as typeof session.context & { storageState?: (options?: { path?: string }) => Promise<StorageStateSnapshot> };
+    if (typeof context.storageState !== 'function') {
+      throw new ValidationError('Storage state snapshots are not supported by the installed Playwright context.');
+    }
+    const state = await context.storageState();
+    await writeStateSnapshot(filePath, state);
+    return { sessionName: session.name, path: filePath, cookies: state.cookies.length, origins: state.origins.length };
+  }
+
+  async loadState(input: { session: string; path: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const filePath = resolveStateSnapshotPath(this.paths, input.path);
+    const state = await readStateSnapshot(filePath);
+    await session.context.addCookies(state.cookies as never);
+    let localStorageItems = 0;
+    for (const originRecord of state.origins) {
+      localStorageItems += originRecord.localStorage.length;
+      if (originRecord.localStorage.length === 0) {
+        continue;
+      }
+      const page = await session.context.newPage();
+      try {
+        await page.goto(originRecord.origin, { waitUntil: 'domcontentloaded' });
+        await page.evaluate((items) => {
+          for (const item of items) {
+            localStorage.setItem(item.name, item.value);
+          }
+        }, originRecord.localStorage);
+      } finally {
+        await page.close();
+      }
+    }
+    return {
+      sessionName: session.name,
+      path: filePath,
+      mode: 'merge',
+      cookies: state.cookies.length,
+      origins: state.origins.length,
+      localStorageItems,
+    };
+  }
+
+  async listStates(): Promise<Record<string, unknown>> {
+    return { states: await listStateSnapshots(this.paths) };
+  }
+
+  async showState(pathOrName: string): Promise<Record<string, unknown>> {
+    const filePath = resolveStateSnapshotPath(this.paths, pathOrName);
+    const state = await readStateSnapshot(filePath);
+    return { path: filePath, cookies: state.cookies.length, origins: state.origins.length, state };
+  }
+
+  async clearState(input: { path?: string | undefined; all?: boolean | undefined }): Promise<Record<string, unknown>> {
+    if (input.all) {
+      return { all: true, ...(await removeAllManagedStateSnapshots(this.paths)) };
+    }
+    if (!input.path) {
+      throw new ValidationError('state clear requires a name/path or --all.');
+    }
+    return removeStateSnapshot(this.paths, input.path);
+  }
+
+  async cleanStates(): Promise<Record<string, unknown>> {
+    return cleanStateSnapshots(this.paths);
+  }
+
+  async renameState(from: string, to: string): Promise<Record<string, unknown>> {
+    return renameStateSnapshot(this.paths, from, to);
   }
 
   async getValue(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
@@ -1517,6 +1700,67 @@ export class BrowserManager {
 
   private tabListSummaries(session: SessionRuntime): Array<Record<string, unknown>> {
     return Array.from(session.tabs.values()).map((tab) => this.tabListSummary(session, tab));
+  }
+
+  private cookieFromSetInput(input: {
+    name?: string | undefined;
+    value?: string | undefined;
+    url?: string | undefined;
+    domain?: string | undefined;
+    path?: string | undefined;
+    expires?: number | undefined;
+    httpOnly?: boolean | undefined;
+    secure?: boolean | undefined;
+    sameSite?: 'Strict' | 'Lax' | 'None' | undefined;
+  }): CookieInput {
+    if (!input.name) {
+      throw new ValidationError('cookies set requires a cookie name, or --curl <file>.');
+    }
+    if (input.value === undefined) {
+      throw new ValidationError('cookies set requires a cookie value, or --curl <file>.');
+    }
+    return {
+      name: input.name,
+      value: input.value,
+      ...(input.url ? { url: input.url } : {}),
+      ...(input.domain ? { domain: input.domain } : {}),
+      ...(input.path ? { path: input.path } : {}),
+      ...(input.expires !== undefined ? { expires: input.expires } : {}),
+      ...(input.httpOnly !== undefined ? { httpOnly: input.httpOnly } : {}),
+      ...(input.secure !== undefined ? { secure: input.secure } : {}),
+      ...(input.sameSite !== undefined ? { sameSite: input.sameSite } : {}),
+    };
+  }
+
+  private applyCookieDefaults(cookie: CookieInput, tab: TabRuntime): CookieInput {
+    const defaulted = {
+      ...cookie,
+      ...(cookie.path ? {} : { path: '/' }),
+    };
+    if (!defaulted.url && !defaulted.domain) {
+      defaulted.url = this.currentHttpUrl(tab, 'Cookie defaulting');
+    }
+    validateCookieScope(defaulted);
+    return defaulted;
+  }
+
+  private currentHttpUrl(tab: TabRuntime, operation: string): string {
+    const url = tab.page.url();
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new ValidationError(`${operation} requires the active page to have an HTTP(S) URL.`);
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new ValidationError(`${operation} requires the active page to have an HTTP(S) URL.`);
+    }
+    return url;
+  }
+
+  private currentHttpOrigin(tab: TabRuntime): string {
+    const url = this.currentHttpUrl(tab, 'Storage access');
+    return new URL(url).origin;
   }
 
   private launchSummary(session: SessionRuntime): Record<string, unknown> {

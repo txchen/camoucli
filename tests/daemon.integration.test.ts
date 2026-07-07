@@ -351,6 +351,182 @@ describe('daemon integration', () => {
     expect(fileExport).toMatchObject({ count: 1, path: cookiePath });
   });
 
+  it('gets sets imports and clears cookies without requiring cookie values in human output', async () => {
+    const curlCookiePath = path.join(rootDir, 'curl-cookie.txt');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'cookie-edit',
+      tabName: 'main',
+      url: 'https://example.com',
+      headless: true,
+    });
+
+    const set = (await sendDaemonRequest(paths, {
+      action: 'cookies.set',
+      session: 'cookie-edit',
+      tabName: 'main',
+      name: 'sid',
+      value: 'secret',
+      domain: 'example.com',
+      path: '/',
+    })) as { count: number; names: string[] };
+    const listed = (await sendDaemonRequest(paths, {
+      action: 'cookies.get',
+      session: 'cookie-edit',
+    })) as { count: number; cookies: Array<{ name: string; value: string }> };
+
+    await writeFile(curlCookiePath, "curl 'https://example.com' -H 'Cookie: imported=very-secret'", 'utf8');
+    const imported = (await sendDaemonRequest(paths, {
+      action: 'cookies.set',
+      session: 'cookie-edit',
+      tabName: 'main',
+      curlPath: curlCookiePath,
+    })) as { count: number; names: string[] };
+
+    const cleared = (await sendDaemonRequest(paths, {
+      action: 'cookies.clear',
+      session: 'cookie-edit',
+    })) as { cleared: number };
+
+    expect(set).toMatchObject({ count: 1, names: ['sid'] });
+    expect(listed.cookies).toEqual([expect.objectContaining({ name: 'sid', value: 'secret' })]);
+    expect(imported).toMatchObject({ count: 1, names: ['imported'] });
+    expect(cleared.cleared).toBe(1);
+  });
+
+  it('manages local and session storage for the current origin', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'storage-session',
+      tabName: 'main',
+      url: 'https://example.com',
+      headless: true,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'set',
+      session: 'storage-session',
+      tabName: 'main',
+      key: 'token',
+      value: 'secret',
+    });
+    await sendDaemonRequest(paths, {
+      action: 'storage.session',
+      operation: 'set',
+      session: 'storage-session',
+      tabName: 'main',
+      key: 'flash',
+      value: 'one',
+    });
+
+    const local = (await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'get',
+      session: 'storage-session',
+      tabName: 'main',
+      key: 'token',
+    })) as { origin: string; values: Record<string, string> };
+    const sessionStorage = (await sendDaemonRequest(paths, {
+      action: 'storage.session',
+      operation: 'get',
+      session: 'storage-session',
+      tabName: 'main',
+    })) as { values: Record<string, string> };
+
+    await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'clear',
+      session: 'storage-session',
+      tabName: 'main',
+      key: 'token',
+    });
+    const cleared = (await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'get',
+      session: 'storage-session',
+      tabName: 'main',
+      key: 'token',
+    })) as { values: Record<string, string | null> };
+
+    expect(local).toMatchObject({ origin: 'https://example.com', values: { token: 'secret' } });
+    expect(sessionStorage.values).toMatchObject({ flash: 'one' });
+    expect(cleared.values.token).toBeNull();
+  });
+
+  it('manages portable state snapshots without deleting profiles', async () => {
+    await ensureSessionPaths(paths, 'stored-profile');
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'state-source',
+      tabName: 'main',
+      url: 'https://example.com',
+      headless: true,
+    });
+    await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'set',
+      session: 'state-source',
+      tabName: 'main',
+      key: 'token',
+      value: 'secret',
+    });
+    await sendDaemonRequest(paths, {
+      action: 'cookies.set',
+      session: 'state-source',
+      tabName: 'main',
+      name: 'sid',
+      value: 'secret',
+      domain: 'example.com',
+      path: '/',
+    });
+
+    const saved = (await sendDaemonRequest(paths, {
+      action: 'state.save',
+      session: 'state-source',
+      path: 'auth',
+    })) as { path: string; cookies: number; origins: number };
+    const listed = (await sendDaemonRequest(paths, { action: 'state.list' })) as { states: Array<{ name: string }> };
+    const shown = (await sendDaemonRequest(paths, { action: 'state.show', path: 'auth' })) as { cookies: number; origins: number };
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'state-target',
+      tabName: 'main',
+      url: 'https://example.com',
+      headless: true,
+    });
+    const loaded = (await sendDaemonRequest(paths, {
+      action: 'state.load',
+      session: 'state-target',
+      path: 'auth',
+    })) as { mode: string; cookies: number; localStorageItems: number };
+
+    const importedLocal = (await sendDaemonRequest(paths, {
+      action: 'storage.local',
+      operation: 'get',
+      session: 'state-target',
+      tabName: 'main',
+      key: 'token',
+    })) as { values: Record<string, string> };
+
+    const renamed = await sendDaemonRequest(paths, { action: 'state.rename', from: 'auth', to: 'renamed' });
+    await writeFile(path.join(paths.statesDir, 'broken.json'), '{', 'utf8');
+    const cleaned = (await sendDaemonRequest(paths, { action: 'state.clean' })) as { removed: number };
+    const cleared = (await sendDaemonRequest(paths, { action: 'state.clear', all: true })) as { removed: number };
+    const profiles = (await sendDaemonRequest(paths, { action: 'profile.list' })) as Array<{ profileName: string }>;
+
+    expect(saved.path).toBe(path.join(paths.statesDir, 'auth.json'));
+    expect(saved).toMatchObject({ cookies: 1, origins: 1 });
+    expect(listed.states).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'auth' })]));
+    expect(shown).toMatchObject({ cookies: 1, origins: 1 });
+    expect(loaded).toMatchObject({ mode: 'merge', cookies: 1, localStorageItems: 1 });
+    expect(importedLocal.values).toMatchObject({ token: 'secret' });
+    expect(renamed).toMatchObject({ path: path.join(paths.statesDir, 'renamed.json') });
+    expect(cleaned.removed).toBe(1);
+    expect(cleared.removed).toBe(1);
+    expect(profiles.map((profile) => profile.profileName)).toContain('stored-profile');
+  });
+
   it('stops all running sessions through the public close-all action', async () => {
     await sendDaemonRequest(paths, {
       action: 'open',

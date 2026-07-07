@@ -375,6 +375,9 @@ describe('CLI output', () => {
     const output = captureStdout(() => {
       printOutput('eval', { expression: 'document.title', result: 'Eval Page' }, false);
       printOutput('cookies.export', { sessionName: 'work', count: 1, cookies: [{ name: 'sid', value: 'abc' }] }, false);
+      printOutput('cookies.get', { sessionName: 'work', count: 1, cookies: [{ name: 'sid', value: 'secret', domain: 'example.com', path: '/' }] }, false);
+      printOutput('cookies.set', { sessionName: 'work', count: 1, names: ['sid'] }, false);
+      printOutput('cookies.clear', { sessionName: 'work', cleared: 1 }, false);
       printOutput('cookies.export', { sessionName: 'work', count: 1, path: '/tmp/cookies.json' }, false);
       printOutput('cookies.import', { sessionName: 'work', imported: 1, path: '/tmp/cookies.json' }, false);
       printOutput('session.stopAll', { stopped: 2, sessionNames: ['one', 'two'] }, false);
@@ -382,11 +385,46 @@ describe('CLI output', () => {
     });
 
     expect(output).toContain('Eval Page');
-    expect(output).toContain('[');
+    expect(output).toContain('Cookies for work: 1');
+    expect(output).toContain('- sid example.com/');
+    expect(output).not.toContain('secret');
+    expect(output).not.toContain('abc');
+    expect(output).toContain('Set 1 cookies in work: sid');
+    expect(output).toContain('Cleared 1 cookies from work');
     expect(output).toContain('/tmp/cookies.json');
     expect(output).toContain('Imported 1 cookies into work');
     expect(output).toContain('Stopped 2 sessions');
     expect(output).toContain('Cleanup complete: stopped 2 sessions, stopped daemon, killed 3 Camoufox processes');
+  });
+
+  it('prints storage and state summaries without values', () => {
+    const output = captureStdout(() => {
+      printOutput('storage.local', { operation: 'get', storage: 'localStorage', origin: 'https://example.com', values: { token: 'secret' } }, false);
+      printOutput('storage.local', { operation: 'set', storage: 'localStorage', origin: 'https://example.com', key: 'token', valueLength: 6 }, false);
+      printOutput('state.save', { sessionName: 'work', path: '/tmp/auth.json', cookies: 1, origins: 1 }, false);
+      printOutput('state.load', { sessionName: 'work', path: '/tmp/auth.json', cookies: 1, localStorageItems: 1 }, false);
+      printOutput('state.list', { states: [{ name: 'auth', size: 42, path: '/tmp/auth.json' }] }, false);
+      printOutput('state.show', { path: '/tmp/auth.json', cookies: 1, origins: 1, state: { cookies: [{ value: 'secret' }] } }, false);
+      printOutput('state.clear', { removed: true, name: 'auth', path: '/tmp/auth.json' }, false);
+      printOutput('state.clean', { removed: 1 }, false);
+      printOutput('state.rename', { from: 'old', to: 'new', path: '/tmp/new.json' }, false);
+    });
+
+    expect(output).toContain('localStorage https://example.com');
+    expect(output).toContain('- token (6 chars)');
+    expect(output).toContain('Saved state for work');
+    expect(output).toContain('Merged state into work');
+    expect(output).toContain('State snapshots:');
+    expect(output).toContain('State /tmp/auth.json: 1 cookies, 1 origins');
+    expect(output).not.toContain('secret');
+  });
+
+  it('prints state show JSON as portable storage-state JSON', () => {
+    const output = captureStdout(() => {
+      printOutput('state.show', { path: '/tmp/auth.json', cookies: 1, origins: 0, state: { cookies: [{ name: 'sid', value: 'secret' }], origins: [] } }, true);
+    });
+
+    expect(JSON.parse(output)).toEqual({ cookies: [{ name: 'sid', value: 'secret' }], origins: [] });
   });
 
   it('prints stateful runtime command results', () => {

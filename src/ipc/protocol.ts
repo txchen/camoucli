@@ -336,11 +336,89 @@ const cookiesExportRequestSchema = z.object({
   path: z.string().optional(),
 });
 
+const cookiesGetRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('cookies.get'),
+  session: z.string().min(1).optional(),
+  urls: z.array(z.string().min(1)).optional(),
+});
+
+const cookiesSetRequestSchema = browserRequestBase.extend({
+  action: z.literal('cookies.set'),
+  name: z.string().min(1).optional(),
+  value: z.string().optional(),
+  url: z.string().min(1).optional(),
+  domain: z.string().min(1).optional(),
+  path: z.string().min(1).optional(),
+  expires: z.number().optional(),
+  httpOnly: z.boolean().optional(),
+  secure: z.boolean().optional(),
+  sameSite: z.enum(['Strict', 'Lax', 'None']).optional(),
+  curlPath: z.string().min(1).optional(),
+});
+
+const cookiesClearRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('cookies.clear'),
+  session: z.string().min(1).optional(),
+});
+
 const cookiesImportRequestSchema = z.object({
   id: z.string(),
   action: z.literal('cookies.import'),
   session: z.string().min(1).optional(),
   path: z.string().min(1),
+});
+
+const storageRequestSchema = browserRequestBase.extend({
+  action: z.enum(['storage.local', 'storage.session']),
+  operation: z.enum(['get', 'set', 'clear']),
+  key: z.string().optional(),
+  value: z.string().optional(),
+});
+
+const stateSaveRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.save'),
+  session: z.string().min(1).optional(),
+  path: z.string().min(1),
+});
+
+const stateLoadRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.load'),
+  session: z.string().min(1).optional(),
+  path: z.string().min(1),
+});
+
+const stateListRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.list'),
+});
+
+const stateShowRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.show'),
+  path: z.string().min(1),
+});
+
+const stateClearRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.clear'),
+  path: z.string().min(1).optional(),
+  all: z.boolean().default(false),
+});
+
+const stateCleanRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.clean'),
+});
+
+const stateRenameRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('state.rename'),
+  from: z.string().min(1),
+  to: z.string().min(1),
 });
 
 const sessionListRequestSchema = z.object({
@@ -464,7 +542,18 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   findRequestSchema,
   evalRequestSchema,
   cookiesExportRequestSchema,
+  cookiesGetRequestSchema,
+  cookiesSetRequestSchema,
+  cookiesClearRequestSchema,
   cookiesImportRequestSchema,
+  storageRequestSchema,
+  stateSaveRequestSchema,
+  stateLoadRequestSchema,
+  stateListRequestSchema,
+  stateShowRequestSchema,
+  stateClearRequestSchema,
+  stateCleanRequestSchema,
+  stateRenameRequestSchema,
   sessionListRequestSchema,
   sessionStopRequestSchema,
   sessionStopAllRequestSchema,

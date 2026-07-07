@@ -348,7 +348,8 @@ camou get title --json                          # JSON scalar output
 camou eval 'document.title' --json              # JSON eval result
 camou eval --base64 ZG9jdW1lbnQudGl0bGU= --json # Decode and evaluate JavaScript
 printf 'document.title' | camou eval --stdin --json # Read JavaScript from stdin
-camou cookies export --json                     # JSON cookie export
+camou cookies get --json                        # JSON cookie listing, including values
+camou state show auth --json                    # JSON Playwright storage-state snapshot
 camou doctor --json                             # JSON diagnostics
 camou remote-versions --json | jq -r '.remoteVersions[].version' # Extract versions
 ```
@@ -417,15 +418,31 @@ camou get value <selectorOrRef>   # Read an element's form value
 
 ### Sessions and tabs
 
-Use `session` for live daemon state and `profile` for stored disk-backed browser data.
+Use `session` for live daemon state, `profile` for full persistent browser profile directories, and `state` for portable Playwright-compatible storage-state JSON snapshots. `state load` merges cookies and localStorage into a running session; it is not a pristine profile reset.
 
 ```bash
 camou session list            # List running daemon sessions
 camou profile list            # List stored profiles on disk
 camou profile inspect <name>  # Show one profile's paths
 camou profile remove <name>   # Delete a profile; stops it first if needed
+camou cookies                 # List cookies in the default session without values
+camou cookies get [url...]    # List cookies, optionally scoped to URLs
+camou cookies set sid secret --domain example.com --path / # Set one cookie
+camou cookies set --curl cookies.txt # Import JSON array, cURL command, or Cookie header
+camou cookies clear           # Clear session cookies
 camou cookies export [path]   # Export context cookies as JSON
 camou cookies import <path>   # Import cookies into session context
+camou storage local get [key] # Read current-origin localStorage
+camou storage local set <key> <value> # Set current-origin localStorage
+camou storage session clear [key] # Clear current-origin sessionStorage
+camou state save auth         # Save portable storage-state to managed auth.json
+camou state load auth         # Merge a snapshot into the running session
+camou state list              # List managed state snapshots
+camou state show auth         # Show snapshot counts; use --json for full data
+camou state clear auth        # Remove one managed or explicit snapshot
+camou state clear --all       # Remove all managed snapshots, not profiles
+camou state clean             # Remove invalid managed snapshot files
+camou state rename auth work  # Rename a managed snapshot
 camou close --all             # Stop all running sessions
 camou daemon stop             # Stop the local daemon process
 camou daemon restart          # Restart the local daemon process

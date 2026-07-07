@@ -140,6 +140,24 @@ function collectRepeatedValue(value: string, previous: string[] = []): string[] 
   return [...previous, value];
 }
 
+function parseNumber(value: string): number {
+  return Number(value);
+}
+
+function normalizeSameSiteOption(value: string): 'Strict' | 'Lax' | 'None' {
+  const normalized = value.toLowerCase();
+  if (normalized === 'strict') {
+    return 'Strict';
+  }
+  if (normalized === 'lax') {
+    return 'Lax';
+  }
+  if (normalized === 'none') {
+    return 'None';
+  }
+  throw new Error('same-site must be Strict, Lax, or None');
+}
+
 function addSharedBrowserOptions(command: Command): Command {
   return command
     .option('--session <name>', 'session name')
@@ -181,6 +199,16 @@ function addSharedBrowserOptions(command: Command): Command {
 
 function addSharedOutputOptions(command: Command): Command {
   return command.option('--json', 'JSON output').option('--verbose', 'verbose output');
+}
+
+function inheritedSharedOptions(options: OutputOptions & { session?: string | undefined; parent?: Command | undefined; opts?: () => OutputOptions & { session?: string | undefined } }): SharedOptions {
+  const ownOptions = typeof options.opts === 'function' ? options.opts() : options;
+  const parentOptions = options.parent?.opts<OutputOptions & { session?: string | undefined }>() ?? {};
+  return {
+    session: ownOptions.session ?? parentOptions.session,
+    json: ownOptions.json ?? parentOptions.json,
+    verbose: ownOptions.verbose ?? parentOptions.verbose,
+  };
 }
 
 export function parseInteger(value: string): number {
@@ -504,25 +532,191 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
   );
 
   const cookiesCommand = program.command('cookies').description('Manage browser cookies for a session');
-  addSharedOutputOptions(
+  cookiesCommand
+    .action(async () => {
+      await handlers.onDaemonAction('cookies.get', { action: 'cookies.get' }, {});
+    });
+
+  cookiesCommand
+    .command('get [url...]')
+    .description('List cookies from the current session')
+    .option('--session <name>', 'session name')
+    .option('--json', 'JSON output')
+    .option('--verbose', 'verbose output')
+    .action(async (urls: string[] | undefined, options: OutputOptions & { session?: string | undefined }) => {
+      const shared = inheritedSharedOptions(options);
+      await handlers.onDaemonAction('cookies.get', {
+        action: 'cookies.get',
+        ...(urls && urls.length > 0 ? { urls } : {}),
+        ...(shared.session ? { session: shared.session } : {}),
+      }, shared);
+    });
+
+  addSharedBrowserOptions(
     cookiesCommand
-      .command('export [path]')
-      .description('Export cookies from the current session')
-      .option('--session <name>', 'session name')
-      .action(async (filePath: string | undefined, options: OutputOptions & { session?: string | undefined }) => {
-        const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
-        await handlers.onDaemonAction('cookies.export', { action: 'cookies.export', ...(filePath ? { path: filePath } : {}), ...(options.session ? { session: options.session } : {}) }, shared);
+      .command('set [name] [value]')
+      .description('Set one cookie, or import cURL-shaped cookie input')
+      .option('--url <url>', 'cookie URL scope')
+      .option('--domain <domain>', 'cookie domain scope')
+      .option('--path <path>', 'cookie path scope')
+      .option('--expires <seconds>', 'cookie expiration epoch seconds', parseNumber)
+      .option('--http-only', 'set HttpOnly')
+      .option('--secure', 'set Secure')
+      .option('--same-site <value>', 'SameSite value: Strict, Lax, or None', normalizeSameSiteOption)
+      .option('--curl <file>', 'import JSON array, cURL command, or Cookie header from file')
+      .action(async (name: string | undefined, value: string | undefined, options: SharedOptions & {
+        url?: string | undefined;
+        domain?: string | undefined;
+        path?: string | undefined;
+        expires?: number | undefined;
+        httpOnly?: boolean | undefined;
+        secure?: boolean | undefined;
+        sameSite?: 'Strict' | 'Lax' | 'None' | undefined;
+        curl?: string | undefined;
+      }) => {
+        await handlers.onDaemonAction('cookies.set', {
+          action: 'cookies.set',
+          name,
+          value,
+          url: options.url,
+          domain: options.domain,
+          path: options.path,
+          expires: options.expires,
+          httpOnly: options.httpOnly,
+          secure: options.secure,
+          sameSite: options.sameSite,
+          curlPath: options.curl,
+          session: options.session,
+          tabName: options.tabname,
+          ...toLaunchInput(options),
+        }, options);
       }),
   );
 
+  cookiesCommand
+    .command('clear')
+    .description('Clear cookies from the current session')
+    .option('--session <name>', 'session name')
+    .option('--json', 'JSON output')
+    .option('--verbose', 'verbose output')
+    .action(async (options: OutputOptions & { session?: string | undefined }) => {
+      const shared = inheritedSharedOptions(options);
+      await handlers.onDaemonAction('cookies.clear', { action: 'cookies.clear', ...(shared.session ? { session: shared.session } : {}) }, shared);
+    });
+
+  cookiesCommand
+    .command('export [path]')
+    .description('Export cookies from the current session')
+    .option('--session <name>', 'session name')
+    .option('--json', 'JSON output')
+    .option('--verbose', 'verbose output')
+    .action(async (filePath: string | undefined, options: OutputOptions & { session?: string | undefined }) => {
+      const shared = inheritedSharedOptions(options);
+      await handlers.onDaemonAction('cookies.export', { action: 'cookies.export', ...(filePath ? { path: filePath } : {}), ...(shared.session ? { session: shared.session } : {}) }, shared);
+    });
+
+  cookiesCommand
+    .command('import <path>')
+    .description('Import cookies into the current session')
+    .option('--session <name>', 'session name')
+    .option('--json', 'JSON output')
+    .option('--verbose', 'verbose output')
+    .action(async (filePath: string, options: OutputOptions & { session?: string | undefined }) => {
+      const shared = inheritedSharedOptions(options);
+      await handlers.onDaemonAction('cookies.import', { action: 'cookies.import', path: filePath, ...(shared.session ? { session: shared.session } : {}) }, shared);
+    });
+
+  const storageCommand = program.command('storage').description('Manage origin localStorage and sessionStorage');
+  const addStorageCommand = (name: 'local' | 'session', action: 'storage.local' | 'storage.session'): void => {
+    const command = storageCommand.command(name).description(`Manage current-origin ${name} storage`);
+    addSharedBrowserOptions(
+      command
+        .command('get [key]')
+        .description('Read storage values')
+        .action(async (key: string | undefined, options: SharedOptions) => {
+          await handlers.onDaemonAction(action, { action, operation: 'get', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+    addSharedBrowserOptions(
+      command
+        .command('set <key> <value>')
+        .description('Set a string storage value')
+        .action(async (key: string, value: string, options: SharedOptions) => {
+          await handlers.onDaemonAction(action, { action, operation: 'set', key, value, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+    addSharedBrowserOptions(
+      command
+        .command('clear [key]')
+        .description('Clear storage values')
+        .action(async (key: string | undefined, options: SharedOptions) => {
+          await handlers.onDaemonAction(action, { action, operation: 'clear', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+  };
+  addStorageCommand('local', 'storage.local');
+  addStorageCommand('session', 'storage.session');
+
+  const stateCommand = program.command('state').description('Manage portable Playwright storage-state snapshots');
   addSharedOutputOptions(
-    cookiesCommand
-      .command('import <path>')
-      .description('Import cookies into the current session')
+    stateCommand
+      .command('save <path-or-name>')
+      .description('Save current session storage state')
       .option('--session <name>', 'session name')
-      .action(async (filePath: string, options: OutputOptions & { session?: string | undefined }) => {
+      .action(async (pathOrName: string, options: OutputOptions & { session?: string | undefined }) => {
         const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
-        await handlers.onDaemonAction('cookies.import', { action: 'cookies.import', path: filePath, ...(options.session ? { session: options.session } : {}) }, shared);
+        await handlers.onDaemonAction('state.save', { action: 'state.save', path: pathOrName, ...(options.session ? { session: options.session } : {}) }, shared);
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('load <path-or-name>')
+      .description('Merge a storage-state snapshot into the running session')
+      .option('--session <name>', 'session name')
+      .action(async (pathOrName: string, options: OutputOptions & { session?: string | undefined }) => {
+        const shared: SharedOptions = { session: options.session, json: options.json, verbose: options.verbose };
+        await handlers.onDaemonAction('state.load', { action: 'state.load', path: pathOrName, ...(options.session ? { session: options.session } : {}) }, shared);
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('list')
+      .description('List managed storage-state snapshots')
+      .action(async (options: OutputOptions) => {
+        await handlers.onDaemonAction('state.list', { action: 'state.list' }, { json: options.json, verbose: options.verbose });
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('show <path-or-name>')
+      .description('Show one storage-state snapshot')
+      .action(async (pathOrName: string, options: OutputOptions) => {
+        await handlers.onDaemonAction('state.show', { action: 'state.show', path: pathOrName }, { json: options.json, verbose: options.verbose });
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('clear [path-or-name]')
+      .description('Remove one managed snapshot, or all with --all')
+      .option('--all', 'remove all managed snapshots')
+      .action(async (pathOrName: string | undefined, options: OutputOptions & { all?: boolean | undefined }) => {
+        await handlers.onDaemonAction('state.clear', { action: 'state.clear', ...(pathOrName ? { path: pathOrName } : {}), all: options.all ?? false }, { json: options.json, verbose: options.verbose });
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('clean')
+      .description('Remove invalid managed storage-state snapshots')
+      .action(async (options: OutputOptions) => {
+        await handlers.onDaemonAction('state.clean', { action: 'state.clean' }, { json: options.json, verbose: options.verbose });
+      }),
+  );
+  addSharedOutputOptions(
+    stateCommand
+      .command('rename <from> <to>')
+      .description('Rename a managed storage-state snapshot')
+      .action(async (from: string, to: string, options: OutputOptions) => {
+        await handlers.onDaemonAction('state.rename', { action: 'state.rename', from, to }, { json: options.json, verbose: options.verbose });
       }),
   );
 

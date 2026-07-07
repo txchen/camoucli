@@ -98,6 +98,32 @@ describe('daemon IPC protocol', () => {
     });
   });
 
+  it('accepts cookie storage and state snapshot requests', () => {
+    expect(daemonRequestSchema.parse({ id: 'request-7', action: 'cookies.get', session: 'default', urls: ['https://example.com'] })).toMatchObject({
+      action: 'cookies.get',
+      urls: ['https://example.com'],
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'cookies.set', name: 'sid', value: 'secret', domain: 'example.com', path: '/' })).toMatchObject({
+      action: 'cookies.set',
+      name: 'sid',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-8', action: 'cookies.clear', session: 'default' })).toMatchObject({
+      action: 'cookies.clear',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'storage.local', operation: 'set', key: 'token', value: 'secret' })).toMatchObject({
+      action: 'storage.local',
+      operation: 'set',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-9', action: 'state.save', session: 'default', path: 'auth' })).toMatchObject({
+      action: 'state.save',
+      path: 'auth',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-10', action: 'state.clear', all: true })).toMatchObject({
+      action: 'state.clear',
+      all: true,
+    });
+  });
+
   it('rejects invalid direct automation request shapes', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'upload', target: '#file', files: [] })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();

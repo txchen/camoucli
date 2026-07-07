@@ -249,6 +249,45 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).not.toHaveBeenCalled();
   });
 
+  it('routes cookie storage and state commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'cookies'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'cookies', 'get', '--session', 'work', 'https://example.com'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'cookies', 'set', 'sid', 'secret', '--domain', 'example.com', '--path', '/', '--http-only'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'cookies', 'set', '--curl', '/tmp/cookies.txt'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'cookies', 'clear', '--session', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'storage', 'local', 'set', 'token', 'secret'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'storage', 'session', 'get', 'token'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'storage', 'local', 'clear'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'save', 'auth', '--session', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'load', 'auth'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'list'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'show', 'auth'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'clear', 'auth'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'clear', '--all'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'clean'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'state', 'rename', 'old', 'new'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'cookies.get', expect.objectContaining({ action: 'cookies.get' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'cookies.get', expect.objectContaining({ urls: ['https://example.com'], session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'cookies.set', expect.objectContaining({ name: 'sid', value: 'secret', domain: 'example.com', path: '/', httpOnly: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'cookies.set', expect.objectContaining({ curlPath: '/tmp/cookies.txt' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'cookies.clear', expect.objectContaining({ session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'storage.local', expect.objectContaining({ operation: 'set', key: 'token', value: 'secret' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'storage.session', expect.objectContaining({ operation: 'get', key: 'token' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'storage.local', expect.objectContaining({ operation: 'clear' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'state.save', expect.objectContaining({ path: 'auth', session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(10, 'state.load', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(11, 'state.list', expect.objectContaining({ action: 'state.list' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(12, 'state.show', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(13, 'state.clear', expect.objectContaining({ path: 'auth' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(14, 'state.clear', expect.objectContaining({ all: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(15, 'state.clean', expect.objectContaining({ action: 'state.clean' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(16, 'state.rename', expect.objectContaining({ from: 'old', to: 'new' }), expect.any(Object));
+  });
+
   it('lists core alias and eval input modes in help', () => {
     const program = createProgram(createHandlers(async () => undefined));
     const help = program.helpInformation();
@@ -286,6 +325,9 @@ describe('CLI program parsing', () => {
     const setHelp = program.commands.find((command) => command.name() === 'set')?.helpInformation();
     expect(setHelp).toContain('viewport');
     expect(setHelp).toContain('media');
+    expect(program.commands.find((command) => command.name() === 'cookies')?.helpInformation()).toContain('set');
+    expect(program.commands.find((command) => command.name() === 'storage')?.helpInformation()).toContain('local');
+    expect(program.commands.find((command) => command.name() === 'state')?.helpInformation()).toContain('save');
   });
 
   it('maps open command flags into a daemon payload', async () => {
@@ -811,7 +853,7 @@ describe('CLI program parsing', () => {
 
     expect(onDaemonAction).toHaveBeenCalledWith(
       'cookies.export',
-      { action: 'cookies.export', path: 'cookies.json', session: undefined },
+      expect.objectContaining({ action: 'cookies.export', path: 'cookies.json' }),
       expect.objectContaining({ json: true, verbose: undefined }),
     );
   });
@@ -835,7 +877,7 @@ describe('CLI program parsing', () => {
 
     expect(onDaemonAction).toHaveBeenCalledWith(
       'cookies.import',
-      { action: 'cookies.import', path: 'cookies.json', session: undefined },
+      expect.objectContaining({ action: 'cookies.import', path: 'cookies.json' }),
       expect.objectContaining({ json: true, verbose: undefined }),
     );
   });

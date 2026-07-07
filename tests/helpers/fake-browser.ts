@@ -31,6 +31,8 @@ interface StoredPageState {
   title: string;
   html: string;
   elements: FakeElement[];
+  localStorage: Record<string, string>;
+  sessionStorage: Record<string, string>;
 }
 
 interface FakeCookie {
@@ -43,6 +45,7 @@ interface FakeCookie {
 interface StoredProfileState {
   pages: StoredPageState[];
   cookies: FakeCookie[];
+  origins: Array<{ origin: string; localStorage: Record<string, string> }>;
 }
 
 const profileStore = new Map<string, StoredProfileState>();
@@ -53,6 +56,8 @@ function cloneState(state: StoredPageState): StoredPageState {
     url: state.url,
     title: state.title,
     html: state.html,
+    localStorage: { ...state.localStorage },
+    sessionStorage: { ...state.sessionStorage },
     elements: state.elements.map((element) => ({
       ...element,
       options: element.options ? [...element.options] : undefined,
@@ -132,6 +137,8 @@ function parseElements(html: string): FakeElement[] {
           url: `about:srcdoc#${id ?? elements.length + 1}`,
           title: /<title>(.*?)<\/title>/is.exec(srcdoc)?.[1]?.trim() ?? 'Frame',
           html: srcdoc ?? `<button id="inside">${frameText}</button>`,
+          localStorage: {},
+          sessionStorage: {},
           elements: parseElements(srcdoc ?? `<button id="inside">${frameText}</button>`),
         } : undefined,
       });
@@ -149,6 +156,8 @@ function parsePageState(url: string): StoredPageState {
       url,
       title,
       html,
+      localStorage: {},
+      sessionStorage: {},
       elements: parseElements(html),
     };
   }
@@ -159,6 +168,8 @@ function parsePageState(url: string): StoredPageState {
       url: 'https://example.com/',
       title: 'Example Domain',
       html,
+      localStorage: {},
+      sessionStorage: {},
       elements: [{ tag: 'a', text: 'Learn more', href: 'https://www.iana.org/domains/example' }],
     };
   }
@@ -167,6 +178,8 @@ function parsePageState(url: string): StoredPageState {
     url,
     title: url,
     html: '',
+    localStorage: {},
+    sessionStorage: {},
     elements: [],
   };
 }
@@ -787,6 +800,37 @@ class FakePage extends EventEmitter {
       });
     }
 
+    if (arg && typeof arg === 'object' && 'kind' in arg) {
+      const options = arg as { kind: 'localStorage' | 'sessionStorage'; key?: string | undefined; value?: string | undefined };
+      const storage = this.storageFor(options.kind);
+      const source = String(_pageFunction);
+      if (source.includes('setItem')) {
+        storage[options.key ?? ''] = options.value ?? '';
+        return undefined;
+      }
+      if (source.includes('removeItem')) {
+        delete storage[options.key ?? ''];
+        return undefined;
+      }
+      if (source.includes('clear')) {
+        for (const key of Object.keys(storage)) {
+          delete storage[key];
+        }
+        return undefined;
+      }
+      if (options.key !== undefined) {
+        return { [options.key]: storage[options.key] ?? null };
+      }
+      return { ...storage };
+    }
+
+    if (Array.isArray(arg)) {
+      for (const item of arg as Array<{ name: string; value: string }>) {
+        this.storageFor('localStorage')[item.name] = item.value;
+      }
+      return undefined;
+    }
+
     if (!arg || typeof arg !== 'object') {
       this.refs.clear();
       return undefined;
@@ -871,19 +915,47 @@ class FakePage extends EventEmitter {
   serialize(): StoredPageState {
     return cloneState(this.state);
   }
+
+  localStorageSnapshot(): Record<string, string> {
+    return { ...this.storageFor('localStorage') };
+  }
+
+  private storageFor(kind: 'localStorage' | 'sessionStorage'): Record<string, string> {
+    if (kind === 'sessionStorage') {
+      return this.state.sessionStorage;
+    }
+    const origin = this.httpOrigin();
+    if (!origin || !this.context) {
+      return this.state.localStorage;
+    }
+    return this.context.localStorageForOrigin(origin);
+  }
+
+  private httpOrigin(): string | undefined {
+    try {
+      const parsed = new URL(this.state.url);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.origin : undefined;
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 export class FakeBrowserContext extends EventEmitter {
   private pagesList: FakePage[];
   private cookiesList: FakeCookie[];
+  private readonly localStorageByOrigin = new Map<string, Record<string, string>>();
   private closed = false;
   geolocation?: { latitude: number; longitude: number; accuracy?: number | undefined } | undefined;
   offline = false;
   headers: Record<string, string> = {};
   credentials?: { origin?: string | undefined; username: string; password: string } | undefined;
 
-  constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[]) {
+  constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[], initialOrigins: Array<{ origin: string; localStorage: Record<string, string> }>) {
     super();
+    for (const origin of initialOrigins) {
+      this.localStorageByOrigin.set(origin.origin, { ...origin.localStorage });
+    }
     this.pagesList = initialPages.map((state) => new FakePage(state, this));
     this.cookiesList = initialCookies.map((cookie) => ({ ...cookie }));
   }
@@ -904,6 +976,30 @@ export class FakeBrowserContext extends EventEmitter {
 
   async addCookies(cookies: FakeCookie[]): Promise<void> {
     this.cookiesList = cookies.map((cookie) => ({ ...cookie }));
+  }
+
+  async clearCookies(): Promise<void> {
+    this.cookiesList = [];
+  }
+
+  async storageState(): Promise<{ cookies: FakeCookie[]; origins: Array<{ origin: string; localStorage: Array<{ name: string; value: string }> }> }> {
+    return {
+      cookies: await this.cookies(),
+      origins: Array.from(this.localStorageByOrigin.entries()).map(([origin, values]) => ({
+        origin,
+        localStorage: Object.entries(values).map(([name, value]) => ({ name, value })),
+      })),
+    };
+  }
+
+  localStorageForOrigin(origin: string): Record<string, string> {
+    const existing = this.localStorageByOrigin.get(origin);
+    if (existing) {
+      return existing;
+    }
+    const created: Record<string, string> = {};
+    this.localStorageByOrigin.set(origin, created);
+    return created;
   }
 
   async setGeolocation(geolocation: { latitude: number; longitude: number; accuracy?: number | undefined }): Promise<void> {
@@ -933,6 +1029,7 @@ export class FakeBrowserContext extends EventEmitter {
         .map((page) => page.serialize())
         .filter((page) => page.url !== 'about:blank'),
       cookies: this.cookiesList.map((cookie) => ({ ...cookie })),
+      origins: Array.from(this.localStorageByOrigin.entries()).map(([origin, localStorage]) => ({ origin, localStorage: { ...localStorage } })),
     });
     this.emit('close');
   }
@@ -942,7 +1039,8 @@ export function createFakeBrowserContext(profileDir: string): FakeBrowserContext
   const stored = profileStore.get(profileDir);
   const initialPages = stored?.pages ?? [parsePageState('about:blank')];
   const initialCookies = stored?.cookies ?? [];
-  return new FakeBrowserContext(profileDir, initialPages, initialCookies);
+  const initialOrigins = stored?.origins ?? [];
+  return new FakeBrowserContext(profileDir, initialPages, initialCookies, initialOrigins);
 }
 
 export function resetFakeBrowserState(): void {
@@ -962,6 +1060,9 @@ export function getProfileState(profileDir: string): StoredPageState[] | undefin
   return profileStore.get(profileDir)?.pages.map((page) => ({
     url: page.url,
     title: page.title,
+    html: page.html,
+    localStorage: { ...page.localStorage },
+    sessionStorage: { ...page.sessionStorage },
     elements: page.elements.map((element) => ({ ...element })),
   }));
 }

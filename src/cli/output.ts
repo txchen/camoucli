@@ -150,17 +150,101 @@ function printEvalResult(data: Record<string, unknown>): void {
 
 function printCookiesExportResult(data: Record<string, unknown>): void {
   if (Array.isArray(data.cookies)) {
-    process.stdout.write(`${JSON.stringify(data.cookies, null, 2)}
-`);
+    printCookiesListResult(data);
     return;
   }
   process.stdout.write(`Exported ${String(data.count ?? 0)} cookies from ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')}
 `);
 }
 
+function printCookiesListResult(data: Record<string, unknown>): void {
+  const cookies = Array.isArray(data.cookies) ? data.cookies : [];
+  process.stdout.write(`Cookies for ${String(data.sessionName ?? 'session')}: ${String(data.count ?? cookies.length)}\n`);
+  for (const cookie of cookies) {
+    if (!cookie || typeof cookie !== 'object') {
+      continue;
+    }
+    const record = cookie as Record<string, unknown>;
+    const scope = typeof record.url === 'string' ? record.url : `${String(record.domain ?? '')}${String(record.path ?? '/')}`;
+    process.stdout.write(`- ${String(record.name ?? 'unknown')} ${scope}\n`);
+  }
+}
+
+function printCookiesSetResult(data: Record<string, unknown>): void {
+  const names = Array.isArray(data.names) ? data.names.map(String).join(', ') : '';
+  process.stdout.write(`Set ${String(data.count ?? 0)} cookies in ${String(data.sessionName ?? 'session')}${names ? `: ${names}` : ''}\n`);
+}
+
+function printCookiesClearResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Cleared ${String(data.cleared ?? 0)} cookies from ${String(data.sessionName ?? 'session')}\n`);
+}
+
 function printCookiesImportResult(data: Record<string, unknown>): void {
   process.stdout.write(`Imported ${String(data.imported ?? 0)} cookies into ${String(data.sessionName ?? 'session')} from ${String(data.path ?? '')}
 `);
+}
+
+function printStorageResult(data: Record<string, unknown>): void {
+  const operation = String(data.operation ?? 'get');
+  const storage = String(data.storage ?? 'storage');
+  const origin = String(data.origin ?? 'origin');
+  if (operation === 'get') {
+    const values = typeof data.values === 'object' && data.values ? (data.values as Record<string, unknown>) : {};
+    process.stdout.write(`${storage} ${origin}\n`);
+    for (const [key, value] of Object.entries(values)) {
+      process.stdout.write(`- ${key} (${typeof value === 'string' ? value.length : 0} chars)\n`);
+    }
+    return;
+  }
+  if (operation === 'set') {
+    process.stdout.write(`Set ${storage} ${String(data.key ?? '')} at ${origin} (${String(data.valueLength ?? 0)} chars)\n`);
+    return;
+  }
+  process.stdout.write(`Cleared ${storage}${typeof data.key === 'string' ? ` ${data.key}` : ''} at ${origin}\n`);
+}
+
+function printStateListResult(data: Record<string, unknown>): void {
+  const states = Array.isArray(data.states) ? data.states : [];
+  if (states.length === 0) {
+    process.stdout.write('State snapshots: none\n');
+    return;
+  }
+  process.stdout.write('State snapshots:\n');
+  for (const state of states) {
+    if (!state || typeof state !== 'object') {
+      continue;
+    }
+    const record = state as Record<string, unknown>;
+    process.stdout.write(`- ${String(record.name ?? 'unknown')} ${String(record.size ?? 0)} bytes ${String(record.path ?? '')}\n`);
+  }
+}
+
+function printStateSaveResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Saved state for ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')} (${String(data.cookies ?? 0)} cookies, ${String(data.origins ?? 0)} origins)\n`);
+}
+
+function printStateLoadResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Merged state into ${String(data.sessionName ?? 'session')} from ${String(data.path ?? '')} (${String(data.cookies ?? 0)} cookies, ${String(data.localStorageItems ?? 0)} localStorage items)\n`);
+}
+
+function printStateShowResult(data: Record<string, unknown>): void {
+  process.stdout.write(`State ${String(data.path ?? '')}: ${String(data.cookies ?? 0)} cookies, ${String(data.origins ?? 0)} origins\n`);
+}
+
+function printStateClearResult(data: Record<string, unknown>): void {
+  if (data.all === true) {
+    process.stdout.write(`Removed ${String(data.removed ?? 0)} state snapshots\n`);
+    return;
+  }
+  process.stdout.write(data.removed === true ? `Removed state ${String(data.name ?? '')} ${String(data.path ?? '')}\n` : `State ${String(data.name ?? '')} was not found\n`);
+}
+
+function printStateCleanResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Cleaned ${String(data.removed ?? 0)} invalid state snapshots\n`);
+}
+
+function printStateRenameResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Renamed state ${String(data.from ?? '')} to ${String(data.to ?? '')} ${String(data.path ?? '')}\n`);
 }
 
 function printStopAllSessionsResult(data: Record<string, unknown>): void {
@@ -819,6 +903,10 @@ function printBrowserCompatibilityResult(prefix: string, data: Record<string, un
 
 export function printOutput(action: string, data: unknown, asJson: boolean): void {
   if (asJson) {
+    if (action === 'state.show' && data && typeof data === 'object' && 'state' in data) {
+      process.stdout.write(`${JSON.stringify((data as Record<string, unknown>).state, null, 2)}\n`);
+      return;
+    }
     process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
     return;
   }
@@ -882,8 +970,42 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'cookies.export':
       printCookiesExportResult(data as Record<string, unknown>);
       return;
+    case 'cookies.get':
+      printCookiesListResult(data as Record<string, unknown>);
+      return;
+    case 'cookies.set':
+      printCookiesSetResult(data as Record<string, unknown>);
+      return;
+    case 'cookies.clear':
+      printCookiesClearResult(data as Record<string, unknown>);
+      return;
     case 'cookies.import':
       printCookiesImportResult(data as Record<string, unknown>);
+      return;
+    case 'storage.local':
+    case 'storage.session':
+      printStorageResult(data as Record<string, unknown>);
+      return;
+    case 'state.list':
+      printStateListResult(data as Record<string, unknown>);
+      return;
+    case 'state.save':
+      printStateSaveResult(data as Record<string, unknown>);
+      return;
+    case 'state.load':
+      printStateLoadResult(data as Record<string, unknown>);
+      return;
+    case 'state.show':
+      printStateShowResult(data as Record<string, unknown>);
+      return;
+    case 'state.clear':
+      printStateClearResult(data as Record<string, unknown>);
+      return;
+    case 'state.clean':
+      printStateCleanResult(data as Record<string, unknown>);
+      return;
+    case 'state.rename':
+      printStateRenameResult(data as Record<string, unknown>);
       return;
     case 'session.stopAll':
       printStopAllSessionsResult(data as Record<string, unknown>);
