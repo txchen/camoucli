@@ -69,6 +69,26 @@ interface EvalOptions extends SharedOptions {
   stdin?: boolean | undefined;
 }
 
+interface TypeOptions extends SharedOptions {
+  clear?: boolean | undefined;
+  delay?: number | undefined;
+}
+
+interface ScreenshotOptions extends SharedOptions {
+  selector?: string | undefined;
+  full?: boolean | undefined;
+  viewport?: boolean | undefined;
+  format?: 'png' | 'jpeg' | undefined;
+  quality?: number | undefined;
+}
+
+interface FindOptions extends SharedOptions {
+  action?: 'click' | 'fill' | 'check' | 'hover' | 'text' | undefined;
+  value?: string | undefined;
+  name?: string | undefined;
+  exact?: boolean | undefined;
+}
+
 function collectValues(value: string, previous: string[] = []): string[] {
   return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
@@ -109,6 +129,32 @@ function addSharedOutputOptions(command: Command): Command {
 
 export function parseInteger(value: string): number {
   return Number.parseInt(value, 10);
+}
+
+function screenshotTargetAndPath(
+  targetOrPath: string | undefined,
+  filePath: string | undefined,
+  selector: string | undefined,
+): { target?: string | undefined; path?: string | undefined } {
+  if (selector) {
+    return { target: selector, ...(filePath ?? targetOrPath ? { path: filePath ?? targetOrPath } : {}) };
+  }
+
+  if (!targetOrPath) {
+    return {};
+  }
+
+  if (filePath) {
+    return { target: targetOrPath, path: filePath };
+  }
+
+  const selectorLike = /^(?:@|#|\.|\[|text=)/u.test(targetOrPath);
+  const pathLike = /(?:^\.{0,2}\/|\/|\\|\.(?:png|jpe?g)$)/iu.test(targetOrPath);
+  return selectorLike && !pathLike ? { target: targetOrPath } : { path: targetOrPath };
+}
+
+function normalizeFindAction(options: FindOptions): 'click' | 'fill' | 'check' | 'hover' | 'text' {
+  return options.action ?? 'click';
 }
 
 export function toLaunchInput(options: SharedOptions): LaunchInput {
@@ -448,10 +494,28 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
+      .command('dblclick <target>')
+      .description('Double-click a selector or @ref')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('dblclick', { action: 'dblclick', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
       .command('hover <target>')
       .description('Hover a selector or @ref')
       .action(async (target: string, options: SharedOptions) => {
         await handlers.onDaemonAction('hover', { action: 'hover', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('focus <target>')
+      .description('Focus a selector or @ref')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('focus', { action: 'focus', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
       }),
   );
 
@@ -468,8 +532,23 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     program
       .command('type <target> <text>')
       .description('Type into a selector or @ref without clearing')
-      .action(async (target: string, text: string, options: SharedOptions) => {
-        await handlers.onDaemonAction('type', { action: 'type', target, text, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      .option('--clear', 'clear the field before typing')
+      .option('--delay <ms>', 'delay between key presses in milliseconds', parseInteger)
+      .action(async (target: string, text: string, options: TypeOptions) => {
+        await handlers.onDaemonAction(
+          'type',
+          {
+            action: 'type',
+            target,
+            text,
+            clear: options.clear ?? false,
+            delayMs: options.delay,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
       }),
   );
 
@@ -493,9 +572,10 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
-      .command('select <target> <value>')
-      .description('Select an option by value')
-      .action(async (target: string, value: string, options: SharedOptions) => {
+      .command('select <target> <value...>')
+      .description('Select one or more options by value')
+      .action(async (target: string, values: string[], options: SharedOptions) => {
+        const value: string | string[] = values.length === 1 ? values[0]! : values;
         await handlers.onDaemonAction('select', { action: 'select', target, value, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
       }),
   );
@@ -516,12 +596,128 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
-      .command('scroll <direction> [amount]')
-      .description('Scroll the page by direction and amount')
-      .action(async (direction: string, amount: string | undefined, options: SharedOptions) => {
+      .command('keydown <key>')
+      .description('Press and hold a keyboard key in the current tab')
+      .action(async (key: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('keyboard.down', { action: 'keyboard.down', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('keyup <key>')
+      .description('Release a keyboard key in the current tab')
+      .action(async (key: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('keyboard.up', { action: 'keyboard.up', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  const keyboardCommand = program.command('keyboard').description('Send keyboard input to the current tab');
+  addSharedBrowserOptions(
+    keyboardCommand
+      .command('type <text>')
+      .description('Type text with the page keyboard')
+      .option('--delay <ms>', 'delay between key presses in milliseconds', parseInteger)
+      .action(async (text: string, options: SharedOptions & { delay?: number | undefined }) => {
+        await handlers.onDaemonAction(
+          'keyboard.type',
+          { action: 'keyboard.type', text, delayMs: options.delay, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    keyboardCommand
+      .command('inserttext <text>')
+      .alias('insert-text')
+      .description('Insert text with the page keyboard')
+      .action(async (text: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'keyboard.insertText',
+          { action: 'keyboard.insertText', text, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  const mouseCommand = program.command('mouse').description('Send mouse input to the current tab');
+  addSharedBrowserOptions(
+    mouseCommand
+      .command('move <x> <y>')
+      .description('Move the mouse to page coordinates')
+      .action(async (x: string, y: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'mouse.move',
+          { action: 'mouse.move', x: parseInteger(x), y: parseInteger(y), session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    mouseCommand
+      .command('down [button]')
+      .description('Press a mouse button')
+      .action(async (button: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'mouse.down',
+          { action: 'mouse.down', ...(button ? { button } : {}), session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    mouseCommand
+      .command('up [button]')
+      .description('Release a mouse button')
+      .action(async (button: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'mouse.up',
+          { action: 'mouse.up', ...(button ? { button } : {}), session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    mouseCommand
+      .command('wheel [deltaY] [deltaX]')
+      .description('Scroll the mouse wheel')
+      .action(async (deltaY: string | undefined, deltaX: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'mouse.wheel',
+          {
+            action: 'mouse.wheel',
+            deltaX: deltaX ? parseInteger(deltaX) : 0,
+            deltaY: deltaY ? parseInteger(deltaY) : 300,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('scroll [direction] [amount]')
+      .description('Scroll the page or a selector by direction and amount')
+      .option('--selector <target>', 'selector or @ref to scroll')
+      .action(async (direction: string | undefined, amount: string | undefined, options: SharedOptions & { selector?: string | undefined }) => {
         await handlers.onDaemonAction(
           'scroll',
-          { action: 'scroll', direction, amount: amount ? parseInteger(amount) : undefined, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          {
+            action: 'scroll',
+            ...(direction ? { direction } : {}),
+            amount: amount ? parseInteger(amount) : undefined,
+            ...(options.selector ? { target: options.selector } : {}),
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
           options,
         );
       }),
@@ -547,12 +743,46 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
-      .command('screenshot [path]')
-      .description('Save a screenshot')
-      .action(async (filePath: string | undefined, options: SharedOptions) => {
+      .command('upload <target> <files...>')
+      .description('Upload one or more files through a file input')
+      .action(async (target: string, files: string[], options: SharedOptions) => {
+        await handlers.onDaemonAction('upload', { action: 'upload', target, files, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('drag <source> <target>')
+      .description('Drag a selector or @ref to another selector or @ref')
+      .action(async (source: string, target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('drag', { action: 'drag', source, target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('screenshot [targetOrPath] [path]')
+      .description('Save a page or selector screenshot')
+      .option('--selector <target>', 'selector or @ref to capture')
+      .option('--full', 'capture the full page')
+      .option('--viewport', 'capture only the current viewport')
+      .option('--format <format>', 'image format: png or jpeg')
+      .option('--quality <quality>', 'JPEG quality from 0 to 100', parseInteger)
+      .action(async (targetOrPath: string | undefined, filePath: string | undefined, options: ScreenshotOptions) => {
+        const resolved = screenshotTargetAndPath(targetOrPath, filePath, options.selector);
         await handlers.onDaemonAction(
           'screenshot',
-          { action: 'screenshot', path: filePath, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          {
+            action: 'screenshot',
+            ...resolved,
+            ...(options.full ? { fullPage: true } : {}),
+            ...(options.viewport ? { fullPage: false } : {}),
+            ...(options.format ? { format: options.format } : {}),
+            ...(options.quality !== undefined ? { quality: options.quality } : {}),
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
           options,
         );
       }),
@@ -561,18 +791,26 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
   addSharedBrowserOptions(
     program
       .command('wait [target]')
-      .description('Wait for a selector, text, or load state')
+      .description('Wait for time, a selector, text, URL, function predicate, or load state')
       .option('--text <text>', 'wait for visible text')
       .option('--load <state>', 'wait for page load state')
+      .option('--url <pattern>', 'wait for URL pattern')
+      .option('--fn <expression>', 'wait for a JavaScript predicate expression')
       .option('--timeout <ms>', 'wait timeout in milliseconds', parseInteger)
-      .action(async (target: string | undefined, options: SharedOptions & { text?: string | undefined; load?: string | undefined; timeout?: number | undefined }) => {
+      .action(async (
+        target: string | undefined,
+        options: SharedOptions & { text?: string | undefined; load?: string | undefined; url?: string | undefined; fn?: string | undefined; timeout?: number | undefined },
+      ) => {
+        const ms = target && /^\d+$/u.test(target) && !options.text && !options.load && !options.url && !options.fn ? parseInteger(target) : undefined;
         await handlers.onDaemonAction(
           'wait',
           {
             action: 'wait',
-            ...(target ? { target } : {}),
+            ...(ms !== undefined ? { ms } : target ? { target } : {}),
             ...(options.text ? { text: options.text } : {}),
             ...(options.load ? { loadState: options.load } : {}),
+            ...(options.url ? { url: options.url } : {}),
+            ...(options.fn ? { fn: options.fn } : {}),
             timeoutMs: options.timeout,
             session: options.session,
             tabName: options.tabname,
@@ -618,6 +856,188 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .description('Get the current value from an input or select')
       .action(async (target: string, options: SharedOptions) => {
         await handlers.onDaemonAction('get.value', { action: 'get.value', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    getCommand
+      .command('html <target>')
+      .description('Get inner HTML from a selector or @ref')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('get.html', { action: 'get.html', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    getCommand
+      .command('attr <target> <attribute>')
+      .description('Get an attribute from a selector or @ref')
+      .action(async (target: string, attribute: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'get.attr',
+          { action: 'get.attr', target, attribute, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    getCommand
+      .command('count <target>')
+      .description('Count elements matching a selector or @ref')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('get.count', { action: 'get.count', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    getCommand
+      .command('box <target>')
+      .description('Get an element bounding box')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('get.box', { action: 'get.box', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    getCommand
+      .command('styles <target>')
+      .description('Get computed styles from an element')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('get.styles', { action: 'get.styles', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  const isCommand = program.command('is').description('Check element predicates');
+  const addIsCommand = (name: 'visible' | 'enabled' | 'checked'): void => {
+    addSharedBrowserOptions(
+      isCommand
+        .command(`${name} <target>`)
+        .description(`Check whether a selector or @ref is ${name}`)
+        .action(async (target: string, options: SharedOptions) => {
+          const action = `is.${name}`;
+          await handlers.onDaemonAction(action, { action, target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+  };
+  addIsCommand('visible');
+  addIsCommand('enabled');
+  addIsCommand('checked');
+
+  const findCommand = program.command('find').description('Find elements semantically and run a narrow action');
+  const addFindValueCommand = (name: 'text' | 'label' | 'placeholder' | 'alt' | 'title' | 'testid', description: string): void => {
+    addSharedBrowserOptions(
+      findCommand
+        .command(`${name} <value>`)
+        .description(description)
+        .option('--action <action>', 'subaction: click, fill, check, hover, or text')
+        .option('--value <text>', 'text to use with --action fill')
+        .option('--exact', 'match exactly where supported')
+        .action(async (value: string, options: FindOptions) => {
+          await handlers.onDaemonAction(
+            'find',
+            {
+              action: 'find',
+              locatorType: name,
+              value,
+              exact: options.exact,
+              subaction: normalizeFindAction(options),
+              text: options.value,
+              session: options.session,
+              tabName: options.tabname,
+              ...toLaunchInput(options),
+            },
+            options,
+          );
+        }),
+    );
+  };
+
+  addSharedBrowserOptions(
+    findCommand
+      .command('role <role>')
+      .description('Find by ARIA role')
+      .option('--name <name>', 'accessible name')
+      .option('--exact', 'match the accessible name exactly')
+      .option('--action <action>', 'subaction: click, fill, check, hover, or text')
+      .option('--value <text>', 'text to use with --action fill')
+      .action(async (role: string, options: FindOptions) => {
+        await handlers.onDaemonAction(
+          'find',
+          {
+            action: 'find',
+            locatorType: 'role',
+            value: role,
+            name: options.name,
+            exact: options.exact,
+            subaction: normalizeFindAction(options),
+            text: options.value,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
+  addFindValueCommand('text', 'Find by visible text');
+  addFindValueCommand('label', 'Find a form control by label');
+  addFindValueCommand('placeholder', 'Find an input by placeholder');
+  addFindValueCommand('alt', 'Find by alt text');
+  addFindValueCommand('title', 'Find by title');
+  addFindValueCommand('testid', 'Find by test id');
+
+  const addFindTargetCommand = (name: 'first' | 'last'): void => {
+    addSharedBrowserOptions(
+      findCommand
+        .command(`${name} <target>`)
+        .description(`Find the ${name} element matching a selector or @ref`)
+        .option('--action <action>', 'subaction: click, fill, check, hover, or text')
+        .option('--value <text>', 'text to use with --action fill')
+        .action(async (target: string, options: FindOptions) => {
+          await handlers.onDaemonAction(
+            'find',
+            {
+              action: 'find',
+              locatorType: name,
+              target,
+              subaction: normalizeFindAction(options),
+              text: options.value,
+              session: options.session,
+              tabName: options.tabname,
+              ...toLaunchInput(options),
+            },
+            options,
+          );
+        }),
+    );
+  };
+  addFindTargetCommand('first');
+  addFindTargetCommand('last');
+
+  addSharedBrowserOptions(
+    findCommand
+      .command('nth <target> <index>')
+      .description('Find the nth element matching a selector or @ref')
+      .option('--action <action>', 'subaction: click, fill, check, hover, or text')
+      .option('--value <text>', 'text to use with --action fill')
+      .action(async (target: string, index: string, options: FindOptions) => {
+        await handlers.onDaemonAction(
+          'find',
+          {
+            action: 'find',
+            locatorType: 'nth',
+            target,
+            index: parseInteger(index),
+            subaction: normalizeFindAction(options),
+            text: options.value,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
       }),
   );
 

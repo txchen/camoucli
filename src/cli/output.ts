@@ -195,6 +195,13 @@ function printHoverResult(data: Record<string, unknown>): void {
   process.stdout.write(`Hovered ${location} ${target}\n`);
 }
 
+function printTargetActionResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  const url = typeof data.url === 'string' ? data.url : '';
+  process.stdout.write(`${prefix} ${location} ${target}${url ? ` ${url}` : ''}\n`);
+}
+
 function printFillResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const target = String(data.target ?? 'unknown');
@@ -218,7 +225,8 @@ function printCheckResult(prefix: string, data: Record<string, unknown>): void {
 function printSelectResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const target = String(data.target ?? 'unknown');
-  process.stdout.write(`Selected ${location} ${target} ${formatQuoted(data.value ?? '')}\n`);
+  const value = Array.isArray(data.value) ? data.value.map((item) => String(item)).join(',') : String(data.value ?? '');
+  process.stdout.write(`Selected ${location} ${target} ${formatQuoted(value)}\n`);
 }
 
 function printPressResult(data: Record<string, unknown>): void {
@@ -227,12 +235,28 @@ function printPressResult(data: Record<string, unknown>): void {
   process.stdout.write(`Pressed ${location} ${key}\n`);
 }
 
+function printKeyboardTextResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const valueLength = typeof data.valueLength === 'number' ? data.valueLength : undefined;
+  process.stdout.write(`${prefix} ${location}${valueLength !== undefined ? ` (${valueLength} chars)` : ''}\n`);
+}
+
+function printMouseResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const details = ['x', 'y', 'button', 'deltaX', 'deltaY']
+    .filter((key) => data[key] !== undefined)
+    .map((key) => `${key}=${String(data[key])}`)
+    .join(' ');
+  process.stdout.write(`${prefix} ${location}${details ? ` ${details}` : ''}\n`);
+}
+
 function printScrollResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
   const direction = String(data.direction ?? 'down');
   const amount = typeof data.amount === 'number' ? data.amount : undefined;
+  const target = typeof data.target === 'string' ? ` ${data.target}` : '';
   const url = typeof data.url === 'string' ? data.url : '';
-  process.stdout.write(`Scrolled ${location} ${direction}${amount !== undefined ? ` ${amount}` : ''}${url ? ` ${url}` : ''}\n`);
+  process.stdout.write(`Scrolled ${location}${target} ${direction}${amount !== undefined ? ` ${amount}` : ''}${url ? ` ${url}` : ''}\n`);
 }
 
 function printScrollIntoViewResult(data: Record<string, unknown>): void {
@@ -243,10 +267,13 @@ function printScrollIntoViewResult(data: Record<string, unknown>): void {
 
 function printWaitResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
+  const ms = typeof data.ms === 'number' ? `${data.ms}ms` : undefined;
   const target = typeof data.target === 'string' ? data.target : undefined;
   const text = typeof data.text === 'string' ? `text=${formatQuoted(data.text)}` : undefined;
   const loadState = typeof data.loadState === 'string' ? `load=${data.loadState}` : undefined;
-  const waitedFor = [target, text, loadState].filter(Boolean).join(' ');
+  const urlPattern = typeof data.urlPattern === 'string' ? `url=${formatQuoted(data.urlPattern)}` : undefined;
+  const fn = typeof data.fn === 'string' ? 'fn' : undefined;
+  const waitedFor = [ms, target, text, loadState, urlPattern, fn].filter(Boolean).join(' ');
   const url = typeof data.url === 'string' ? data.url : '';
   process.stdout.write(`Ready ${location}${waitedFor ? ` ${waitedFor}` : ''}${url ? ` ${url}` : ''}\n`);
 }
@@ -300,6 +327,46 @@ function printTabCloseResult(data: Record<string, unknown>): void {
 
 function printValueResult(data: Record<string, unknown>): void {
   process.stdout.write(`${String((data as Record<string, unknown>).value ?? '')}\n`);
+}
+
+function printCountResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String(data.count ?? 0)}\n`);
+}
+
+function printBoxResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${JSON.stringify(data.box ?? null)}\n`);
+}
+
+function printStylesResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${JSON.stringify(data.styles ?? {}, null, 2)}\n`);
+}
+
+function printPredicateResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String(Boolean(data.value))}\n`);
+}
+
+function printFindResult(data: Record<string, unknown>): void {
+  if (typeof data.text === 'string') {
+    process.stdout.write(`${data.text}\n`);
+    return;
+  }
+
+  const location = formatSessionTab(data);
+  const locatorType = String(data.locatorType ?? 'locator');
+  const value = data.value ?? data.target ?? data.index ?? '';
+  const subaction = String(data.subaction ?? 'click');
+  process.stdout.write(`Found ${location} ${locatorType}${value !== '' ? ` ${formatQuoted(value)}` : ''} ${subaction}\n`);
+}
+
+function printUploadResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  process.stdout.write(`Uploaded ${String(data.count ?? 0)} files ${location} ${target}\n`);
+}
+
+function printDragResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  process.stdout.write(`Dragged ${location} ${String(data.source ?? 'unknown')} -> ${String(data.target ?? 'unknown')}\n`);
 }
 
 function printSessionList(data: unknown): void {
@@ -690,8 +757,14 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'click':
       printClickResult(data as Record<string, unknown>);
       return;
+    case 'dblclick':
+      printTargetActionResult('Double-clicked', data as Record<string, unknown>);
+      return;
     case 'hover':
       printHoverResult(data as Record<string, unknown>);
+      return;
+    case 'focus':
+      printTargetActionResult('Focused', data as Record<string, unknown>);
       return;
     case 'fill':
       printFillResult(data as Record<string, unknown>);
@@ -711,14 +784,47 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'press':
       printPressResult(data as Record<string, unknown>);
       return;
+    case 'keyboard.down':
+      printPressResult(data as Record<string, unknown>);
+      return;
+    case 'keyboard.up':
+      printPressResult(data as Record<string, unknown>);
+      return;
+    case 'keyboard.type':
+      printKeyboardTextResult('Keyboard typed', data as Record<string, unknown>);
+      return;
+    case 'keyboard.insertText':
+      printKeyboardTextResult('Keyboard inserted', data as Record<string, unknown>);
+      return;
+    case 'mouse.move':
+      printMouseResult('Mouse moved', data as Record<string, unknown>);
+      return;
+    case 'mouse.down':
+      printMouseResult('Mouse down', data as Record<string, unknown>);
+      return;
+    case 'mouse.up':
+      printMouseResult('Mouse up', data as Record<string, unknown>);
+      return;
+    case 'mouse.wheel':
+      printMouseResult('Mouse wheel', data as Record<string, unknown>);
+      return;
     case 'scroll':
       printScrollResult(data as Record<string, unknown>);
       return;
     case 'scroll.intoView':
       printScrollIntoViewResult(data as Record<string, unknown>);
       return;
+    case 'upload':
+      printUploadResult(data as Record<string, unknown>);
+      return;
+    case 'drag':
+      printDragResult(data as Record<string, unknown>);
+      return;
     case 'wait':
       printWaitResult(data as Record<string, unknown>);
+      return;
+    case 'find':
+      printFindResult(data as Record<string, unknown>);
       return;
     case 'session.stop':
       printSessionStopResult(data as Record<string, unknown>);
@@ -752,6 +858,26 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'get.value':
       printValueResult(data as Record<string, unknown>);
+      return;
+    case 'get.html':
+      process.stdout.write(`${String((data as Record<string, unknown>).html ?? '')}\n`);
+      return;
+    case 'get.attr':
+      printValueResult(data as Record<string, unknown>);
+      return;
+    case 'get.count':
+      printCountResult(data as Record<string, unknown>);
+      return;
+    case 'get.box':
+      printBoxResult(data as Record<string, unknown>);
+      return;
+    case 'get.styles':
+      printStylesResult(data as Record<string, unknown>);
+      return;
+    case 'is.visible':
+    case 'is.enabled':
+    case 'is.checked':
+      printPredicateResult(data as Record<string, unknown>);
       return;
     case 'screenshot':
       process.stdout.write(`${String((data as Record<string, unknown>).path ?? '')}\n`);

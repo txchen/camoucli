@@ -1,6 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -377,10 +377,14 @@ describe('daemon integration', () => {
     const secondUrl = dataPage('<title>Second</title><p>Next page</p>');
     const controlsUrl = dataPage(`
       <title>Controls</title>
+      <div id="pane">Scrollable pane</div>
       <input id="name" placeholder="Name">
       <input id="agree" type="checkbox">
-      <select id="choice"><option value="a" selected>A</option><option value="b">B</option></select>
+      <input id="file" type="file">
+      <select id="choice"><option value="a" selected>A</option><option value="b">B</option><option value="c">C</option></select>
       <button id="submit">Submit</button>
+      <button id="secondary" title="Secondary action">Second</button>
+      <img id="logo" alt="Logo" data-testid="brand-logo">
       <a id="next" href="${secondUrl}">Next</a>
     `);
 
@@ -393,7 +397,21 @@ describe('daemon integration', () => {
     });
 
     await sendDaemonRequest(paths, {
+      action: 'focus',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+    });
+
+    await sendDaemonRequest(paths, {
       action: 'hover',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'dblclick',
       session: 'actions',
       tabName: 'main',
       target: '#submit',
@@ -405,6 +423,7 @@ describe('daemon integration', () => {
       tabName: 'main',
       target: '#name',
       text: 'hello',
+      delayMs: 5,
     });
 
     let value = (await sendDaemonRequest(paths, {
@@ -432,6 +451,23 @@ describe('daemon integration', () => {
     expect(value.value).toBe('reset');
 
     await sendDaemonRequest(paths, {
+      action: 'type',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+      text: 'typed',
+      clear: true,
+    });
+
+    value = (await sendDaemonRequest(paths, {
+      action: 'get.value',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+    })) as { value: string };
+    expect(value.value).toBe('typed');
+
+    await sendDaemonRequest(paths, {
       action: 'check',
       session: 'actions',
       tabName: 'main',
@@ -450,7 +486,7 @@ describe('daemon integration', () => {
       session: 'actions',
       tabName: 'main',
       target: '#choice',
-      value: 'b',
+      value: ['b', 'c'],
     });
 
     value = (await sendDaemonRequest(paths, {
@@ -459,7 +495,65 @@ describe('daemon integration', () => {
       tabName: 'main',
       target: '#choice',
     })) as { value: string };
-    expect(value.value).toBe('b');
+    expect(value.value).toBe('b,c');
+
+    await sendDaemonRequest(paths, {
+      action: 'keyboard.down',
+      session: 'actions',
+      tabName: 'main',
+      key: 'Shift',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'keyboard.up',
+      session: 'actions',
+      tabName: 'main',
+      key: 'Shift',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'keyboard.type',
+      session: 'actions',
+      tabName: 'main',
+      text: 'keyboard',
+      delayMs: 1,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'keyboard.insertText',
+      session: 'actions',
+      tabName: 'main',
+      text: 'inserted',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'mouse.move',
+      session: 'actions',
+      tabName: 'main',
+      x: 10,
+      y: 20,
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'mouse.down',
+      session: 'actions',
+      tabName: 'main',
+      button: 'right',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'mouse.up',
+      session: 'actions',
+      tabName: 'main',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'mouse.wheel',
+      session: 'actions',
+      tabName: 'main',
+      deltaX: 0,
+      deltaY: 100,
+    });
 
     await sendDaemonRequest(paths, {
       action: 'scroll',
@@ -470,10 +564,144 @@ describe('daemon integration', () => {
     });
 
     await sendDaemonRequest(paths, {
+      action: 'scroll',
+      session: 'actions',
+      tabName: 'main',
+      target: '#pane',
+    });
+
+    await sendDaemonRequest(paths, {
       action: 'scroll.intoView',
       session: 'actions',
       tabName: 'main',
       target: '#submit',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'upload',
+      session: 'actions',
+      tabName: 'main',
+      target: '#file',
+      files: ['a.txt', 'b.txt'],
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'drag',
+      session: 'actions',
+      tabName: 'main',
+      source: '#submit',
+      target: '#secondary',
+    });
+
+    const html = (await sendDaemonRequest(paths, {
+      action: 'get.html',
+      session: 'actions',
+      tabName: 'main',
+      target: '#pane',
+    })) as { html: string };
+    expect(html.html).toBe('Scrollable pane');
+
+    const attr = (await sendDaemonRequest(paths, {
+      action: 'get.attr',
+      session: 'actions',
+      tabName: 'main',
+      target: '#next',
+      attribute: 'href',
+    })) as { value: string };
+    expect(attr.value).toBe(secondUrl);
+
+    const count = (await sendDaemonRequest(paths, {
+      action: 'get.count',
+      session: 'actions',
+      tabName: 'main',
+      target: 'button',
+    })) as { count: number };
+    expect(count.count).toBe(2);
+
+    const box = (await sendDaemonRequest(paths, {
+      action: 'get.box',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    })) as { box: { width: number } };
+    expect(box.box.width).toBe(100);
+
+    const styles = (await sendDaemonRequest(paths, {
+      action: 'get.styles',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    })) as { styles: { display: string } };
+    expect(styles.styles.display).toBe('block');
+
+    const visible = (await sendDaemonRequest(paths, {
+      action: 'is.visible',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    })) as { value: boolean };
+    expect(visible.value).toBe(true);
+
+    const enabled = (await sendDaemonRequest(paths, {
+      action: 'is.enabled',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+    })) as { value: boolean };
+    expect(enabled.value).toBe(true);
+
+    const checked = (await sendDaemonRequest(paths, {
+      action: 'is.checked',
+      session: 'actions',
+      tabName: 'main',
+      target: '#agree',
+    })) as { value: boolean };
+    expect(checked.value).toBe(false);
+
+    const findText = (await sendDaemonRequest(paths, {
+      action: 'find',
+      session: 'actions',
+      tabName: 'main',
+      locatorType: 'role',
+      value: 'button',
+      name: 'Submit',
+      subaction: 'text',
+    })) as { text: string };
+    expect(findText.text).toBe('Submit');
+
+    await sendDaemonRequest(paths, {
+      action: 'find',
+      session: 'actions',
+      tabName: 'main',
+      locatorType: 'placeholder',
+      value: 'Name',
+      subaction: 'fill',
+      text: 'Grace',
+    });
+
+    value = (await sendDaemonRequest(paths, {
+      action: 'get.value',
+      session: 'actions',
+      tabName: 'main',
+      target: '#name',
+    })) as { value: string };
+    expect(value.value).toBe('Grace');
+
+    await sendDaemonRequest(paths, {
+      action: 'find',
+      session: 'actions',
+      tabName: 'main',
+      locatorType: 'nth',
+      target: 'button',
+      index: 1,
+      subaction: 'hover',
+    });
+
+    await sendDaemonRequest(paths, {
+      action: 'wait',
+      session: 'actions',
+      tabName: 'main',
+      ms: 1,
     });
 
     await sendDaemonRequest(paths, {
@@ -489,7 +717,22 @@ describe('daemon integration', () => {
       tabName: 'main',
       text: 'Submit',
       loadState: 'networkidle',
+      url: '**/controls',
+      fn: 'document.title === "Controls"',
     });
+
+    const screenshot = (await sendDaemonRequest(paths, {
+      action: 'screenshot',
+      session: 'actions',
+      tabName: 'main',
+      target: '#submit',
+      format: 'jpeg',
+      quality: 80,
+    })) as { path: string; target: string; format: string };
+    expect(screenshot.target).toBe('#submit');
+    expect(screenshot.format).toBe('jpeg');
+    await expect(stat(screenshot.path)).resolves.toBeDefined();
+    await expect(readFile(screenshot.path, 'utf8')).resolves.toContain('fake element screenshot');
 
     await sendDaemonRequest(paths, {
       action: 'click',

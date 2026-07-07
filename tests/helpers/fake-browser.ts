@@ -13,10 +13,16 @@ interface FakeElement {
   tag: string;
   text: string;
   href?: string;
+  placeholder?: string;
+  alt?: string;
+  title?: string;
+  testId?: string;
   inputType?: string;
   value?: string;
   checked?: boolean;
   options?: string[];
+  files?: string[];
+  attributes?: Record<string, string>;
 }
 
 interface StoredPageState {
@@ -47,6 +53,8 @@ function cloneState(state: StoredPageState): StoredPageState {
     elements: state.elements.map((element) => ({
       ...element,
       options: element.options ? [...element.options] : undefined,
+      files: element.files ? [...element.files] : undefined,
+      attributes: element.attributes ? { ...element.attributes } : undefined,
     })),
   };
 }
@@ -67,6 +75,8 @@ function parseElements(html: string): FakeElement[] {
     { regex: /<input([^>]*)>/gis, tag: 'input' },
     { regex: /<textarea([^>]*)>(.*?)<\/textarea>/gis, tag: 'textarea' },
     { regex: /<select([^>]*)>(.*?)<\/select>/gis, tag: 'select' },
+    { regex: /<img([^>]*)>/gis, tag: 'img' },
+    { regex: /<div([^>]*)>(.*?)<\/div>/gis, tag: 'div' },
     { regex: /<p([^>]*)>(.*?)<\/p>/gis, tag: 'p' },
   ] as const;
 
@@ -78,8 +88,13 @@ function parseElements(html: string): FakeElement[] {
       const id = /id=["']([^"']+)["']/i.exec(attrs)?.[1];
       const href = /href=["']([^"']+)["']/i.exec(attrs)?.[1];
       const placeholder = /placeholder=["']([^"']+)["']/i.exec(attrs)?.[1];
+      const alt = /alt=["']([^"']+)["']/i.exec(attrs)?.[1];
+      const title = /title=["']([^"']+)["']/i.exec(attrs)?.[1];
+      const testId = /data-testid=["']([^"']+)["']/i.exec(attrs)?.[1];
       const inputType = /type=["']([^"']+)["']/i.exec(attrs)?.[1] ?? (pattern.tag === 'input' ? 'text' : undefined);
       const checked = /checked/i.test(attrs);
+      const attributePairs = Array.from(attrs.matchAll(/([a-zA-Z_:][a-zA-Z0-9_:.-]*)=["']([^"']*)["']/g));
+      const attributes = Object.fromEntries(attributePairs.map((attributeMatch) => [attributeMatch[1]!, attributeMatch[2]!]));
       const optionMatches = Array.from((match[2] ?? '').matchAll(/<option([^>]*)>(.*?)<\/option>/gis));
       const options = optionMatches.map((optionMatch) => {
         const optionAttrs = optionMatch[1] ?? '';
@@ -94,12 +109,17 @@ function parseElements(html: string): FakeElement[] {
       elements.push({
         id,
         tag: pattern.tag,
-        text: body || placeholder || pattern.tag,
+        text: body || placeholder || alt || title || pattern.tag,
         href,
+        placeholder,
+        alt,
+        title,
+        testId,
         inputType,
         value: pattern.tag === 'select' ? selectedValue ?? '' : body || '',
         checked: pattern.tag === 'input' ? checked : undefined,
         options: pattern.tag === 'select' ? options : undefined,
+        attributes,
       });
     }
   }
@@ -137,10 +157,15 @@ class FakeLocator {
   constructor(
     private readonly page: FakePage,
     private readonly selector: string,
+    private readonly index?: number | 'last',
   ) {}
 
+  private resolveElement(): FakeElement | undefined {
+    return this.page.resolveElement(this.selector, this.index);
+  }
+
   async click(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -150,15 +175,26 @@ class FakeLocator {
     }
   }
 
+  async dblclick(): Promise<void> {
+    await this.click();
+  }
+
   async hover(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+  }
+
+  async focus(): Promise<void> {
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
   }
 
   async fill(value: string): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -168,7 +204,7 @@ class FakeLocator {
   }
 
   async type(value: string): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -179,7 +215,7 @@ class FakeLocator {
   }
 
   async check(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -188,7 +224,7 @@ class FakeLocator {
   }
 
   async uncheck(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -196,20 +232,30 @@ class FakeLocator {
     element.checked = false;
   }
 
-  async selectOption(value: string): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+  async selectOption(value: string | string[]): Promise<void> {
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
 
-    element.value = value;
-    if (element.options?.includes(value)) {
-      element.text = value;
+    const values = Array.isArray(value) ? value : [value];
+    element.value = values.join(',');
+    if (values.every((item) => element.options?.includes(item))) {
+      element.text = values.join(',');
     }
   }
 
   async innerText(): Promise<string> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    return element.text;
+  }
+
+  async innerHTML(): Promise<string> {
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -218,7 +264,7 @@ class FakeLocator {
   }
 
   async inputValue(): Promise<string> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -226,19 +272,101 @@ class FakeLocator {
     return element.value ?? '';
   }
 
+  async getAttribute(attribute: string): Promise<string | null> {
+    const element = this.resolveElement();
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    return element.attributes?.[attribute] ?? null;
+  }
+
+  async count(): Promise<number> {
+    return this.page.resolveElements(this.selector).length;
+  }
+
+  async boundingBox(): Promise<{ x: number; y: number; width: number; height: number } | null> {
+    const element = this.resolveElement();
+    if (!element) {
+      return null;
+    }
+
+    return { x: 10, y: 20, width: 100, height: 30 };
+  }
+
+  async isVisible(): Promise<boolean> {
+    return Boolean(this.resolveElement());
+  }
+
+  async isEnabled(): Promise<boolean> {
+    return Boolean(this.resolveElement());
+  }
+
+  async isChecked(): Promise<boolean> {
+    return Boolean(this.resolveElement()?.checked);
+  }
+
+  async setInputFiles(files: string[]): Promise<void> {
+    const element = this.resolveElement();
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    element.files = [...files];
+  }
+
+  async dragTo(target: FakeLocator): Promise<void> {
+    const sourceElement = this.resolveElement();
+    const targetElement = target.resolveElement();
+    if (!sourceElement || !targetElement) {
+      throw new Error('Drag source or target was not found');
+    }
+  }
+
+  async evaluate(pageFunction: unknown): Promise<unknown> {
+    const element = this.resolveElement();
+    if (!element) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+
+    const source = String(pageFunction);
+    if (source.includes('getComputedStyle')) {
+      return { display: 'block', visibility: 'visible' };
+    }
+
+    return undefined;
+  }
+
+  async screenshot(options?: { path?: string }): Promise<void> {
+    if (!this.resolveElement()) {
+      throw new Error(`No element matches ${this.selector}`);
+    }
+    if (options?.path) {
+      await writeFile(options.path, `fake element screenshot for ${this.selector}\n`, 'utf8');
+    }
+  }
+
   async scrollIntoViewIfNeeded(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
   }
 
   first(): FakeLocator {
-    return this;
+    return new FakeLocator(this.page, this.selector, 0);
+  }
+
+  last(): FakeLocator {
+    return new FakeLocator(this.page, this.selector, 'last');
+  }
+
+  nth(index: number): FakeLocator {
+    return new FakeLocator(this.page, this.selector, index);
   }
 
   async waitFor(): Promise<void> {
-    const element = this.page.resolveElement(this.selector);
+    const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
     }
@@ -255,9 +383,16 @@ class FakePage extends EventEmitter {
 
   readonly keyboard = {
     press: async (_key: string) => undefined,
+    down: async (_key: string) => undefined,
+    up: async (_key: string) => undefined,
+    type: async (_text: string) => undefined,
+    insertText: async (_text: string) => undefined,
   };
 
   readonly mouse = {
+    move: async (_x: number, _y: number) => undefined,
+    down: async (_options?: { button?: string }) => undefined,
+    up: async (_options?: { button?: string }) => undefined,
     wheel: async (_deltaX: number, _deltaY: number) => undefined,
   };
 
@@ -317,6 +452,19 @@ class FakePage extends EventEmitter {
     return undefined;
   }
 
+  async waitForURL(_url: string): Promise<void> {
+    return undefined;
+  }
+
+  async waitForFunction(expression: string): Promise<void> {
+    const location = { href: this.state.url };
+    const document = { title: this.state.title };
+    const result = Function('document', 'location', `return (${expression});`)(document, location);
+    if (!result) {
+      throw new Error(`Function predicate did not match: ${expression}`);
+    }
+  }
+
   url(): string {
     return this.state.url;
   }
@@ -331,6 +479,30 @@ class FakePage extends EventEmitter {
 
   getByText(text: string): FakeLocator {
     return new FakeLocator(this, `text=${text}`);
+  }
+
+  getByRole(role: string, options?: { name?: string; exact?: boolean }): FakeLocator {
+    return new FakeLocator(this, `role=${role}${options?.name ? `[name=${options.name}]` : ''}${options?.exact ? '[exact]' : ''}`);
+  }
+
+  getByLabel(label: string): FakeLocator {
+    return new FakeLocator(this, `label=${label}`);
+  }
+
+  getByPlaceholder(placeholder: string): FakeLocator {
+    return new FakeLocator(this, `placeholder=${placeholder}`);
+  }
+
+  getByAltText(alt: string): FakeLocator {
+    return new FakeLocator(this, `alt=${alt}`);
+  }
+
+  getByTitle(title: string): FakeLocator {
+    return new FakeLocator(this, `title=${title}`);
+  }
+
+  getByTestId(testId: string): FakeLocator {
+    return new FakeLocator(this, `testid=${testId}`);
   }
 
   async screenshot(options: { path: string }): Promise<void> {
@@ -395,22 +567,76 @@ class FakePage extends EventEmitter {
     return undefined;
   }
 
-  resolveElement(selector: string): FakeElement | undefined {
+  resolveElement(selector: string, index?: number | 'last'): FakeElement | undefined {
+    const elements = this.resolveElements(selector);
+    if (index === 'last') {
+      return elements.at(-1);
+    }
+    return elements[index ?? 0];
+  }
+
+  resolveElements(selector: string): FakeElement[] {
     if (selector.startsWith('[data-camoucli-ref=')) {
-      return this.refs.get(selector);
+      const element = this.refs.get(selector);
+      return element ? [element] : [];
     }
 
     if (selector.startsWith('text=')) {
       const text = selector.slice('text='.length);
-      return this.state.elements.find((element) => element.text.includes(text));
+      return this.state.elements.filter((element) => element.text.includes(text));
+    }
+
+    if (selector.startsWith('role=')) {
+      const role = /^role=([^\[]+)/u.exec(selector)?.[1] ?? '';
+      const name = /\[name=([^\]]+)\]/u.exec(selector)?.[1];
+      return this.state.elements.filter((element) => {
+        const elementRole =
+          element.tag === 'a'
+            ? 'link'
+            : element.tag === 'button'
+              ? 'button'
+              : element.tag === 'select'
+                ? 'combobox'
+                : element.tag === 'textarea' || (element.tag === 'input' && element.inputType !== 'checkbox')
+                  ? 'textbox'
+                  : element.tag === 'input' && element.inputType === 'checkbox'
+                    ? 'checkbox'
+                    : element.tag;
+        return elementRole === role && (!name || element.text.includes(name));
+      });
+    }
+
+    if (selector.startsWith('label=')) {
+      const label = selector.slice('label='.length);
+      return this.state.elements.filter((element) => element.text.includes(label) || element.id === label);
+    }
+
+    if (selector.startsWith('placeholder=')) {
+      const placeholder = selector.slice('placeholder='.length);
+      return this.state.elements.filter((element) => element.placeholder?.includes(placeholder));
+    }
+
+    if (selector.startsWith('alt=')) {
+      const alt = selector.slice('alt='.length);
+      return this.state.elements.filter((element) => element.alt?.includes(alt));
+    }
+
+    if (selector.startsWith('title=')) {
+      const title = selector.slice('title='.length);
+      return this.state.elements.filter((element) => element.title?.includes(title));
+    }
+
+    if (selector.startsWith('testid=')) {
+      const testId = selector.slice('testid='.length);
+      return this.state.elements.filter((element) => element.testId === testId);
     }
 
     if (selector.startsWith('#')) {
       const id = selector.slice(1);
-      return this.state.elements.find((element) => element.id === id);
+      return this.state.elements.filter((element) => element.id === id);
     }
 
-    return this.state.elements.find((element) => element.tag === selector);
+    return this.state.elements.filter((element) => element.tag === selector);
   }
 
   serialize(): StoredPageState {

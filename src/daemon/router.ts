@@ -22,8 +22,12 @@ export class DaemonRouter {
         return this.browserManager.snapshot(request);
       case 'click':
         return this.browserManager.click(request);
+      case 'dblclick':
+        return this.browserManager.dblclick(request);
       case 'hover':
         return this.browserManager.hover(request);
+      case 'focus':
+        return this.browserManager.focus(request);
       case 'fill':
         return this.browserManager.fill(request);
       case 'type':
@@ -36,10 +40,30 @@ export class DaemonRouter {
         return this.browserManager.select(request);
       case 'press':
         return this.browserManager.press(request);
+      case 'keyboard.down':
+        return this.browserManager.keyboardDown(request);
+      case 'keyboard.up':
+        return this.browserManager.keyboardUp(request);
+      case 'keyboard.type':
+        return this.browserManager.keyboardType(request);
+      case 'keyboard.insertText':
+        return this.browserManager.keyboardInsertText(request);
+      case 'mouse.move':
+        return this.browserManager.mouseMove(request);
+      case 'mouse.down':
+        return this.browserManager.mouseDown(request);
+      case 'mouse.up':
+        return this.browserManager.mouseUp(request);
+      case 'mouse.wheel':
+        return this.browserManager.mouseWheel(request);
       case 'scroll':
         return this.browserManager.scroll(request);
       case 'scroll.intoView':
         return this.browserManager.scrollIntoView(request);
+      case 'upload':
+        return this.browserManager.upload(request);
+      case 'drag':
+        return this.browserManager.drag(request);
       case 'screenshot':
         return this.browserManager.screenshot(request);
       case 'get.url':
@@ -50,8 +74,24 @@ export class DaemonRouter {
         return this.browserManager.getText(request);
       case 'get.value':
         return this.browserManager.getValue(request);
+      case 'get.html':
+        return this.browserManager.getHtml(request);
+      case 'get.attr':
+        return this.browserManager.getAttribute(request);
+      case 'get.count':
+        return this.browserManager.getCount(request);
+      case 'get.box':
+        return this.browserManager.getBox(request);
+      case 'get.styles':
+        return this.browserManager.getStyles(request);
+      case 'is.visible':
+      case 'is.enabled':
+      case 'is.checked':
+        return this.browserManager.elementPredicate(request);
       case 'wait':
         return this.browserManager.wait(request);
+      case 'find':
+        return this.browserManager.find(request);
       case 'eval':
         return this.browserManager.eval(request);
       case 'cookies.export':

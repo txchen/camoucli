@@ -334,11 +334,22 @@ describe('CLI program parsing', () => {
     });
 
     await program.parseAsync(['node', 'camou', 'hover', '@e1'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'dblclick', '@e1'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'focus', '#name'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'type', '#name', 'hello'], { from: 'node' });
-    await program.parseAsync(['node', 'camou', 'select', '#choice', 'b'], { from: 'node' });
-    await program.parseAsync(['node', 'camou', 'scroll', 'down', '250'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'type', '#name', 'reset', '--clear', '--delay', '25'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'select', '#choice', 'b', 'c'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'scroll', 'down', '250', '--selector', '#pane'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'scrollintoview', '#submit'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'upload', '#file', 'a.txt', 'b.txt'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'drag', '#source', '#target'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'get', 'value', '#name'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'html', '#panel'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'attr', '#next', 'href'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'count', 'button'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'box', '#submit'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'get', 'styles', '#submit'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'is', 'visible', '#submit'], { from: 'node' });
     await program.parseAsync(['node', 'camou', 'reload'], { from: 'node' });
 
     expect(onDaemonAction).toHaveBeenNthCalledWith(
@@ -349,40 +360,141 @@ describe('CLI program parsing', () => {
     );
     expect(onDaemonAction).toHaveBeenNthCalledWith(
       2,
+      'dblclick',
+      expect.objectContaining({ action: 'dblclick', target: '@e1' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'focus',
+      expect.objectContaining({ action: 'focus', target: '#name' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      4,
       'type',
       expect.objectContaining({ action: 'type', target: '#name', text: 'hello' }),
       expect.any(Object),
     );
     expect(onDaemonAction).toHaveBeenNthCalledWith(
-      3,
-      'select',
-      expect.objectContaining({ action: 'select', target: '#choice', value: 'b' }),
-      expect.any(Object),
-    );
-    expect(onDaemonAction).toHaveBeenNthCalledWith(
-      4,
-      'scroll',
-      expect.objectContaining({ action: 'scroll', direction: 'down', amount: 250 }),
-      expect.any(Object),
-    );
-    expect(onDaemonAction).toHaveBeenNthCalledWith(
       5,
+      'type',
+      expect.objectContaining({ action: 'type', target: '#name', text: 'reset', clear: true, delayMs: 25 }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      6,
+      'select',
+      expect.objectContaining({ action: 'select', target: '#choice', value: ['b', 'c'] }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      7,
+      'scroll',
+      expect.objectContaining({ action: 'scroll', direction: 'down', amount: 250, target: '#pane' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      8,
       'scroll.intoView',
       expect.objectContaining({ action: 'scroll.intoView', target: '#submit' }),
       expect.any(Object),
     );
     expect(onDaemonAction).toHaveBeenNthCalledWith(
-      6,
+      9,
+      'upload',
+      expect.objectContaining({ action: 'upload', target: '#file', files: ['a.txt', 'b.txt'] }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      10,
+      'drag',
+      expect.objectContaining({ action: 'drag', source: '#source', target: '#target' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      11,
       'get.value',
       expect.objectContaining({ action: 'get.value', target: '#name' }),
       expect.any(Object),
     );
     expect(onDaemonAction).toHaveBeenNthCalledWith(
-      7,
+      12,
+      'get.html',
+      expect.objectContaining({ action: 'get.html', target: '#panel' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      13,
+      'get.attr',
+      expect.objectContaining({ action: 'get.attr', target: '#next', attribute: 'href' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      14,
+      'get.count',
+      expect.objectContaining({ action: 'get.count', target: 'button' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      15,
+      'get.box',
+      expect.objectContaining({ action: 'get.box', target: '#submit' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      16,
+      'get.styles',
+      expect.objectContaining({ action: 'get.styles', target: '#submit' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      17,
+      'is.visible',
+      expect.objectContaining({ action: 'is.visible', target: '#submit' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      18,
       'reload',
       expect.objectContaining({ action: 'reload' }),
       expect.any(Object),
     );
+  });
+
+  it('routes direct keyboard mouse wait screenshot and find commands', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'keydown', 'Shift'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'keyup', 'Shift'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'keyboard', 'type', 'hello', '--delay', '10'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'keyboard', 'inserttext', 'raw'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'mouse', 'move', '10', '20'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'mouse', 'down', 'right'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'mouse', 'up'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'mouse', 'wheel', '400', '5'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'wait', '250'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'wait', '--url', '**/done', '--fn', 'document.title === "Done"', '--timeout', '1000'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'screenshot', '#panel', 'panel.jpg', '--format', 'jpeg', '--quality', '80'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'find', 'role', 'button', '--name', 'Submit', '--action', 'text', '--exact'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'find', 'text', 'Name', '--action', 'fill', '--value', 'Ada'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'find', 'nth', 'button', '1', '--action', 'hover'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'keyboard.down', expect.objectContaining({ action: 'keyboard.down', key: 'Shift' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'keyboard.up', expect.objectContaining({ action: 'keyboard.up', key: 'Shift' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'keyboard.type', expect.objectContaining({ action: 'keyboard.type', text: 'hello', delayMs: 10 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'keyboard.insertText', expect.objectContaining({ action: 'keyboard.insertText', text: 'raw' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'mouse.move', expect.objectContaining({ action: 'mouse.move', x: 10, y: 20 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'mouse.down', expect.objectContaining({ action: 'mouse.down', button: 'right' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'mouse.up', expect.objectContaining({ action: 'mouse.up' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'mouse.wheel', expect.objectContaining({ action: 'mouse.wheel', deltaY: 400, deltaX: 5 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'wait', expect.objectContaining({ action: 'wait', ms: 250 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(10, 'wait', expect.objectContaining({ action: 'wait', url: '**/done', fn: 'document.title === "Done"', timeoutMs: 1000 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(11, 'screenshot', expect.objectContaining({ action: 'screenshot', target: '#panel', path: 'panel.jpg', format: 'jpeg', quality: 80 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(12, 'find', expect.objectContaining({ action: 'find', locatorType: 'role', value: 'button', name: 'Submit', subaction: 'text', exact: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(13, 'find', expect.objectContaining({ action: 'find', locatorType: 'text', value: 'Name', subaction: 'fill', text: 'Ada' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(14, 'find', expect.objectContaining({ action: 'find', locatorType: 'nth', target: 'button', index: 1, subaction: 'hover' }), expect.any(Object));
   });
 
   it('routes session list to the running session handler', async () => {

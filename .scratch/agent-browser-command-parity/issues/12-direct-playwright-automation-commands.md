@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Direct Playwright Automation Commands
@@ -15,19 +15,19 @@ Keep the work vertical: every accepted command shape should have CLI parsing, de
 
 ## Acceptance criteria
 
-- [ ] Double-click and focus commands work for selectors and snapshot refs.
-- [ ] Type supports clear-before-type and typing delay while preserving current default typing behavior.
-- [ ] Select accepts one or more option values.
-- [ ] Keydown, keyup, keyboard type, keyboard insert-text, mouse move/down/up/wheel, upload, and drag commands are available.
-- [ ] Scroll supports an optional direction, parity default amount where applicable, and selector-scoped scrolling.
-- [ ] Wait supports fixed time, URL patterns, function predicates, selectors, text, load states, and consistent timeout handling.
-- [ ] Screenshot supports page or selector capture, optional paths, viewport/full-page mode, format, and JPEG quality with daemon-owned artifact paths when omitted.
-- [ ] Rich getters are available for HTML, attributes, counts, bounding boxes, and computed styles.
-- [ ] Element predicates are available for visible, enabled, and checked.
-- [ ] Semantic find helpers are available for the accepted locator types and execute the accepted narrow subactions.
-- [ ] Commands that take targets reuse the selector-or-ref model.
-- [ ] The slice includes schema/parser/defaults/output/help/docs coverage and fake-browser tests for representative behavior.
-- [ ] `npm run build` and `npm test` pass.
+- [x] Double-click and focus commands work for selectors and snapshot refs.
+- [x] Type supports clear-before-type and typing delay while preserving current default typing behavior.
+- [x] Select accepts one or more option values.
+- [x] Keydown, keyup, keyboard type, keyboard insert-text, mouse move/down/up/wheel, upload, and drag commands are available.
+- [x] Scroll supports an optional direction, parity default amount where applicable, and selector-scoped scrolling.
+- [x] Wait supports fixed time, URL patterns, function predicates, selectors, text, load states, and consistent timeout handling.
+- [x] Screenshot supports page or selector capture, optional paths, viewport/full-page mode, format, and JPEG quality with daemon-owned artifact paths when omitted.
+- [x] Rich getters are available for HTML, attributes, counts, bounding boxes, and computed styles.
+- [x] Element predicates are available for visible, enabled, and checked.
+- [x] Semantic find helpers are available for the accepted locator types and execute the accepted narrow subactions.
+- [x] Commands that take targets reuse the selector-or-ref model.
+- [x] The slice includes schema/parser/defaults/output/help/docs coverage and fake-browser tests for representative behavior.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 

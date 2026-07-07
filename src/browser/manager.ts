@@ -1,7 +1,7 @@
 import path from 'node:path';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import type { Page } from 'playwright-core';
+import type { Locator, Page } from 'playwright-core';
 
 import { hasLaunchFingerprintHelpers, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
@@ -193,9 +193,30 @@ export class BrowserManager {
     };
   }
 
+  async dblclick(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).dblclick();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      url: tab.page.url(),
+    };
+  }
+
   async hover(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).hover();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+    };
+  }
+
+  async focus(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).focus();
     return {
       sessionName: input.session,
       tabName: tab.name,
@@ -214,14 +235,22 @@ export class BrowserManager {
     };
   }
 
-  async type(input: LaunchInput & { session: string; tabName: string; target: string; text: string }): Promise<Record<string, unknown>> {
+  async type(
+    input: LaunchInput & { session: string; tabName: string; target: string; text: string; clear?: boolean | undefined; delayMs?: number | undefined },
+  ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    await locatorForTarget(tab.page, tab, input.target).type(input.text);
+    const locator = locatorForTarget(tab.page, tab, input.target);
+    if (input.clear) {
+      await locator.fill('');
+    }
+    await locator.type(input.text, input.delayMs !== undefined ? { delay: input.delayMs } : undefined);
     return {
       sessionName: input.session,
       tabName: tab.name,
       target: input.target,
       valueLength: input.text.length,
+      clear: input.clear ?? false,
+      ...(input.delayMs !== undefined ? { delayMs: input.delayMs } : {}),
     };
   }
 
@@ -247,7 +276,7 @@ export class BrowserManager {
     };
   }
 
-  async select(input: LaunchInput & { session: string; tabName: string; target: string; value: string }): Promise<Record<string, unknown>> {
+  async select(input: LaunchInput & { session: string; tabName: string; target: string; value: string | string[] }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     await locatorForTarget(tab.page, tab, input.target).selectOption(input.value);
     return {
@@ -268,26 +297,125 @@ export class BrowserManager {
     };
   }
 
-  async scroll(
-    input: LaunchInput & { session: string; tabName: string; direction: 'up' | 'down' | 'left' | 'right'; amount?: number | undefined },
-  ): Promise<Record<string, unknown>> {
+  async keyboardDown(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    const amount = input.amount ?? 500;
-    const delta =
-      input.direction === 'up'
-        ? { x: 0, y: -amount }
-        : input.direction === 'down'
-          ? { x: 0, y: amount }
-          : input.direction === 'left'
-            ? { x: -amount, y: 0 }
-            : { x: amount, y: 0 };
-
-    await tab.page.mouse.wheel(delta.x, delta.y);
+    await tab.page.keyboard.down(input.key);
     return {
       sessionName: input.session,
       tabName: tab.name,
-      direction: input.direction,
+      key: input.key,
+    };
+  }
+
+  async keyboardUp(input: LaunchInput & { session: string; tabName: string; key: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.keyboard.up(input.key);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      key: input.key,
+    };
+  }
+
+  async keyboardType(
+    input: LaunchInput & { session: string; tabName: string; text: string; delayMs?: number | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.keyboard.type(input.text, input.delayMs !== undefined ? { delay: input.delayMs } : undefined);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      valueLength: input.text.length,
+      ...(input.delayMs !== undefined ? { delayMs: input.delayMs } : {}),
+    };
+  }
+
+  async keyboardInsertText(input: LaunchInput & { session: string; tabName: string; text: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.keyboard.insertText(input.text);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      valueLength: input.text.length,
+    };
+  }
+
+  async mouseMove(input: LaunchInput & { session: string; tabName: string; x: number; y: number }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.mouse.move(input.x, input.y);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      x: input.x,
+      y: input.y,
+    };
+  }
+
+  async mouseDown(
+    input: LaunchInput & { session: string; tabName: string; button?: 'left' | 'right' | 'middle' | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.mouse.down(input.button ? { button: input.button } : undefined);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      button: input.button ?? 'left',
+    };
+  }
+
+  async mouseUp(
+    input: LaunchInput & { session: string; tabName: string; button?: 'left' | 'right' | 'middle' | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.mouse.up(input.button ? { button: input.button } : undefined);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      button: input.button ?? 'left',
+    };
+  }
+
+  async mouseWheel(input: LaunchInput & { session: string; tabName: string; deltaX: number; deltaY: number }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await tab.page.mouse.wheel(input.deltaX, input.deltaY);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      deltaX: input.deltaX,
+      deltaY: input.deltaY,
+      url: tab.page.url(),
+    };
+  }
+
+  async scroll(
+    input: LaunchInput & { session: string; tabName: string; direction?: 'up' | 'down' | 'left' | 'right' | undefined; amount?: number | undefined; target?: string | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const direction = input.direction ?? 'down';
+    const amount = input.amount ?? 300;
+    const delta =
+      direction === 'up'
+        ? { x: 0, y: -amount }
+        : direction === 'down'
+          ? { x: 0, y: amount }
+          : direction === 'left'
+            ? { x: -amount, y: 0 }
+            : { x: amount, y: 0 };
+
+    if (input.target) {
+      await locatorForTarget(tab.page, tab, input.target).evaluate((element, scrollDelta) => {
+        element.scrollBy(scrollDelta.x, scrollDelta.y);
+      }, delta);
+    } else {
+      await tab.page.mouse.wheel(delta.x, delta.y);
+    }
+
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      direction,
       amount,
+      ...(input.target ? { target: input.target } : {}),
       url: tab.page.url(),
     };
   }
@@ -298,6 +426,29 @@ export class BrowserManager {
     return {
       sessionName: input.session,
       tabName: tab.name,
+      target: input.target,
+    };
+  }
+
+  async upload(input: LaunchInput & { session: string; tabName: string; target: string; files: string[] }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.target).setInputFiles(input.files);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      files: input.files,
+      count: input.files.length,
+    };
+  }
+
+  async drag(input: LaunchInput & { session: string; tabName: string; source: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await locatorForTarget(tab.page, tab, input.source).dragTo(locatorForTarget(tab.page, tab, input.target));
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      source: input.source,
       target: input.target,
     };
   }
@@ -313,16 +464,42 @@ export class BrowserManager {
   }
 
   async screenshot(
-    input: LaunchInput & { session: string; tabName: string; path?: string | undefined },
+    input: LaunchInput & {
+      session: string;
+      tabName: string;
+      target?: string | undefined;
+      path?: string | undefined;
+      fullPage?: boolean | undefined;
+      format?: 'png' | 'jpeg' | undefined;
+      quality?: number | undefined;
+    },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const session = await this.ensureSession(input.session, input);
-    const filePath = input.path ?? path.join(session.paths.artifactsDir, `${tab.name}-${Date.now()}.png`);
-    await tab.page.screenshot({ path: filePath, fullPage: true });
+    const format = input.format ?? (input.path?.toLowerCase().endsWith('.jpg') || input.path?.toLowerCase().endsWith('.jpeg') ? 'jpeg' : 'png');
+    const filePath = input.path ?? path.join(session.paths.artifactsDir, `${tab.name}-${Date.now()}.${format === 'jpeg' ? 'jpg' : 'png'}`);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const screenshotOptions = {
+      path: filePath,
+      type: format,
+      ...(format === 'jpeg' && input.quality !== undefined ? { quality: input.quality } : {}),
+    } as const;
+    if (input.target) {
+      await locatorForTarget(tab.page, tab, input.target).screenshot(screenshotOptions);
+    } else {
+      await tab.page.screenshot({
+        ...screenshotOptions,
+        fullPage: input.fullPage ?? true,
+      });
+    }
     return {
       sessionName: input.session,
       tabName: tab.name,
       path: filePath,
+      format,
+      ...(input.target ? { target: input.target } : {}),
+      ...(input.target ? {} : { fullPage: input.fullPage ?? true }),
+      ...(format === 'jpeg' && input.quality !== undefined ? { quality: input.quality } : {}),
     };
   }
 
@@ -384,15 +561,110 @@ export class BrowserManager {
     };
   }
 
-  async wait(
-    input: LaunchInput & { session: string; tabName: string; target?: string | undefined; text?: string | undefined; loadState?: 'domcontentloaded' | 'load' | 'networkidle' | undefined; timeoutMs?: number | undefined },
+  async getHtml(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const html = await locatorForTarget(tab.page, tab, input.target).innerHTML();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      html,
+    };
+  }
+
+  async getAttribute(
+    input: LaunchInput & { session: string; tabName: string; target: string; attribute: string },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    if (!input.target && !input.text && !input.loadState) {
-      throw new ValidationError('wait requires a target, --text value, or --load state.');
+    const value = await locatorForTarget(tab.page, tab, input.target).getAttribute(input.attribute);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      attribute: input.attribute,
+      value,
+    };
+  }
+
+  async getCount(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const count = await locatorForTarget(tab.page, tab, input.target).count();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      count,
+    };
+  }
+
+  async getBox(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const box = await locatorForTarget(tab.page, tab, input.target).boundingBox();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      box,
+    };
+  }
+
+  async getStyles(input: LaunchInput & { session: string; tabName: string; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const styles = await locatorForTarget(tab.page, tab, input.target).evaluate((element) => {
+      const computed = window.getComputedStyle(element);
+      return Object.fromEntries(Array.from(computed).map((property) => [property, computed.getPropertyValue(property)]));
+    });
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      styles,
+    };
+  }
+
+  async elementPredicate(
+    input: LaunchInput & { action: 'is.visible' | 'is.enabled' | 'is.checked'; session: string; tabName: string; target: string },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const locator = locatorForTarget(tab.page, tab, input.target);
+    const value =
+      input.action === 'is.visible'
+        ? await locator.isVisible()
+        : input.action === 'is.enabled'
+          ? await locator.isEnabled()
+          : await locator.isChecked();
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      predicate: input.action.slice('is.'.length),
+      value,
+    };
+  }
+
+  async wait(
+    input: LaunchInput & {
+      session: string;
+      tabName: string;
+      ms?: number | undefined;
+      target?: string | undefined;
+      text?: string | undefined;
+      loadState?: 'domcontentloaded' | 'load' | 'networkidle' | undefined;
+      url?: string | undefined;
+      fn?: string | undefined;
+      timeoutMs?: number | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    if (input.ms === undefined && !input.target && !input.text && !input.loadState && !input.url && !input.fn) {
+      throw new ValidationError('wait requires milliseconds, a target, --text value, --load state, --url pattern, or --fn predicate.');
     }
 
     const waitOptions = input.timeoutMs ? { timeout: input.timeoutMs } : undefined;
+    if (input.ms !== undefined) {
+      await new Promise((resolve) => setTimeout(resolve, input.ms));
+    }
+
     if (input.target) {
       await locatorForTarget(tab.page, tab, input.target).waitFor(waitOptions);
     }
@@ -405,12 +677,72 @@ export class BrowserManager {
       await tab.page.waitForLoadState(input.loadState, waitOptions);
     }
 
+    if (input.url) {
+      await tab.page.waitForURL(input.url, waitOptions);
+    }
+
+    if (input.fn) {
+      await tab.page.waitForFunction(input.fn, undefined, waitOptions);
+    }
+
     return {
       sessionName: input.session,
       tabName: tab.name,
+      ...(input.ms !== undefined ? { ms: input.ms } : {}),
       ...(input.target ? { target: input.target } : {}),
       ...(input.text ? { text: input.text } : {}),
       ...(input.loadState ? { loadState: input.loadState } : {}),
+      ...(input.url ? { urlPattern: input.url } : {}),
+      ...(input.fn ? { fn: input.fn } : {}),
+      url: tab.page.url(),
+    };
+  }
+
+  async find(
+    input: LaunchInput & {
+      session: string;
+      tabName: string;
+      locatorType: 'role' | 'text' | 'label' | 'placeholder' | 'alt' | 'title' | 'testid' | 'first' | 'last' | 'nth';
+      value?: string | undefined;
+      target?: string | undefined;
+      index?: number | undefined;
+      name?: string | undefined;
+      exact?: boolean | undefined;
+      subaction?: 'click' | 'fill' | 'check' | 'hover' | 'text' | undefined;
+      text?: string | undefined;
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const locator = this.locatorForFind(tab.page, tab, input);
+    const subaction = input.subaction ?? 'click';
+    let text: string | undefined;
+
+    if (subaction === 'click') {
+      await locator.click();
+    } else if (subaction === 'fill') {
+      if (input.text === undefined) {
+        throw new ValidationError('find --action fill requires --value.');
+      }
+      await locator.fill(input.text);
+    } else if (subaction === 'check') {
+      await locator.check();
+    } else if (subaction === 'hover') {
+      await locator.hover();
+    } else {
+      text = await locator.innerText();
+    }
+
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      locatorType: input.locatorType,
+      ...(input.value !== undefined ? { value: input.value } : {}),
+      ...(input.target !== undefined ? { target: input.target } : {}),
+      ...(input.index !== undefined ? { index: input.index } : {}),
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.exact !== undefined ? { exact: input.exact } : {}),
+      subaction,
+      ...(text !== undefined ? { text } : {}),
       url: tab.page.url(),
     };
   }
@@ -621,5 +953,86 @@ export class BrowserManager {
     }
 
     return undefined;
+  }
+
+  private locatorForFind(
+    page: Page,
+    tab: TabRuntime,
+    input: {
+      locatorType: 'role' | 'text' | 'label' | 'placeholder' | 'alt' | 'title' | 'testid' | 'first' | 'last' | 'nth';
+      value?: string | undefined;
+      target?: string | undefined;
+      index?: number | undefined;
+      name?: string | undefined;
+      exact?: boolean | undefined;
+    },
+  ): Locator {
+    if (input.locatorType === 'role') {
+      if (!input.value) {
+        throw new ValidationError('find role requires a role value.');
+      }
+      return page.getByRole(input.value as never, {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.exact !== undefined ? { exact: input.exact } : {}),
+      });
+    }
+
+    if (input.locatorType === 'text') {
+      if (!input.value) {
+        throw new ValidationError('find text requires a text value.');
+      }
+      return page.getByText(input.value, input.exact !== undefined ? { exact: input.exact } : undefined);
+    }
+
+    if (input.locatorType === 'label') {
+      if (!input.value) {
+        throw new ValidationError('find label requires a label value.');
+      }
+      return page.getByLabel(input.value, input.exact !== undefined ? { exact: input.exact } : undefined);
+    }
+
+    if (input.locatorType === 'placeholder') {
+      if (!input.value) {
+        throw new ValidationError('find placeholder requires a placeholder value.');
+      }
+      return page.getByPlaceholder(input.value, input.exact !== undefined ? { exact: input.exact } : undefined);
+    }
+
+    if (input.locatorType === 'alt') {
+      if (!input.value) {
+        throw new ValidationError('find alt requires an alt text value.');
+      }
+      return page.getByAltText(input.value, input.exact !== undefined ? { exact: input.exact } : undefined);
+    }
+
+    if (input.locatorType === 'title') {
+      if (!input.value) {
+        throw new ValidationError('find title requires a title value.');
+      }
+      return page.getByTitle(input.value, input.exact !== undefined ? { exact: input.exact } : undefined);
+    }
+
+    if (input.locatorType === 'testid') {
+      if (!input.value) {
+        throw new ValidationError('find testid requires a test id value.');
+      }
+      return page.getByTestId(input.value);
+    }
+
+    if (!input.target) {
+      throw new ValidationError(`find ${input.locatorType} requires a selector or @ref target.`);
+    }
+
+    const locator = locatorForTarget(page, tab, input.target);
+    if (input.locatorType === 'first') {
+      return locator.first();
+    }
+    if (input.locatorType === 'last') {
+      return locator.last();
+    }
+    if (input.index === undefined) {
+      throw new ValidationError('find nth requires an index.');
+    }
+    return locator.nth(input.index);
   }
 }
