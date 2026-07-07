@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Core Aliases And Eval Input Modes
@@ -15,14 +15,14 @@ This slice should stay low-state. It should not add URL-less `open`, active tabs
 
 ## Acceptance criteria
 
-- [ ] `goto <url>` and `navigate <url>` navigate the current tab using the same daemon path as existing navigation and require a URL.
-- [ ] `open`, `goto`, and `navigate` normalize bare domains/hosts to HTTPS while preserving supported explicit schemes.
-- [ ] Existing `open <url>` behavior remains compatible for current Camoucli users.
-- [ ] `key <key>` behaves as an alias for the existing press behavior.
-- [ ] `scrollinto <target>` behaves as an alias for the existing scroll-into-view behavior.
-- [ ] `eval` supports literal expressions, base64-decoded scripts, and stdin scripts, with invalid base64 rejected before contacting the daemon.
-- [ ] The slice includes typed request validation where needed, output behavior, help text, README or command-parity documentation updates, and focused parser/defaults tests.
-- [ ] `npm run build` and `npm test` pass.
+- [x] `goto <url>` and `navigate <url>` navigate the current tab using the same daemon path as existing navigation and require a URL.
+- [x] `open`, `goto`, and `navigate` normalize bare domains/hosts to HTTPS while preserving supported explicit schemes.
+- [x] Existing `open <url>` behavior remains compatible for current Camoucli users.
+- [x] `key <key>` behaves as an alias for the existing press behavior.
+- [x] `scrollinto <target>` behaves as an alias for the existing scroll-into-view behavior.
+- [x] `eval` supports literal expressions, base64-decoded scripts, and stdin scripts, with invalid base64 rejected before contacting the daemon.
+- [x] The slice includes typed request validation where needed, output behavior, help text, README or command-parity documentation updates, and focused parser/defaults tests.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 

@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Stateful Core Runtime Commands
@@ -15,16 +15,16 @@ This slice should rely on the session/tab lifecycle foundation and launch compat
 
 ## Acceptance criteria
 
-- [ ] `download <target> <path>` waits for a download triggered by clicking the target, saves it through daemon-owned path resolution, creates parent directories as needed, and returns saved path plus browser metadata.
-- [ ] `wait --download [path]` waits for the next download in the current tab, optionally saves it, and times out with a structured error.
-- [ ] Runtime `set` commands support the accepted viewport, geolocation, offline, headers, credentials, and media operations with explicit tab-versus-session lifetimes.
-- [ ] Unsupported runtime setting variants reject clearly instead of silently pretending to apply.
-- [ ] `frame <selector|ref>` sets tab-scoped active frame context for later selector actions, and `frame main` clears it.
-- [ ] Frame context clears on navigation, tab close, and session stop.
-- [ ] Dialog listeners track pending tab dialogs, `dialog status` reports metadata, and `dialog accept|dismiss [text]` resolves the pending dialog or returns a validation error.
-- [ ] `read [url]` performs local DOM reading, optionally navigates first, supports the accepted raw/outline/filter/timeout/JSON-friendly options, and does not use external reader services.
-- [ ] The slice includes schema/parser/defaults/output/help/docs coverage plus fake-browser or focused mock tests for downloads, settings, frames, dialogs, and read behavior.
-- [ ] `npm run build` and `npm test` pass.
+- [x] `download <target> <path>` waits for a download triggered by clicking the target, saves it through daemon-owned path resolution, creates parent directories as needed, and returns saved path plus browser metadata.
+- [x] `wait --download [path]` waits for the next download in the current tab, optionally saves it, and times out with a structured error.
+- [x] Runtime `set` commands support the accepted viewport, geolocation, offline, headers, credentials, and media operations with explicit tab-versus-session lifetimes.
+- [x] Unsupported runtime setting variants reject clearly instead of silently pretending to apply.
+- [x] `frame <selector|ref>` sets tab-scoped active frame context for later selector actions, and `frame main` clears it.
+- [x] Frame context clears on navigation, tab close, and session stop.
+- [x] Dialog listeners track pending tab dialogs, `dialog status` reports metadata, and `dialog accept|dismiss [text]` resolves the pending dialog or returns a validation error.
+- [x] `read [url]` performs local DOM reading, optionally navigates first, supports the accepted raw/outline/filter/timeout/JSON-friendly options, and does not use external reader services.
+- [x] The slice includes schema/parser/defaults/output/help/docs coverage plus fake-browser or focused mock tests for downloads, settings, frames, dialogs, and read behavior.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 
