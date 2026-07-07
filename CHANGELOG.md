@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.13.0] - 2026-07-07
+
+### Added
+
+- Added `camou batch` for running multiple JSON-array commands sequentially through the normal CLI parser, with shared browser flags and Agent Browser-style pre-navigation setup support.
+- Updated command-parity docs and packaged agent skills to cover the new batch workflow.
+
 ## [0.12.1] - 2026-07-07
 
 ### Fixed
