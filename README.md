@@ -58,6 +58,8 @@ From this repo:
 npm install
 npm run build
 npm run dev -- --help
+npm run dev -- skills get core
+npm run dev -- skills get core --full
 ```
 
 Notes:
@@ -65,12 +67,13 @@ Notes:
 - Browser download is explicit. Installing the npm package does not download Camoufox.
 - `camou install` runs a quick headless launch probe after download.
 - `camou use <version>` runs the same compatibility check when you switch versions.
+- Agent instructions are available from the installed CLI with `camou skills get core` and `camou skills get core --full`.
 
 ## Install The Skill
 
-Camou also ships an agent skill that can be installed through the open skills ecosystem at [skills.sh](https://skills.sh).
+Camou ships a two-layer agent skill through the open skills ecosystem at [skills.sh](https://skills.sh).
 
-Install it from this repo:
+Install the thin discovery stub from this repo:
 
 ```bash
 npx skills add txchen/camoucli --skill camou
@@ -86,7 +89,16 @@ npx skills add txchen/camoucli --list
 npx skills add txchen/camoucli --skill camou -g -a opencode
 ```
 
-The skill teaches agents the recommended Camou workflow: `open -> snapshot -i -> interact with @refs -> re-snapshot`, plus session/tab/version troubleshooting guidance.
+The installed `camou` skill is intentionally small. It points agents at the version-matched runtime guide served by the CLI:
+
+```bash
+camou skills get core
+camou skills get core --full
+npx camou skills get core
+npx camou skills get core --full
+```
+
+This keeps agent instructions aligned with the installed Camou version. If you previously installed the older static skill, reinstall it so the stub points at `camou skills get core`.
 
 ## Quick Start
 
@@ -428,6 +440,19 @@ camou path                 # Show the active browser executable path
 camou doctor               # Diagnose install and launch issues
 ```
 
+### Skills
+
+```bash
+camou skills                  # Alias for skills list
+camou skills list             # List visible packaged skills
+camou skills get <name>       # Print one skill
+camou skills get <name> --full # Include references and templates
+camou skills get --all        # Print every visible skill
+camou skills path [name]      # Print searched skill dirs, or one skill dir
+```
+
+`CAMOU_SKILLS_DIR` can point at one directory containing skill subdirectories, which is useful for tests and local skill development. `camou skills` does not start the daemon, check browser installs, launch Camoufox, or touch session/browser state.
+
 ### Page automation
 
 ```bash
@@ -750,6 +775,9 @@ Local development commands:
 
 ```bash
 npm run dev -- --help
+npm run dev -- skills list
+npm run dev -- skills get core
+npm run dev -- skills get core --full
 npm run dev:daemon
 ```
 

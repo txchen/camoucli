@@ -17,6 +17,7 @@ import { applyCliDefaultsToPayload, resolveSharedOptions } from './defaults.js';
 import { printOutput } from './output.js';
 import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
 import { resolveSessionId, type SessionIdScope } from './session.js';
+import { SkillsCommandError, executeSkillsCommand, formatSkillsError } from './skills.js';
 
 async function runDaemonAction(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<void> {
   const paths = getCamoucliPaths();
@@ -66,6 +67,14 @@ function wantsJsonOutput(argv: string[]): boolean {
   return argv.includes('--json');
 }
 
+function normalizeSkillsJsonArgv(argv: string[]): string[] {
+  if (argv[2] === '--json' && argv[3] === 'skills') {
+    return [argv[0] ?? 'node', argv[1] ?? 'camou', 'skills', '--json', ...argv.slice(4)];
+  }
+
+  return argv;
+}
+
 function normalizeCliError(error: unknown): unknown {
   if (error instanceof CommanderError) {
     return new ValidationError(error.message.replace(/^error:\s*/i, '').trim() || 'Invalid command input.');
@@ -94,8 +103,19 @@ function printCliError(error: unknown, asJson: boolean): void {
   process.stderr.write(`${normalized instanceof Error ? normalized.message : String(normalized)}\n`);
 }
 
+function printSkillsCommandError(error: SkillsCommandError): void {
+  const result = formatSkillsError(error);
+  if (result.stdout) {
+    process.stdout.write(result.stdout);
+  }
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+}
+
 export async function main(argv: string[] = process.argv): Promise<number> {
   const asJson = wantsJsonOutput(argv);
+  const normalizedArgv = normalizeSkillsJsonArgv(argv);
   const program = createProgram({
     onInstall: async (version: string | undefined, options: OutputOptions) => {
         const paths = getCamoucliPaths();
@@ -249,10 +269,19 @@ export async function main(argv: string[] = process.argv): Promise<number> {
         const data = await cleanupDaemon(paths);
         printOutput('daemon.cleanup', data, options.json ?? false);
     },
+    onSkills: async (args, options) => {
+        const result = executeSkillsCommand(args, options);
+        if (result.stdout) {
+          process.stdout.write(result.stdout);
+        }
+        if (result.stderr) {
+          process.stderr.write(result.stderr);
+        }
+    },
   }, { quietErrors: asJson });
 
   try {
-    await program.parseAsync(argv);
+    await program.parseAsync(normalizedArgv);
     return 0;
   } catch (error) {
     if (
@@ -260,6 +289,11 @@ export async function main(argv: string[] = process.argv): Promise<number> {
       (error.code === 'commander.helpDisplayed' || error.code === 'commander.help' || error.code === 'commander.version')
     ) {
       return 0;
+    }
+
+    if (error instanceof SkillsCommandError) {
+      printSkillsCommandError(error);
+      return 1;
     }
 
     printCliError(error, asJson);
@@ -286,6 +320,10 @@ if (isEntrypoint()) {
   main().then((exitCode) => {
     process.exit(exitCode);
   }).catch((error: CamoucliError | Error | unknown) => {
+    if (error instanceof SkillsCommandError) {
+      printSkillsCommandError(error);
+      process.exit(1);
+    }
     printCliError(error, wantsJsonOutput(process.argv));
     process.exit(getExitCode(normalizeCliError(error)));
   });

@@ -406,6 +406,7 @@ describe('CLI program parsing', () => {
     const program = createProgram(createHandlers(async () => undefined));
     const help = program.helpInformation();
 
+    expect(help).toContain('skills');
     expect(help).toContain('open [options] [url]');
     expect(help).toContain('goto [options] <url>');
     expect(help).toContain('navigate [options] <url>');
@@ -461,6 +462,28 @@ describe('CLI program parsing', () => {
     expect(help).toContain('clipboard');
     expect(help).toContain('trace');
     expect(program.commands.find((command) => command.name() === 'trace')?.helpInformation()).toContain('Playwright trace zip');
+  });
+
+  it('routes skills commands through the local skills handler without daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const onSkills = vi.fn(async () => undefined);
+    const program = createProgram({
+      ...createHandlers(onDaemonAction),
+      onSkills,
+    });
+
+    await program.parseAsync(['node', 'camou', 'skills'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'skills', 'list', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'skills', 'get', 'core', '--full', '--json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'skills', 'get', '--all'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'skills', 'path', 'core'], { from: 'node' });
+
+    expect(onSkills).toHaveBeenNthCalledWith(1, [], expect.objectContaining({ json: undefined, full: undefined, all: undefined }));
+    expect(onSkills).toHaveBeenNthCalledWith(2, ['list'], expect.objectContaining({ json: true }));
+    expect(onSkills).toHaveBeenNthCalledWith(3, ['get', 'core'], expect.objectContaining({ json: true, full: true }));
+    expect(onSkills).toHaveBeenNthCalledWith(4, ['get'], expect.objectContaining({ all: true }));
+    expect(onSkills).toHaveBeenNthCalledWith(5, ['path', 'core'], expect.any(Object));
+    expect(onDaemonAction).not.toHaveBeenCalled();
   });
 
   it('maps open command flags into a daemon payload', async () => {
@@ -1340,5 +1363,6 @@ function createHandlers(onDaemonAction: (action: string, payload: Record<string,
     onVersion: async () => undefined,
     onDoctor: async () => undefined,
     onDaemonAction,
+    onSkills: async () => undefined,
   };
 }

@@ -57,6 +57,11 @@ export interface OutputOptions {
   force?: boolean | undefined;
 }
 
+export interface SkillsOptions extends OutputOptions {
+  full?: boolean | undefined;
+  all?: boolean | undefined;
+}
+
 export interface CliHandlers {
   onInstall: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onRemove: (version: string | undefined, options: OutputOptions) => Promise<void>;
@@ -75,6 +80,7 @@ export interface CliHandlers {
   onDaemonStop?: (options: OutputOptions) => Promise<void>;
   onDaemonRestart?: (options: OutputOptions) => Promise<void>;
   onDaemonCleanup?: (options: OutputOptions) => Promise<void>;
+  onSkills?: (args: string[], options: SkillsOptions) => Promise<void>;
 }
 
 export interface ProgramOptions {
@@ -549,6 +555,27 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
     .name('camou')
     .description('CLI and local daemon for Camoufox via Playwright')
     .version(packageJson.version);
+
+  program
+    .command('skills')
+    .description('List and print packaged agent skills')
+    .argument('[args...]', 'skills subcommand and arguments')
+    .option('--json', 'JSON output')
+    .option('--verbose', 'verbose output')
+    .option('--full', 'include supplementary references and templates')
+    .option('--all', 'print all visible skills')
+    .action(async (args: string[] | undefined, options: SkillsOptions & { parent?: Command | undefined }) => {
+      if (!handlers.onSkills) {
+        throw new ValidationError('skills handler unavailable.');
+      }
+      const parentOptions = options.parent?.opts<OutputOptions>() ?? {};
+      await handlers.onSkills(args ?? [], {
+        json: options.json ?? parentOptions.json,
+        verbose: options.verbose ?? parentOptions.verbose,
+        full: options.full,
+        all: options.all,
+      });
+    });
 
   addSharedOutputOptions(
     program
