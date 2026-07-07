@@ -77,4 +77,10 @@ describe('daemon IPC protocol', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'screenshot', format: 'gif' })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'find', locatorType: 'css', value: '#submit' })).toThrow();
   });
+
+  it('rejects unsupported migration launch surfaces instead of stripping them', () => {
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'open', executablePath: '/tmp/browser' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'open', provider: 'browserbase' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'open', restorePolicy: 'last' })).toThrow();
+  });
 });

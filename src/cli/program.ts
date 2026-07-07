@@ -11,6 +11,7 @@ export interface SharedOptions {
   session?: string | undefined;
   tabname?: string | undefined;
   headless?: boolean | undefined;
+  headed?: boolean | undefined;
   browser?: string | undefined;
   config?: string | undefined;
   configJson?: string | undefined;
@@ -20,6 +21,14 @@ export interface SharedOptions {
   fingerprintJson?: string | undefined;
   preset?: string[] | undefined;
   proxy?: string | undefined;
+  proxyBypass?: string | undefined;
+  headers?: string | undefined;
+  userAgent?: string | undefined;
+  ignoreHttpsErrors?: boolean | undefined;
+  colorScheme?: 'dark' | 'light' | 'no-preference' | undefined;
+  reducedMotion?: 'reduce' | 'no-preference' | undefined;
+  initScript?: string[] | undefined;
+  state?: string | undefined;
   locale?: string | undefined;
   locales?: string[] | undefined;
   region?: string | undefined;
@@ -106,11 +115,16 @@ function collectValues(value: string, previous: string[] = []): string[] {
   return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
 
+function collectRepeatedValue(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
+}
+
 function addSharedBrowserOptions(command: Command): Command {
   return command
     .option('--session <name>', 'session name')
     .option('--tabname <name>', 'tab name')
     .option('--headless', 'launch headless')
+    .option('--headed', 'launch headed (alias for --headless false)')
     .option('--browser <version>', 'specific installed browser version')
     .option('--config <path>', 'Camoufox config file path')
     .option('--config-json <json>', 'inline Camoufox config JSON')
@@ -120,6 +134,14 @@ function addSharedBrowserOptions(command: Command): Command {
     .option('--fingerprint-json <json>', 'inline fingerprint helper JSON')
     .option('--preset <name>', 'apply a built-in preset (repeat or use comma-separated values)', collectValues)
     .option('--proxy <url>', 'proxy URL')
+    .option('--proxy-bypass <hosts>', 'proxy bypass host list')
+    .option('--headers <json>', 'extra HTTP headers JSON object')
+    .option('--user-agent <ua>', 'user agent override')
+    .option('--ignore-https-errors', 'ignore HTTPS certificate errors')
+    .option('--color-scheme <value>', 'preferred color scheme: dark, light, or no-preference')
+    .option('--reduced-motion <value>', 'preferred reduced motion: reduce or no-preference')
+    .option('--init-script <path>', 'register an init script before navigation', collectRepeatedValue)
+    .option('--state <path-or-name>', 'load Playwright storage-state JSON at launch')
     .option('--locale <locale>', 'locale override')
     .option('--locales <locale>', 'accepted locales (repeat or use comma-separated values)', collectValues)
     .option('--region <code>', 'region profile for locale/timezone/geolocation helpers')
@@ -172,7 +194,7 @@ function normalizeFindAction(options: FindOptions): 'click' | 'fill' | 'check' |
 
 export function toLaunchInput(options: SharedOptions): LaunchInput {
   return {
-    headless: options.headless,
+    headless: options.headed === true ? false : options.headless,
     browser: options.browser,
     configPath: options.config,
     configJson: options.configJson,
@@ -182,6 +204,14 @@ export function toLaunchInput(options: SharedOptions): LaunchInput {
     fingerprintJson: options.fingerprintJson,
     preset: options.preset,
     proxy: options.proxy,
+    proxyBypass: options.proxyBypass,
+    headers: options.headers,
+    userAgent: options.userAgent,
+    ignoreHTTPSErrors: options.ignoreHttpsErrors,
+    colorScheme: options.colorScheme,
+    reducedMotion: options.reducedMotion,
+    initScripts: options.initScript,
+    state: options.state,
     locale: options.locale,
     locales: options.locales,
     region: options.region,

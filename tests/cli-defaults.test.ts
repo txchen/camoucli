@@ -28,6 +28,15 @@ describe('CLI defaults resolution', () => {
         tabname: 'assistant',
         browser: '135.0.1-beta.24',
         headless: true,
+        proxy: 'http://127.0.0.1:8080',
+        proxyBypass: 'localhost',
+        headers: { 'x-config': 'yes' },
+        userAgent: 'ConfigUA/1.0',
+        ignoreHttpsErrors: true,
+        colorScheme: 'dark',
+        reducedMotion: 'reduce',
+        initScript: ['config-init.js'],
+        state: 'config-state',
         preset: ['cache', 'low-bandwidth'],
         locales: ['en-US', 'fr-FR'],
         region: 'US',
@@ -44,6 +53,15 @@ describe('CLI defaults resolution', () => {
     expect(resolved.tabname).toBe('assistant');
     expect(resolved.browser).toBe('135.0.1-beta.24');
     expect(resolved.headless).toBe(true);
+    expect(resolved.proxy).toBe('http://127.0.0.1:8080');
+    expect(resolved.proxyBypass).toBe('localhost');
+    expect(resolved.headers).toBe('{"x-config":"yes"}');
+    expect(resolved.userAgent).toBe('ConfigUA/1.0');
+    expect(resolved.ignoreHttpsErrors).toBe(true);
+    expect(resolved.colorScheme).toBe('dark');
+    expect(resolved.reducedMotion).toBe('reduce');
+    expect(resolved.initScript).toEqual(['config-init.js']);
+    expect(resolved.state).toBe('config-state');
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
     expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
     expect(resolved.region).toBe('US');
@@ -70,6 +88,15 @@ describe('CLI defaults resolution', () => {
           CAMOU_TABNAME: 'env-tab',
           CAMOU_BROWSER: '135.0.1-beta.24',
           CAMOU_HEADLESS: 'true',
+          CAMOU_PROXY: 'http://127.0.0.1:8080',
+          CAMOU_PROXY_BYPASS: 'localhost',
+          CAMOU_HEADERS: '{"x-env":"yes"}',
+          CAMOU_USER_AGENT: 'EnvUA/1.0',
+          CAMOU_IGNORE_HTTPS_ERRORS: 'true',
+          CAMOU_COLOR_SCHEME: 'light',
+          CAMOU_REDUCED_MOTION: 'no-preference',
+          CAMOU_INIT_SCRIPTS: 'env-a.js,env-b.js',
+          CAMOU_STATE: 'env-state',
           CAMOU_PRESET: 'cache,low-bandwidth',
           CAMOU_LOCALES: 'en-US,fr-FR',
           CAMOU_REGION: 'CA',
@@ -84,6 +111,15 @@ describe('CLI defaults resolution', () => {
     expect(resolved.tabname).toBe('env-tab');
     expect(resolved.browser).toBe('135.0.1-beta.24');
     expect(resolved.headless).toBe(true);
+    expect(resolved.proxy).toBe('http://127.0.0.1:8080');
+    expect(resolved.proxyBypass).toBe('localhost');
+    expect(resolved.headers).toBe('{"x-env":"yes"}');
+    expect(resolved.userAgent).toBe('EnvUA/1.0');
+    expect(resolved.ignoreHttpsErrors).toBe(true);
+    expect(resolved.colorScheme).toBe('light');
+    expect(resolved.reducedMotion).toBe('no-preference');
+    expect(resolved.initScript).toEqual(['env-a.js', 'env-b.js']);
+    expect(resolved.state).toBe('env-state');
     expect(resolved.preset).toEqual(['cache', 'low-bandwidth']);
     expect(resolved.locales).toEqual(['en-US', 'fr-FR']);
     expect(resolved.region).toBe('CA');
@@ -104,7 +140,17 @@ describe('CLI defaults resolution', () => {
         session: 'flag-session',
         tabname: 'flag-tab',
         browser: '135.0.1-beta.25',
+        headed: true,
         headless: false,
+        proxy: 'http://127.0.0.2:8080',
+        proxyBypass: '127.0.0.1',
+        headers: '{"x-cli":"yes"}',
+        userAgent: 'CliUA/1.0',
+        ignoreHttpsErrors: false,
+        colorScheme: 'no-preference',
+        reducedMotion: 'reduce',
+        initScript: ['cli-init.js'],
+        state: 'cli-state',
         preset: ['disable-coop'],
         locales: ['de-DE'],
         region: 'DE',
@@ -118,6 +164,8 @@ describe('CLI defaults resolution', () => {
           CAMOU_TAB: 'env-tab',
           CAMOU_BROWSER: '135.0.1-beta.24',
           CAMOU_HEADLESS: 'true',
+          CAMOU_PROXY: 'http://127.0.0.1:8080',
+          CAMOU_HEADERS: '{"x-env":"yes"}',
           CAMOU_PRESET: 'cache',
           CAMOU_LOCALES: 'en-US,fr-FR',
           CAMOU_REGION: 'US',
@@ -131,6 +179,15 @@ describe('CLI defaults resolution', () => {
     expect(resolved.tabname).toBe('flag-tab');
     expect(resolved.browser).toBe('135.0.1-beta.25');
     expect(resolved.headless).toBe(false);
+    expect(resolved.proxy).toBe('http://127.0.0.2:8080');
+    expect(resolved.proxyBypass).toBe('127.0.0.1');
+    expect(resolved.headers).toBe('{"x-cli":"yes"}');
+    expect(resolved.userAgent).toBe('CliUA/1.0');
+    expect(resolved.ignoreHttpsErrors).toBe(false);
+    expect(resolved.colorScheme).toBe('no-preference');
+    expect(resolved.reducedMotion).toBe('reduce');
+    expect(resolved.initScript).toEqual(['cli-init.js']);
+    expect(resolved.state).toBe('cli-state');
     expect(resolved.preset).toEqual(['disable-coop']);
     expect(resolved.locales).toEqual(['de-DE']);
     expect(resolved.region).toBe('DE');
@@ -178,6 +235,15 @@ describe('CLI defaults resolution', () => {
       tabnameSource: 'config' as const,
       browser: '135.0.1-beta.24',
       headless: true,
+      proxy: 'http://127.0.0.1:8080',
+      proxyBypass: 'localhost',
+      headers: '{"x-default":"yes"}',
+      userAgent: 'DefaultUA/1.0',
+      ignoreHttpsErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      initScript: ['init.js'],
+      state: 'auth',
       preset: ['cache'],
       locales: ['en-US', 'fr-FR'],
       region: 'US',
@@ -193,6 +259,15 @@ describe('CLI defaults resolution', () => {
       tabName: 'assistant',
       browser: '135.0.1-beta.24',
       headless: true,
+      proxy: 'http://127.0.0.1:8080',
+      proxyBypass: 'localhost',
+      headers: '{"x-default":"yes"}',
+      userAgent: 'DefaultUA/1.0',
+      ignoreHTTPSErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      initScripts: ['init.js'],
+      state: 'auth',
       preset: ['cache'],
       locales: ['en-US', 'fr-FR'],
       region: 'US',
@@ -211,6 +286,15 @@ describe('CLI defaults resolution', () => {
           tabName: 'flag-tab',
           browser: '135.0.1-beta.25',
           headless: false,
+          proxy: 'http://127.0.0.2:8080',
+          proxyBypass: '127.0.0.1',
+          headers: '{"x-flag":"yes"}',
+          userAgent: 'FlagUA/1.0',
+          ignoreHTTPSErrors: false,
+          colorScheme: 'light',
+          reducedMotion: 'no-preference',
+          initScripts: ['flag-init.js'],
+          state: 'flag-auth',
           preset: ['disable-coop'],
           locales: ['de-DE'],
           region: 'DE',
@@ -224,6 +308,15 @@ describe('CLI defaults resolution', () => {
       tabName: 'flag-tab',
       browser: '135.0.1-beta.25',
       headless: false,
+      proxy: 'http://127.0.0.2:8080',
+      proxyBypass: '127.0.0.1',
+      headers: '{"x-flag":"yes"}',
+      userAgent: 'FlagUA/1.0',
+      ignoreHTTPSErrors: false,
+      colorScheme: 'light',
+      reducedMotion: 'no-preference',
+      initScripts: ['flag-init.js'],
+      state: 'flag-auth',
       preset: ['disable-coop'],
       locales: ['de-DE'],
       region: 'DE',
@@ -278,5 +371,11 @@ describe('CLI defaults resolution', () => {
     await expect(
       resolveSharedOptions({}, { cwd: rootDir, env: { CAMOU_HEADLESS: 'sometimes' } }),
     ).rejects.toThrow('Invalid boolean value for CAMOU_HEADLESS');
+  });
+
+  it('rejects invalid media env defaults', async () => {
+    await expect(
+      resolveSharedOptions({}, { cwd: rootDir, env: { CAMOU_COLOR_SCHEME: 'sepia' } }),
+    ).rejects.toThrow('Invalid value for CAMOU_COLOR_SCHEME');
   });
 });

@@ -49,6 +49,7 @@ export {
   type ResolvedFingerprintHelpers,
 } from './camoufox/fingerprint.js';
 export { getCamoucliPaths, ensureBasePaths, ensureSessionPaths, getSessionPaths, type CamoucliPaths, type SessionPaths } from './state/paths.js';
+export { resolveStateSnapshotPath } from './state/states.js';
 export {
   BrowserNotInstalledError,
   CamoucliError,

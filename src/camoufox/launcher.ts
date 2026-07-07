@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import { firefox, type BrowserContext } from 'playwright-core';
 
 import type { CamoucliPaths, SessionPaths } from '../state/paths.js';
-import { ensureSessionPaths } from '../state/paths.js';
+import { ensureSessionPaths, getSessionPaths } from '../state/paths.js';
+import { resolveStateSnapshotPath } from '../state/states.js';
 import { SessionError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { requireInstalledBrowser, resolveInstalledBrowser } from './registry.js';
@@ -39,6 +40,18 @@ export interface BrowserLaunchProbe {
   } | undefined;
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+}
+
 function stripAnsi(input: string): string {
   return input.replace(/\u001B\[[0-9;]*m/g, '');
 }
@@ -69,6 +82,9 @@ export async function launchPersistentCamoufox(
 
   try {
     const context = await firefox.launchPersistentContext(prepared.userDataDir, prepared.launchOptions);
+    for (const initScript of prepared.resolvedConfig.initScripts) {
+      await context.addInitScript(initScript);
+    }
 
     return {
       context,
@@ -98,9 +114,18 @@ export async function preparePersistentCamoufoxLaunch(
   _logger?: Logger,
 ): Promise<PreparedPersistentCamoufoxLaunch> {
   const browser = await requireInstalledBrowser(paths, input.browser);
+  const existingSessionPaths = getSessionPaths(paths, sessionName);
+  if ((input.state !== undefined || input.storageState !== undefined) && await pathExists(existingSessionPaths.profileDir)) {
+    throw new SessionError(
+      `Launch-time state can only be applied to a new session profile. Remove profile ${existingSessionPaths.safeSessionName}, use a different session name, or omit state.`,
+      { sessionName, profileDir: existingSessionPaths.profileDir },
+    );
+  }
+
   const sessionPaths = await ensureSessionPaths(paths, sessionName);
   const resolvedConfig = await resolveLaunchConfig(input);
   await validateCamouConfig(resolvedConfig.camouConfig, browser.rootDir);
+  const storageState = input.state ? resolveStateSnapshotPath(paths, input.state) : resolvedConfig.storageState;
 
   const launchOptions: Parameters<typeof firefox.launchPersistentContext>[1] = {
     executablePath: browser.executablePath,
@@ -109,6 +134,12 @@ export async function preparePersistentCamoufoxLaunch(
     firefoxUserPrefs: resolvedConfig.firefoxUserPrefs,
     downloadsPath: sessionPaths.downloadsDir,
     ...(resolvedConfig.proxy ? { proxy: resolvedConfig.proxy } : {}),
+    ...(resolvedConfig.extraHTTPHeaders ? { extraHTTPHeaders: resolvedConfig.extraHTTPHeaders } : {}),
+    ...(resolvedConfig.userAgent ? { userAgent: resolvedConfig.userAgent } : {}),
+    ...(resolvedConfig.ignoreHTTPSErrors !== undefined ? { ignoreHTTPSErrors: resolvedConfig.ignoreHTTPSErrors } : {}),
+    ...(resolvedConfig.colorScheme ? { colorScheme: resolvedConfig.colorScheme } : {}),
+    ...(resolvedConfig.reducedMotion ? { reducedMotion: resolvedConfig.reducedMotion } : {}),
+    ...(storageState !== undefined ? { storageState } : {}),
     ...(resolvedConfig.locale ? { locale: resolvedConfig.locale } : {}),
     ...(resolvedConfig.timezoneId ? { timezoneId: resolvedConfig.timezoneId } : {}),
     ...(resolvedConfig.viewport ? { viewport: resolvedConfig.viewport } : {}),

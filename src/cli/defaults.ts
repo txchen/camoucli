@@ -8,6 +8,8 @@ import { ValidationError } from '../util/errors.js';
 import type { SharedOptions } from './program.js';
 
 const presetValueSchema = z.union([z.string().min(1), z.array(z.string().min(1))]);
+const headerMapSchema = z.record(z.string(), z.string());
+const initScriptValueSchema = z.union([z.string().min(1), z.array(z.string().min(1))]);
 
 const configDefaultsSchema = z.object({
   session: z.string().min(1).optional(),
@@ -15,6 +17,17 @@ const configDefaultsSchema = z.object({
   tabname: z.string().min(1).optional(),
   browser: z.string().min(1).optional(),
   headless: z.boolean().optional(),
+  proxy: z.string().min(1).optional(),
+  proxyBypass: z.string().min(1).optional(),
+  headers: z.union([z.string().min(1), headerMapSchema]).optional(),
+  userAgent: z.string().min(1).optional(),
+  ignoreHTTPSErrors: z.boolean().optional(),
+  ignoreHttpsErrors: z.boolean().optional(),
+  colorScheme: z.enum(['dark', 'light', 'no-preference']).optional(),
+  reducedMotion: z.enum(['reduce', 'no-preference']).optional(),
+  initScript: initScriptValueSchema.optional(),
+  initScripts: initScriptValueSchema.optional(),
+  state: z.string().min(1).optional(),
   preset: presetValueSchema.optional(),
   presets: presetValueSchema.optional(),
   fingerprint: z.string().min(1).optional(),
@@ -33,6 +46,17 @@ const configDefaultsSchema = z.object({
     tabname: z.string().min(1).optional(),
     browser: z.string().min(1).optional(),
     headless: z.boolean().optional(),
+    proxy: z.string().min(1).optional(),
+    proxyBypass: z.string().min(1).optional(),
+    headers: z.union([z.string().min(1), headerMapSchema]).optional(),
+    userAgent: z.string().min(1).optional(),
+    ignoreHTTPSErrors: z.boolean().optional(),
+    ignoreHttpsErrors: z.boolean().optional(),
+    colorScheme: z.enum(['dark', 'light', 'no-preference']).optional(),
+    reducedMotion: z.enum(['reduce', 'no-preference']).optional(),
+    initScript: initScriptValueSchema.optional(),
+    initScripts: initScriptValueSchema.optional(),
+    state: z.string().min(1).optional(),
     preset: presetValueSchema.optional(),
     presets: presetValueSchema.optional(),
     fingerprint: z.string().min(1).optional(),
@@ -56,6 +80,15 @@ export interface ResolvedCliDefaults {
   tabnameSource: 'cli' | 'env' | 'config' | 'builtin';
   browser?: string | undefined;
   headless?: boolean | undefined;
+  proxy?: string | undefined;
+  proxyBypass?: string | undefined;
+  headers?: string | undefined;
+  userAgent?: string | undefined;
+  ignoreHttpsErrors?: boolean | undefined;
+  colorScheme?: 'dark' | 'light' | 'no-preference' | undefined;
+  reducedMotion?: 'reduce' | 'no-preference' | undefined;
+  initScript?: string[] | undefined;
+  state?: string | undefined;
   preset?: string[] | undefined;
   fingerprint?: string | undefined;
   fingerprintJson?: string | undefined;
@@ -102,6 +135,21 @@ function normalizeLocalesValue(value: string | string[] | undefined): string[] |
     .filter(Boolean);
 
   return items.length > 0 ? [...new Set(items)] : undefined;
+}
+
+function normalizeHeaderValue(value: string | Record<string, string> | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function normalizeInitScriptValues(value: string | string[] | undefined): string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return Array.isArray(value) ? value : [value];
 }
 
 function parseBooleanEnvValue(name: string, value: string): boolean {
@@ -151,6 +199,15 @@ async function loadConfigDefaults(cwd: string): Promise<{
   tabname?: string;
   browser?: string;
   headless?: boolean;
+  proxy?: string;
+  proxyBypass?: string;
+  headers?: string;
+  userAgent?: string;
+  ignoreHttpsErrors?: boolean;
+  colorScheme?: 'dark' | 'light' | 'no-preference';
+  reducedMotion?: 'reduce' | 'no-preference';
+  initScript?: string[];
+  state?: string;
   preset?: string[];
   fingerprint?: string;
   fingerprintJson?: string;
@@ -185,6 +242,21 @@ async function loadConfigDefaults(cwd: string): Promise<{
   const tabname = trimValue(result.data.tabname ?? result.data.tab ?? result.data.defaults?.tabname ?? result.data.defaults?.tab);
   const browser = trimValue(result.data.browser ?? result.data.defaults?.browser);
   const headless = result.data.headless ?? result.data.defaults?.headless;
+  const proxy = trimValue(result.data.proxy ?? result.data.defaults?.proxy);
+  const proxyBypass = trimValue(result.data.proxyBypass ?? result.data.defaults?.proxyBypass);
+  const headers = normalizeHeaderValue(result.data.headers ?? result.data.defaults?.headers);
+  const userAgent = trimValue(result.data.userAgent ?? result.data.defaults?.userAgent);
+  const ignoreHttpsErrors =
+    result.data.ignoreHTTPSErrors ??
+    result.data.ignoreHttpsErrors ??
+    result.data.defaults?.ignoreHTTPSErrors ??
+    result.data.defaults?.ignoreHttpsErrors;
+  const colorScheme = result.data.colorScheme ?? result.data.defaults?.colorScheme;
+  const reducedMotion = result.data.reducedMotion ?? result.data.defaults?.reducedMotion;
+  const initScript = normalizeInitScriptValues(
+    result.data.initScripts ?? result.data.initScript ?? result.data.defaults?.initScripts ?? result.data.defaults?.initScript,
+  );
+  const state = trimValue(result.data.state ?? result.data.defaults?.state);
   const preset = normalizePresetValues(
     result.data.preset ?? result.data.presets ?? result.data.defaults?.preset ?? result.data.defaults?.presets,
   );
@@ -204,6 +276,15 @@ async function loadConfigDefaults(cwd: string): Promise<{
     ...(tabname ? { tabname } : {}),
     ...(browser ? { browser } : {}),
     ...(headless !== undefined ? { headless } : {}),
+    ...(proxy ? { proxy } : {}),
+    ...(proxyBypass ? { proxyBypass } : {}),
+    ...(headers ? { headers } : {}),
+    ...(userAgent ? { userAgent } : {}),
+    ...(ignoreHttpsErrors !== undefined ? { ignoreHttpsErrors } : {}),
+    ...(colorScheme ? { colorScheme } : {}),
+    ...(reducedMotion ? { reducedMotion } : {}),
+    ...(initScript ? { initScript } : {}),
+    ...(state ? { state } : {}),
     ...(preset ? { preset } : {}),
     ...(fingerprint ? { fingerprint } : {}),
     ...(fingerprintJson ? { fingerprintJson } : {}),
@@ -263,6 +344,20 @@ function readEnvLocales(env: NodeJS.ProcessEnv, ...names: string[]): string[] | 
   return undefined;
 }
 
+function readEnvChoice<T extends string>(env: NodeJS.ProcessEnv, allowed: readonly T[], ...names: string[]): T | undefined {
+  for (const name of names) {
+    const value = trimValue(env[name]);
+    if (value !== undefined) {
+      if (allowed.includes(value as T)) {
+        return value as T;
+      }
+      throw new ValidationError(`Invalid value for ${name}: ${value}. Use one of: ${allowed.join(', ')}.`);
+    }
+  }
+
+  return undefined;
+}
+
 export async function resolveSharedOptions(
   options: SharedOptions,
   resolveOptions: ResolveCliDefaultsOptions = {},
@@ -288,9 +383,54 @@ export async function resolveSharedOptions(
     configDefaults.browser;
 
   const headless =
-    (options.headless !== undefined ? options.headless : undefined) ??
+    (options.headed === true ? false : options.headless !== undefined ? options.headless : undefined) ??
     readEnvBoolean(env, 'CAMOU_HEADLESS', 'CAMOUCLI_HEADLESS') ??
     configDefaults.headless;
+
+  const proxy =
+    trimValue(options.proxy) ??
+    readEnvDefault(env, 'CAMOU_PROXY', 'CAMOUCLI_PROXY') ??
+    configDefaults.proxy;
+
+  const proxyBypass =
+    trimValue(options.proxyBypass) ??
+    readEnvDefault(env, 'CAMOU_PROXY_BYPASS', 'CAMOUCLI_PROXY_BYPASS') ??
+    configDefaults.proxyBypass;
+
+  const headers =
+    trimValue(options.headers) ??
+    readEnvDefault(env, 'CAMOU_HEADERS', 'CAMOUCLI_HEADERS') ??
+    configDefaults.headers;
+
+  const userAgent =
+    trimValue(options.userAgent) ??
+    readEnvDefault(env, 'CAMOU_USER_AGENT', 'CAMOUCLI_USER_AGENT') ??
+    configDefaults.userAgent;
+
+  const ignoreHttpsErrors =
+    (options.ignoreHttpsErrors !== undefined ? options.ignoreHttpsErrors : undefined) ??
+    readEnvBoolean(env, 'CAMOU_IGNORE_HTTPS_ERRORS', 'CAMOUCLI_IGNORE_HTTPS_ERRORS') ??
+    configDefaults.ignoreHttpsErrors;
+
+  const colorScheme =
+    options.colorScheme ??
+    readEnvChoice(env, ['dark', 'light', 'no-preference'], 'CAMOU_COLOR_SCHEME', 'CAMOUCLI_COLOR_SCHEME') ??
+    configDefaults.colorScheme;
+
+  const reducedMotion =
+    options.reducedMotion ??
+    readEnvChoice(env, ['reduce', 'no-preference'], 'CAMOU_REDUCED_MOTION', 'CAMOUCLI_REDUCED_MOTION') ??
+    configDefaults.reducedMotion;
+
+  const initScript =
+    normalizeInitScriptValues(options.initScript) ??
+    readEnvPreset(env, 'CAMOU_INIT_SCRIPT', 'CAMOU_INIT_SCRIPTS', 'CAMOUCLI_INIT_SCRIPT', 'CAMOUCLI_INIT_SCRIPTS') ??
+    configDefaults.initScript;
+
+  const state =
+    trimValue(options.state) ??
+    readEnvDefault(env, 'CAMOU_STATE', 'CAMOUCLI_STATE') ??
+    configDefaults.state;
 
   const preset =
     normalizePresetValues(options.preset) ??
@@ -354,6 +494,15 @@ export async function resolveSharedOptions(
     tabnameSource,
     ...(browser ? { browser } : {}),
     ...(headless !== undefined ? { headless } : {}),
+    ...(proxy ? { proxy } : {}),
+    ...(proxyBypass ? { proxyBypass } : {}),
+    ...(headers ? { headers } : {}),
+    ...(userAgent ? { userAgent } : {}),
+    ...(ignoreHttpsErrors !== undefined ? { ignoreHttpsErrors } : {}),
+    ...(colorScheme ? { colorScheme } : {}),
+    ...(reducedMotion ? { reducedMotion } : {}),
+    ...(initScript ? { initScript } : {}),
+    ...(state ? { state } : {}),
     ...(preset ? { preset } : {}),
     ...(fingerprint ? { fingerprint } : {}),
     ...(fingerprintJson ? { fingerprintJson } : {}),
@@ -544,6 +693,42 @@ export function applyCliDefaultsToPayload(
 
     if (nextPayload.headless === undefined && options.headless !== undefined) {
       nextPayload.headless = options.headless;
+    }
+
+    if (nextPayload.proxy === undefined && options.proxy !== undefined) {
+      nextPayload.proxy = options.proxy;
+    }
+
+    if (nextPayload.proxyBypass === undefined && options.proxyBypass !== undefined) {
+      nextPayload.proxyBypass = options.proxyBypass;
+    }
+
+    if (nextPayload.headers === undefined && options.headers !== undefined) {
+      nextPayload.headers = options.headers;
+    }
+
+    if (nextPayload.userAgent === undefined && options.userAgent !== undefined) {
+      nextPayload.userAgent = options.userAgent;
+    }
+
+    if (nextPayload.ignoreHTTPSErrors === undefined && options.ignoreHttpsErrors !== undefined) {
+      nextPayload.ignoreHTTPSErrors = options.ignoreHttpsErrors;
+    }
+
+    if (nextPayload.colorScheme === undefined && options.colorScheme !== undefined) {
+      nextPayload.colorScheme = options.colorScheme;
+    }
+
+    if (nextPayload.reducedMotion === undefined && options.reducedMotion !== undefined) {
+      nextPayload.reducedMotion = options.reducedMotion;
+    }
+
+    if (nextPayload.initScripts === undefined && options.initScript !== undefined) {
+      nextPayload.initScripts = options.initScript;
+    }
+
+    if (nextPayload.state === undefined && options.state !== undefined) {
+      nextPayload.state = options.state;
     }
 
     const currentPreset = Array.isArray(nextPayload.preset)

@@ -70,6 +70,13 @@ describe('public Node API', () => {
         screenProfile: 'desktop-fhd',
         blockImages: true,
       },
+      extraHTTPHeaders: { 'x-api': 'yes' },
+      userAgent: 'ApiUA/1.0',
+      ignoreHTTPSErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      initScripts: [{ content: 'window.api = true;' }],
+      storageState: { cookies: [], origins: [] },
     });
 
     expect(launchPersistentCamoufoxMock).toHaveBeenCalledWith(
@@ -84,6 +91,13 @@ describe('public Node API', () => {
           screenProfile: 'desktop-fhd',
           blockImages: true,
         },
+        extraHTTPHeaders: { 'x-api': 'yes' },
+        userAgent: 'ApiUA/1.0',
+        ignoreHTTPSErrors: true,
+        colorScheme: 'dark',
+        reducedMotion: 'reduce',
+        initScripts: [{ content: 'window.api = true;' }],
+        storageState: { cookies: [], origins: [] },
       }),
       undefined,
     );

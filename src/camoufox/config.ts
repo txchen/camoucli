@@ -16,6 +16,15 @@ import { parseFirefoxUserPrefs, type FirefoxUserPrefs } from './prefs.js';
 import { resolveCamoufoxPresets } from './presets.js';
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
+const headerMapSchema = z.record(z.string(), z.string());
+const storageStateSchema = z.union([
+  z.string().min(1),
+  z.object({
+    cookies: z.array(z.record(z.string(), z.unknown())).default([]),
+    origins: z.array(z.record(z.string(), z.unknown())).default([]),
+  }),
+]);
+const initScriptSchema = z.union([z.string().min(1), z.object({ path: z.string().min(1) }), z.object({ content: z.string().min(1) })]);
 
 export const launchInputSchema = z.object({
   headless: z.boolean().optional(),
@@ -28,6 +37,17 @@ export const launchInputSchema = z.object({
   fingerprint: fingerprintHelperSchema.optional(),
   preset: z.array(z.string()).optional(),
   proxy: z.string().optional(),
+  proxyBypass: z.string().optional(),
+  headers: z.union([z.string().min(1), headerMapSchema]).optional(),
+  extraHTTPHeaders: headerMapSchema.optional(),
+  userAgent: z.string().optional(),
+  ignoreHTTPSErrors: z.boolean().optional(),
+  colorScheme: z.enum(['dark', 'light', 'no-preference']).optional(),
+  reducedMotion: z.enum(['reduce', 'no-preference']).optional(),
+  initScript: z.string().optional(),
+  initScripts: z.array(initScriptSchema).optional(),
+  state: z.string().optional(),
+  storageState: storageStateSchema.optional(),
   locale: z.string().optional(),
   locales: fingerprintLocalesValueSchema.optional(),
   region: z.string().optional(),
@@ -45,13 +65,18 @@ export const launchInputSchema = z.object({
   width: z.number().int().positive().optional(),
   height: z.number().int().positive().optional(),
   browser: z.string().optional(),
-});
+}).strict();
 
 export type LaunchInput = z.infer<typeof launchInputSchema>;
 
 export interface ProxySettings {
   server: string;
+  bypass?: string;
 }
+
+export type InitScriptSpec =
+  | { path: string; content?: never }
+  | { content: string; path?: never };
 
 export interface ResolvedLaunchConfig {
   headless: boolean;
@@ -60,6 +85,14 @@ export interface ResolvedLaunchConfig {
   camouConfig: Record<string, unknown>;
   firefoxUserPrefs: FirefoxUserPrefs;
   proxy?: ProxySettings | undefined;
+  extraHTTPHeaders?: Record<string, string> | undefined;
+  userAgent?: string | undefined;
+  ignoreHTTPSErrors?: boolean | undefined;
+  colorScheme?: 'dark' | 'light' | 'no-preference' | undefined;
+  reducedMotion?: 'reduce' | 'no-preference' | undefined;
+  initScripts: InitScriptSpec[];
+  storageState?: string | { cookies: Array<Record<string, unknown>>; origins: Array<Record<string, unknown>> } | undefined;
+  state?: string | undefined;
   locale?: string | undefined;
   timezoneId?: string | undefined;
   viewport?: {
@@ -93,6 +126,28 @@ export function parseJsonObjectString(raw: string, label: string): Record<string
   const result = jsonObjectSchema.safeParse(parsed);
   if (!result.success) {
     throw new ValidationError(`${label} must be a JSON object.`);
+  }
+
+  return result.data;
+}
+
+export function parseExtraHTTPHeaders(
+  headers: LaunchInput['headers'],
+  extraHTTPHeaders: LaunchInput['extraHTTPHeaders'],
+): Record<string, string> | undefined {
+  if (headers !== undefined && extraHTTPHeaders !== undefined) {
+    throw new ValidationError('Pass either headers or extraHTTPHeaders, not both.');
+  }
+
+  const value = headers ?? extraHTTPHeaders;
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = typeof value === 'string' ? parseJsonString(value, 'headers') : value;
+  const result = headerMapSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new ValidationError('headers must be a JSON object with string values.');
   }
 
   return result.data;
@@ -182,8 +237,11 @@ export async function resolveJsonObjectInput(
   return {};
 }
 
-export function parseProxyString(proxy?: string): ProxySettings | undefined {
+export function parseProxyString(proxy?: string, proxyBypass?: string): ProxySettings | undefined {
   if (!proxy) {
+    if (proxyBypass) {
+      throw new ValidationError('proxyBypass requires proxy.');
+    }
     return undefined;
   }
 
@@ -192,10 +250,28 @@ export function parseProxyString(proxy?: string): ProxySettings | undefined {
     if (!['http:', 'https:', 'socks5:', 'socks4:'].includes(url.protocol)) {
       throw new Error(`Unsupported protocol ${url.protocol}`);
     }
-    return { server: url.toString() };
+    return { server: url.toString(), ...(proxyBypass ? { bypass: proxyBypass } : {}) };
   } catch (error) {
     throw new ValidationError(`Invalid proxy URL: ${proxy}`, undefined, error);
   }
+}
+
+export function resolveInitScripts(input: LaunchInput): InitScriptSpec[] {
+  const scripts: InitScriptSpec[] = [];
+
+  if (input.initScript) {
+    scripts.push({ path: input.initScript });
+  }
+
+  for (const script of input.initScripts ?? []) {
+    if (typeof script === 'string') {
+      scripts.push({ path: script });
+    } else {
+      scripts.push(script);
+    }
+  }
+
+  return scripts;
 }
 
 export function validateLocale(locale?: string): string | undefined {
@@ -230,6 +306,9 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
   const rawPrefs = await resolveJsonObjectInput(input.prefsPath, input.prefsJson, 'prefs');
   if (input.locale && input.locales) {
     throw new ValidationError('Pass either locale or locales, not both.');
+  }
+  if (input.state !== undefined && input.storageState !== undefined) {
+    throw new ValidationError('Pass either state or storageState, not both.');
   }
 
   const helperInput = mergeFingerprintHelpers(
@@ -267,7 +346,15 @@ export async function resolveLaunchConfig(input: LaunchInput): Promise<ResolvedL
     presetNames: presets.presetNames,
     camouConfig,
     firefoxUserPrefs,
-    proxy: parseProxyString(input.proxy),
+    proxy: parseProxyString(input.proxy, input.proxyBypass),
+    extraHTTPHeaders: parseExtraHTTPHeaders(input.headers, input.extraHTTPHeaders),
+    ...(input.userAgent ? { userAgent: input.userAgent } : {}),
+    ...(input.ignoreHTTPSErrors !== undefined ? { ignoreHTTPSErrors: input.ignoreHTTPSErrors } : {}),
+    ...(input.colorScheme ? { colorScheme: input.colorScheme } : {}),
+    ...(input.reducedMotion ? { reducedMotion: input.reducedMotion } : {}),
+    initScripts: resolveInitScripts(input),
+    ...(input.storageState !== undefined ? { storageState: input.storageState } : {}),
+    ...(input.state ? { state: input.state } : {}),
     locale: validateLocale(fingerprintHelpers.locale ?? input.locale),
     timezoneId: validateTimezone(input.timezone ?? fingerprintHelpers.timezoneId),
     viewport,

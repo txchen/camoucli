@@ -23,7 +23,7 @@ Statuses:
 | `eval -b <script>` / `eval --base64 <script>` | `eval -b <script>` / `eval --base64 <script>` | supported | Decodes UTF-8 JavaScript in the CLI and rejects invalid base64 before contacting the daemon. |
 | `eval --stdin` | `eval --stdin` | supported | Reads JavaScript from stdin in the CLI and sends the existing eval daemon action. |
 
-Later parity slices will add launch option compatibility, state/storage/network commands, and debug/artifact commands.
+Later parity slices will add broader state/storage/network commands and debug/artifact commands.
 
 ## Direct Playwright Automation Commands
 
@@ -82,3 +82,21 @@ These commands add daemon-owned active-tab behavior while preserving explicit `-
 | `window new [url] [--label <name>]` | same | adapted | Creates a new tracked Playwright page. Firefox/Playwright does not guarantee this is a separate OS window. |
 
 Still deferred from the broader core automation plan: downloads, `wait --download`, frame context, dialogs, runtime `set`, local-DOM `read`, PDF, screenshot annotation, and debug event buffers.
+
+## Launch Option Compatibility
+
+Launch globals apply when the daemon starts a new persistent Camoufox session. If the named session is already running, Camoucli rejects immutable launch changes with a structured `session_error`; use a different `--session` value or stop the session first.
+
+| Agent Browser launch surface | Camoucli surface | Status | Notes |
+| --- | --- | --- | --- |
+| headed/headless | `--headless`, `--headed` | adapted | `--headed` is a compatibility alias for `headless=false`; Camoucli remains headed by default unless config/env/CLI says otherwise. |
+| proxy | `--proxy <url>` | supported | Existing Camoucli proxy support remains preferred and maps to Playwright persistent-context proxy settings. |
+| proxy bypass | `--proxy-bypass <hosts>` | supported | Requires `--proxy` and maps to Playwright proxy `bypass`. |
+| extra headers | `--headers <json>` | supported | JSON object with string values; maps to Playwright `extraHTTPHeaders`. |
+| user agent | `--user-agent <ua>` | supported | Maps to Playwright `userAgent`. |
+| HTTPS errors | `--ignore-https-errors` | supported | Maps to Playwright `ignoreHTTPSErrors`. |
+| media preferences | `--color-scheme dark|light|no-preference`, `--reduced-motion reduce|no-preference` | supported | Maps to Playwright context media options. Runtime media mutation remains deferred. |
+| init scripts | `--init-script <path>` | supported | Can be repeated. Scripts are registered with the context before Camoucli performs the first real navigation. |
+| storage state | `--state <path-or-name>` | adapted | For fresh session profiles only. Names resolve under Camoucli's managed state directory as `<name>.json`; explicit paths are passed through as Playwright storage-state JSON. It does not reset or merge into an existing persistent profile. |
+| direct Node launch | `extraHTTPHeaders`, `userAgent`, `ignoreHTTPSErrors`, `colorScheme`, `reducedMotion`, `initScripts`, `storageState` | supported | Programmatic `Camoufox.launch()` and `launchCamoufox()` expose idiomatic Playwright-style names while preserving Camoucli-native launch fields. |
+| executable path, browser engine, CDP/provider, extensions, restore policy | none | unsupported | These remain outside local Camoufox persistent-session scope. Camoucli keeps registry-managed executables and centralized named profiles. |

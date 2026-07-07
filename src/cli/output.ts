@@ -328,7 +328,23 @@ function printSessionInfoResult(data: Record<string, unknown>): void {
   }
   const launch = typeof data.launch === 'object' && data.launch ? (data.launch as Record<string, unknown>) : undefined;
   if (launch) {
-    const details = ['browser', 'headless', 'preset', 'proxy', 'locale', 'timezone', 'region', 'screenProfile', 'windowProfile']
+    const details = [
+      'browser',
+      'headless',
+      'preset',
+      'proxy',
+      'proxyBypass',
+      'userAgent',
+      'ignoreHTTPSErrors',
+      'colorScheme',
+      'reducedMotion',
+      'state',
+      'locale',
+      'timezone',
+      'region',
+      'screenProfile',
+      'windowProfile',
+    ]
       .filter((key) => launch[key] !== undefined)
       .map((key) => {
         const value = Array.isArray(launch[key]) ? (launch[key] as unknown[]).map(String).join(',') : String(launch[key]);

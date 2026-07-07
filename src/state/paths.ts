@@ -17,6 +17,7 @@ export interface CamoucliPaths {
   browserRegistryFile: string;
   profilesDir: string;
   presetsDir: string;
+  statesDir: string;
   daemonSocketPath?: string | undefined;
   daemonHost?: string | undefined;
   daemonPort?: number | undefined;
@@ -114,6 +115,7 @@ export function getCamoucliPaths(env: NodeJS.ProcessEnv = process.env, platform:
     browserRegistryFile: path.join(bases.dataDir, 'browsers', 'registry.json'),
     profilesDir: path.join(bases.dataDir, 'profiles'),
     presetsDir: path.join(bases.dataDir, 'presets'),
+    statesDir: path.join(bases.dataDir, 'states'),
     daemonSocketPath: platform === 'win32' ? undefined : path.join(runtimeDir, 'daemon.sock'),
     daemonHost: platform === 'win32' ? '127.0.0.1' : undefined,
     daemonPort: platform === 'win32' ? Number(env.CAMOUCLI_PORT ?? 43133) : undefined,
@@ -133,6 +135,7 @@ export async function ensureBasePaths(paths: CamoucliPaths): Promise<void> {
     ensureDir(paths.browsersDir),
     ensureDir(paths.profilesDir),
     ensureDir(paths.presetsDir),
+    ensureDir(paths.statesDir),
   ]);
 }
 

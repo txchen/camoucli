@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import type { Locator, Page } from 'playwright-core';
 
-import { hasLaunchFingerprintHelpers, type LaunchInput } from '../camoufox/config.js';
+import { hasLaunchFingerprintHelpers, parseExtraHTTPHeaders, parseProxyString, resolveInitScripts, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
 import type { CamoucliPaths } from '../state/paths.js';
 import { inspectStoppedSessionInfo, inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
@@ -16,6 +16,19 @@ import { createTabRuntime, type SessionRuntime, type TabRuntime } from './tabs.j
 interface BrowserManagerOptions {
   paths: CamoucliPaths;
   logger: Logger;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export class BrowserManager {
@@ -983,9 +996,62 @@ export class BrowserManager {
       );
     }
 
-    if (input.proxy && input.proxy !== session.resolvedConfig.proxy?.server) {
+    const proxy = input.proxy !== undefined || input.proxyBypass !== undefined
+      ? parseProxyString(input.proxy, input.proxyBypass)
+      : undefined;
+    if (proxy && stableJson(proxy) !== stableJson(session.resolvedConfig.proxy)) {
       throw new SessionError(
         `Session ${session.name} is already running with proxy ${session.resolvedConfig.proxy?.server ?? 'none'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (!proxy && input.proxyBypass !== undefined && input.proxyBypass !== session.resolvedConfig.proxy?.bypass) {
+      throw new SessionError(
+        `Session ${session.name} is already running with proxy bypass ${session.resolvedConfig.proxy?.bypass ?? 'none'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    const headers = parseExtraHTTPHeaders(input.headers, input.extraHTTPHeaders);
+    if (headers !== undefined && stableJson(headers) !== stableJson(session.resolvedConfig.extraHTTPHeaders ?? {})) {
+      throw new SessionError(
+        `Session ${session.name} is already running with different extra HTTP headers. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.userAgent !== undefined && input.userAgent !== session.resolvedConfig.userAgent) {
+      throw new SessionError(
+        `Session ${session.name} is already running with userAgent ${session.resolvedConfig.userAgent ?? 'default'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.ignoreHTTPSErrors !== undefined && input.ignoreHTTPSErrors !== session.resolvedConfig.ignoreHTTPSErrors) {
+      throw new SessionError(
+        `Session ${session.name} is already running with ignoreHTTPSErrors=${String(session.resolvedConfig.ignoreHTTPSErrors ?? false)}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.colorScheme !== undefined && input.colorScheme !== session.resolvedConfig.colorScheme) {
+      throw new SessionError(
+        `Session ${session.name} is already running with colorScheme ${session.resolvedConfig.colorScheme ?? 'default'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.reducedMotion !== undefined && input.reducedMotion !== session.resolvedConfig.reducedMotion) {
+      throw new SessionError(
+        `Session ${session.name} is already running with reducedMotion ${session.resolvedConfig.reducedMotion ?? 'default'}. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    const initScripts = resolveInitScripts(input);
+    if (initScripts.length > 0 && stableJson(initScripts) !== stableJson(session.resolvedConfig.initScripts)) {
+      throw new SessionError(
+        `Session ${session.name} is already running with different launch init scripts. Use a different session name or stop the existing session first.`,
+      );
+    }
+
+    if (input.state !== undefined || input.storageState !== undefined) {
+      throw new SessionError(
+        `Session ${session.name} is already running. Launch-time state can only be applied when starting a new session; use a different session name or stop the existing session first.`,
       );
     }
 
@@ -1141,6 +1207,14 @@ export class BrowserManager {
       ...(session.launchInput.prefsPath ? { prefsPath: session.launchInput.prefsPath } : {}),
       ...(session.launchInput.preset?.length ? { preset: session.launchInput.preset } : {}),
       ...(session.resolvedConfig.proxy ? { proxy: session.resolvedConfig.proxy.server } : {}),
+      ...(session.resolvedConfig.proxy?.bypass ? { proxyBypass: session.resolvedConfig.proxy.bypass } : {}),
+      ...(session.resolvedConfig.extraHTTPHeaders ? { extraHTTPHeaders: session.resolvedConfig.extraHTTPHeaders } : {}),
+      ...(session.resolvedConfig.userAgent ? { userAgent: session.resolvedConfig.userAgent } : {}),
+      ...(session.resolvedConfig.ignoreHTTPSErrors !== undefined ? { ignoreHTTPSErrors: session.resolvedConfig.ignoreHTTPSErrors } : {}),
+      ...(session.resolvedConfig.colorScheme ? { colorScheme: session.resolvedConfig.colorScheme } : {}),
+      ...(session.resolvedConfig.reducedMotion ? { reducedMotion: session.resolvedConfig.reducedMotion } : {}),
+      ...(session.resolvedConfig.initScripts.length > 0 ? { initScripts: session.resolvedConfig.initScripts } : {}),
+      ...(session.launchInput.state ? { state: session.launchInput.state } : {}),
       ...(session.resolvedConfig.locale ? { locale: session.resolvedConfig.locale } : {}),
       ...(session.resolvedConfig.timezoneId ? { timezone: session.resolvedConfig.timezoneId } : {}),
       ...(viewport ? { viewport: { width: viewport.width, height: viewport.height } } : {}),

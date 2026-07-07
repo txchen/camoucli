@@ -163,6 +163,12 @@ describe('CLI program parsing', () => {
     expect(help).toContain('key [options] <key>');
     expect(help).toContain('scrollinto [options] <target>');
     expect(help).toContain('window');
+    const openHelp = program.commands.find((command) => command.name() === 'open')?.helpInformation();
+    expect(openHelp).toContain('--headed');
+    expect(openHelp).toContain('--proxy-bypass <hosts>');
+    expect(openHelp).toContain('--headers <json>');
+    expect(openHelp).toContain('--init-script <path>');
+    expect(openHelp).toContain('--state <path-or-name>');
 
     const evalHelp = program.commands.find((command) => command.name() === 'eval')?.helpInformation();
     expect(evalHelp).toContain('--base64 <script>');
@@ -205,6 +211,25 @@ describe('CLI program parsing', () => {
         '--tabname',
         'docs',
         '--headless',
+        '--proxy',
+        'http://127.0.0.1:8080',
+        '--proxy-bypass',
+        'localhost',
+        '--headers',
+        '{"x-test":"1"}',
+        '--user-agent',
+        'CamouTest/1.0',
+        '--ignore-https-errors',
+        '--color-scheme',
+        'dark',
+        '--reduced-motion',
+        'reduce',
+        '--init-script',
+        '/tmp/init-a.js',
+        '--init-script',
+        '/tmp/init-b.js',
+        '--state',
+        'auth',
         '--browser',
         '135.0.1-beta.24',
         '--preset',
@@ -237,6 +262,15 @@ describe('CLI program parsing', () => {
         session: 'work',
         tabName: 'docs',
         headless: true,
+        proxy: 'http://127.0.0.1:8080',
+        proxyBypass: 'localhost',
+        headers: '{"x-test":"1"}',
+        userAgent: 'CamouTest/1.0',
+        ignoreHTTPSErrors: true,
+        colorScheme: 'dark',
+        reducedMotion: 'reduce',
+        initScripts: ['/tmp/init-a.js', '/tmp/init-b.js'],
+        state: 'auth',
         browser: '135.0.1-beta.24',
         preset: ['cache', 'low-bandwidth'],
         configJson: '{"foo":1}',
@@ -254,6 +288,19 @@ describe('CLI program parsing', () => {
         tabname: 'docs',
         json: true,
       }),
+    );
+  });
+
+  it('maps headed alias to headless false', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'open', 'https://example.com', '--headed'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenCalledWith(
+      'open',
+      expect.objectContaining({ action: 'open', headless: false }),
+      expect.any(Object),
     );
   });
 

@@ -6,10 +6,44 @@ import { ValidationError } from '../src/util/errors.js';
 describe('launch config parsing', () => {
   it('parses proxy URLs', () => {
     expect(parseProxyString('http://127.0.0.1:8080')).toEqual({ server: 'http://127.0.0.1:8080/' });
+    expect(parseProxyString('http://127.0.0.1:8080', '*.internal,localhost')).toEqual({
+      server: 'http://127.0.0.1:8080/',
+      bypass: '*.internal,localhost',
+    });
   });
 
   it('rejects invalid proxy URLs', () => {
     expect(() => parseProxyString('not-a-url')).toThrow(ValidationError);
+    expect(() => parseProxyString(undefined, 'localhost')).toThrow(ValidationError);
+  });
+
+  it('resolves Playwright-compatible launch context options', async () => {
+    const config = await resolveLaunchConfig({
+      proxy: 'http://127.0.0.1:8080',
+      proxyBypass: 'localhost',
+      headers: '{"x-test":"1"}',
+      userAgent: 'CamouTest/1.0',
+      ignoreHTTPSErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      initScripts: ['/tmp/init.js', { content: 'window.ready = true;' }],
+      state: 'auth',
+    });
+
+    expect(config.proxy).toEqual({ server: 'http://127.0.0.1:8080/', bypass: 'localhost' });
+    expect(config.extraHTTPHeaders).toEqual({ 'x-test': '1' });
+    expect(config.userAgent).toBe('CamouTest/1.0');
+    expect(config.ignoreHTTPSErrors).toBe(true);
+    expect(config.colorScheme).toBe('dark');
+    expect(config.reducedMotion).toBe('reduce');
+    expect(config.initScripts).toEqual([{ path: '/tmp/init.js' }, { content: 'window.ready = true;' }]);
+    expect(config.state).toBe('auth');
+  });
+
+  it('rejects invalid launch compatibility option combinations', async () => {
+    await expect(resolveLaunchConfig({ headers: '{"x-number":1}' })).rejects.toThrow(ValidationError);
+    await expect(resolveLaunchConfig({ headers: '{"x-test":"1"}', extraHTTPHeaders: { 'x-other': '2' } })).rejects.toThrow(ValidationError);
+    await expect(resolveLaunchConfig({ state: 'auth', storageState: '/tmp/auth.json' })).rejects.toThrow(ValidationError);
   });
 
   it('resolves inline config and prefs JSON', async () => {

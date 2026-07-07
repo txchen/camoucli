@@ -16,6 +16,7 @@ export function createTestPaths(rootDir: string): CamoucliPaths {
     browserRegistryFile: path.join(rootDir, 'data', 'browsers', 'registry.json'),
     profilesDir: path.join(rootDir, 'data', 'profiles'),
     presetsDir: path.join(rootDir, 'data', 'presets'),
+    statesDir: path.join(rootDir, 'data', 'states'),
     daemonSocketPath: path.join(rootDir, 'runtime', 'daemon.sock'),
     daemonPidFile: path.join(rootDir, 'runtime', 'daemon.pid'),
     daemonLogFile: path.join(rootDir, 'logs', 'daemon.log'),

@@ -165,6 +165,97 @@ describe('daemon integration', () => {
     expect(getFakeLaunchLog().map((launch) => launch.sessionName)).not.toContain('stored-only');
   });
 
+  it('rejects incompatible launch options for already-running sessions', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'launch-options',
+      tabName: 'main',
+      url: 'about:blank',
+      headless: true,
+      proxy: 'http://127.0.0.1:8080',
+      proxyBypass: 'localhost',
+      headers: '{"x-test":"1"}',
+      userAgent: 'CamouTest/1.0',
+      ignoreHTTPSErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+      initScripts: [{ content: 'window.ready = true;' }],
+    });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'open',
+        session: 'launch-options',
+        tabName: 'main',
+        url: 'about:blank',
+        proxy: 'http://127.0.0.1:8080',
+        proxyBypass: 'localhost',
+        headers: '{"x-test":"1"}',
+        userAgent: 'CamouTest/1.0',
+        ignoreHTTPSErrors: true,
+        colorScheme: 'dark',
+        reducedMotion: 'reduce',
+        initScripts: [{ content: 'window.ready = true;' }],
+      }),
+    ).resolves.toMatchObject({
+      sessionName: 'launch-options',
+      tabName: 'main',
+    });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'open',
+        session: 'launch-options',
+        tabName: 'main',
+        url: 'about:blank',
+        userAgent: 'DifferentUA/1.0',
+      }),
+    ).rejects.toMatchObject({
+      code: 'session_error',
+      message: expect.stringContaining('userAgent CamouTest/1.0'),
+    });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'open',
+        session: 'launch-options',
+        tabName: 'main',
+        url: 'about:blank',
+        state: 'auth',
+      }),
+    ).rejects.toMatchObject({
+      code: 'session_error',
+      message: expect.stringContaining('Launch-time state can only be applied when starting a new session'),
+    });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'open',
+        session: 'launch-options',
+        tabName: 'main',
+        url: 'about:blank',
+        initScripts: [{ content: 'window.ready = false;' }],
+      }),
+    ).rejects.toMatchObject({
+      code: 'session_error',
+      message: expect.stringContaining('different launch init scripts'),
+    });
+
+    const info = (await sendDaemonRequest(paths, {
+      action: 'session.info',
+      session: 'launch-options',
+    })) as { launch?: Record<string, unknown> };
+    expect(info.launch).toMatchObject({
+      proxy: 'http://127.0.0.1:8080/',
+      proxyBypass: 'localhost',
+      extraHTTPHeaders: { 'x-test': '1' },
+      userAgent: 'CamouTest/1.0',
+      ignoreHTTPSErrors: true,
+      colorScheme: 'dark',
+      reducedMotion: 'reduce',
+    });
+  });
+
   it('removes a stored profile and stops the running session if needed', async () => {
     await sendDaemonRequest(paths, {
       action: 'open',
