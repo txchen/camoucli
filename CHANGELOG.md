@@ -8,10 +8,21 @@ The format is loosely based on Keep a Changelog and uses semantic versioning.
 
 ### Added
 
+- Added `camou skills` to serve version-matched agent skill content without starting the daemon or requiring an installed browser.
+- Added the version-matched `core` runtime skill plus `core --full` references and templates.
+- Added runtime skills for `dogfood`, `migration`, `network-debug`, and `node` alongside the core Camou guide.
+
+### Changed
+
+- Replaced the installed `camou` skill with a hidden discovery stub that points agents to `camou skills get core`.
+- Updated README and package contents for the CLI-served skill model.
+
+## [0.11.0] - 2026-07-07
+
+### Added
+
 - Added the typed `CamouClient` daemon API for command-parity workflows without shelling out.
 - Added Agent Browser command-parity and migration documentation covering supported, adapted, unsupported, and out-of-scope command families.
-- Added `camou skills` to serve version-matched agent skill content without starting the daemon or requiring an installed browser.
-- Added runtime skills for `dogfood`, `migration`, `network-debug`, and `node` alongside the core Camou guide.
 
 ### Changed
 
