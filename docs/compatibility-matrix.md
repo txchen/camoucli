@@ -2,6 +2,8 @@
 
 Camou includes cross-platform CI and a repeatable compatibility-matrix workflow so it is easier to track which Camoufox builds launch with the currently bundled `playwright-core` version.
 
+This document is about Camoufox build compatibility. Agent Browser command migration status is tracked separately in [`agent-browser-command-parity.md`](agent-browser-command-parity.md) and [`agent-browser-migration.md`](agent-browser-migration.md).
+
 ## GitHub Actions
 
 - CI workflow: `.github/workflows/ci.yml`

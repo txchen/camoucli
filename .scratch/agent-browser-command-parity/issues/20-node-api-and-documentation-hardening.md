@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Node API And Documentation Hardening
@@ -15,18 +15,18 @@ This is the final polish and API slice. It should not be used to discover or imp
 
 ## Acceptance criteria
 
-- [ ] The existing direct Playwright Node API remains focused on launching Camoufox and returning real Playwright context/page access.
-- [ ] A typed daemon client exposes canonical methods for implemented session, tab, ref, state, network, and artifact workflows without requiring users to shell out.
-- [ ] CLI-only aliases and shell transports are not duplicated as unnecessary first-class Node API methods.
-- [ ] Public daemon-client input and result types are exported and avoid raw untyped IPC exposure.
-- [ ] Node API tests cover method shape, defaults, timeout/path propagation, structured results, and error normalization.
-- [ ] A command-parity matrix documents Agent Browser command, Camoucli command, status, slice, Node API surface, notes, and test coverage.
-- [ ] Migration notes explain local Camoufox scope, sessions/profiles/state, tabs/windows, network, debug, video/PDF caveats, Node API split, and unsupported commands.
-- [ ] README and command help are audited for every implemented, adapted, deferred, unsupported, and out-of-scope command family.
-- [ ] Unsupported commands consistently return stable structured error codes and useful alternatives in human and JSON output.
-- [ ] Agent-facing workflow docs are updated only for commands that are stable enough for agents to use.
-- [ ] Opt-in real Camoufox smoke coverage is documented or added for engine-sensitive behavior such as init scripts, state, route/unroute, trace, clipboard, PDF if attempted, video if implemented, and HAR.
-- [ ] `npm run build` and `npm test` pass.
+- [x] The existing direct Playwright Node API remains focused on launching Camoufox and returning real Playwright context/page access.
+- [x] A typed daemon client exposes canonical methods for implemented session, tab, ref, state, network, and artifact workflows without requiring users to shell out.
+- [x] CLI-only aliases and shell transports are not duplicated as unnecessary first-class Node API methods.
+- [x] Public daemon-client input and result types are exported and avoid raw untyped IPC exposure.
+- [x] Node API tests cover method shape, defaults, timeout/path propagation, structured results, and error normalization.
+- [x] A command-parity matrix documents Agent Browser command, Camoucli command, status, slice, Node API surface, notes, and test coverage.
+- [x] Migration notes explain local Camoufox scope, sessions/profiles/state, tabs/windows, network, debug, video/PDF caveats, Node API split, and unsupported commands.
+- [x] README and command help are audited for every implemented, adapted, deferred, unsupported, and out-of-scope command family.
+- [x] Unsupported commands consistently return stable structured error codes and useful alternatives in human and JSON output.
+- [x] Agent-facing workflow docs are updated only for commands that are stable enough for agents to use.
+- [x] Opt-in real Camoufox smoke coverage is documented or added for engine-sensitive behavior such as init scripts, state, route/unroute, trace, clipboard, PDF if attempted, video if implemented, and HAR.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 

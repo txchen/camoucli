@@ -79,20 +79,31 @@ camou open https://example.com --browser <version>
 - the user explicitly wants a script, test, or reusable module
 - the workflow needs loops, branching, retries, or composition with other Node code
 - the user wants direct Playwright access after launch
+- the user wants stable daemon-owned sessions, tabs, refs, or state workflows without shelling out repeatedly
 
 Core programmatic helpers:
 
 ```ts
-import { Camoufox, launchCamoufox, withCamoufox } from 'camou';
+import { CamouClient, Camoufox, launchCamoufox, withCamoufox } from 'camou';
 ```
 
-The Node API returns a real Playwright `BrowserContext`, so standard Playwright methods work after launch.
+`Camoufox` returns a real Playwright `BrowserContext`, so standard Playwright methods work after launch. `CamouClient` talks to the local daemon and returns structured command results for the stable session/tab/ref workflow. Check the command-parity matrix before using newer network/debug/artifact methods from agent-authored scripts.
 
 High-level wrapper pattern:
 
 ```ts
 const camou = await Camoufox.launch({ session: 'script' });
 const page = await camou.open('https://example.com');
+await camou.close();
+```
+
+Daemon-backed workflow pattern:
+
+```ts
+const camou = CamouClient.create({ session: 'script', tabName: 'main' });
+await camou.open('https://example.com');
+await camou.snapshot({ interactive: true });
+await camou.click('@e1');
 await camou.close();
 ```
 
@@ -143,4 +154,4 @@ When the user says "use the browser" or "test the site":
 5. interact with `click`, `fill`, `press`, `wait`
 6. re-snapshot after page changes
 7. keep the same `--session` if the workflow depends on login state
-8. if they want a reusable Node script instead, switch to the package API and prefer `Camoufox.launch()` or `Camoufox.with()`
+8. if they want a reusable Node script instead, switch to the package API: use `Camoufox` for direct Playwright access or `CamouClient` for daemon session/tab/ref workflows

@@ -1526,7 +1526,7 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
   addSharedOutputOptions(
     program
       .command('connect')
-      .description('Unsupported: CDP/provider connection modes are outside local Camoufox scope')
+      .description('Unsupported: CDP/provider/browser-engine commands are outside local Camoufox scope; returns a structured migration error')
       .allowUnknownOption(true)
       .allowExcessArguments(true)
       .action(() => {

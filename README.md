@@ -181,7 +181,12 @@ and they automatically use the configured session, tab, browser version, headles
 
 Camou can also be used as a Node library, not just a CLI.
 
-The programmatic API is Playwright-based: it launches Camoufox for you and gives you a real Playwright `BrowserContext`, similar in spirit to the Camoufox Python wrapper.
+There are two programmatic surfaces:
+
+- `Camoufox` launches Camoufox directly and gives you real Playwright `BrowserContext` and `Page` access.
+- `CamouClient` talks to the local daemon for command-parity workflows such as named sessions/tabs, `@eN` snapshot refs, state files, network buffers, and artifacts.
+
+Use `Camoufox` when you want standard Playwright control:
 
 ```ts
 import { Camoufox } from 'camou';
@@ -202,7 +207,27 @@ console.log(await page.title());
 await camou.close();
 ```
 
-If you prefer a scoped helper:
+Use `CamouClient` when you want the daemon-owned CLI workflow without shelling out:
+
+```ts
+import { CamouClient } from 'camou';
+
+const camou = CamouClient.create({
+  session: 'script',
+  tabName: 'main',
+  headless: false,
+});
+
+await camou.open('https://example.com');
+const snapshot = await camou.snapshot({ interactive: true });
+await camou.click('@e1');
+await camou.state.save('logged-in');
+await camou.close();
+```
+
+`CamouClient` returns structured results and preserves Camoucli error classes. It intentionally omits CLI-only aliases and unsupported compatibility stubs; use canonical methods such as `press()` instead of `key`, `scrollIntoView()` instead of `scrollinto`, and `vitals()` instead of `web-vitals`.
+
+If you prefer a scoped direct-Playwright helper:
 
 ```ts
 import { Camoufox } from 'camou';
@@ -223,6 +248,9 @@ Useful exported helpers include:
 - `launchCamoufoxContext()`
 - `resolveCamoufoxLaunchSpec()`
 - `withCamoufox()`
+- `CamouClient`
+- `createCamouClient()`
+- `withCamouClient()`
 - `installCamoufox()`
 - `getLogger()`
 - `Logger`
@@ -235,6 +263,7 @@ Notes:
 - install a browser first with `camou install` or `installCamoufox()`
 - use a dedicated `session` name in scripts if you do not want to share the default CLI profile
 - the returned context is a normal Playwright context, so you can use standard Playwright APIs from there
+- use `CamouClient` instead of spawning `camou` repeatedly when a Node script needs daemon state, active tabs, refs, or managed artifacts
 
 Install with logs from Node:
 
@@ -383,6 +412,8 @@ Use `camou daemon restart` after upgrading the CLI if an older background daemon
 
 ## Command Reference
 
+For Agent Browser migration details, see [`docs/agent-browser-command-parity.md`](docs/agent-browser-command-parity.md) and [`docs/agent-browser-migration.md`](docs/agent-browser-migration.md).
+
 ### Browser management
 
 ```bash
@@ -412,7 +443,9 @@ camou eval --stdin                # Run JavaScript read from stdin
 camou snapshot                    # Capture page state and refs
 camou snapshot -i                 # Interactive elements only; recommended
 camou click <selectorOrRef>       # Click a selector or @eN ref
+camou dblclick <selectorOrRef>    # Double-click a selector or @eN ref
 camou hover <selectorOrRef>       # Hover a selector or @eN ref
+camou focus <selectorOrRef>       # Focus an element
 camou fill <selectorOrRef> <text> # Set an input value directly
 camou type <selectorOrRef> <text> # Type text with key events
 camou check <selectorOrRef>       # Check a checkbox or radio input
@@ -420,15 +453,21 @@ camou uncheck <selectorOrRef>     # Uncheck a checkbox
 camou select <selectorOrRef> <value> # Choose a select option
 camou press <key>                 # Press a keyboard key in the page
 camou key <key>                   # Alias for press
+camou keyboard type <text>        # Send page keyboard typing
+camou mouse move <x> <y>          # Move the page mouse
 camou scroll <direction> [amount] # Scroll up, down, left, or right
 camou scrollintoview <selectorOrRef> # Scroll until visible
 camou scrollinto <selectorOrRef>  # Alias for scrollintoview
+camou upload <selectorOrRef> <files...> # Set files on an input
+camou drag <source> <target>      # Drag one selector/ref to another
 camou wait [selectorOrRef] [--text <text>] [--load <state>] # Wait for element, text, or load
 camou screenshot [path]           # Save a screenshot under artifacts/screenshots by default
 camou get url                     # Read the current page URL
 camou get title                   # Read the current page title
 camou get text <selectorOrRef>    # Read visible text from an element
 camou get value <selectorOrRef>   # Read an element's form value
+camou find role button --name Save # Use semantic Playwright locator helpers
+camou is visible <selectorOrRef>  # Return element predicate booleans
 ```
 
 ### Debug and artifacts
@@ -445,6 +484,10 @@ camou clipboard copy              # Synthesize the platform copy shortcut
 camou clipboard paste             # Synthesize the platform paste shortcut
 camou trace start                 # Start Playwright tracing for the session
 camou trace stop [path]           # Write a trace zip under artifacts/traces by default
+camou diff snapshot --baseline old.txt # Compare a fresh snapshot to a baseline
+camou vitals                      # Report browser Performance API vitals
+camou pushstate /next             # Run history.pushState in the page
+camou addinitscript 'window.x=1'  # Register an init script for future documents
 ```
 
 Relative artifact paths resolve under per-family directories in `profiles/<session>/artifacts/`: screenshots under `screenshots/`, traces under `traces/`, HARs under `har/`, and future diff/PDF/video artifacts under their own matching directories.
@@ -484,7 +527,21 @@ camou session stop [name]     # Stop one session or the current session
 camou tab list                # List tabs in the current session
 camou tab new [url]           # Create a new tab, optionally opening a URL
 camou tab close [nameOrIndex] # Close one tab by name or index
+camou window new [url]        # Create a new tracked Playwright page
 ```
+
+### Unsupported and out of scope
+
+Camoucli intentionally stays in local Camoufox/Playwright scope. The following Agent Browser families are not implemented as local daemon workflows:
+
+```bash
+camou connect ...             # Unsupported CDP/provider attach migration stub
+camou inspect ...             # Unsupported DevTools/CDP inspect migration stub
+camou profiler ...            # Unsupported CDP profiler migration stub
+camou pdf ...                 # Unsupported until real Camoufox smoke coverage proves support
+```
+
+Hidden migration flags such as `--cdp`, `--provider`, `--executable-path`, `--engine`, `--extension`, and `--restore-policy` also return structured `unsupported_command` errors. Remote-provider control, auth vaults, MCP, dashboards, chat, plugin/skill management, and self-upgrade commands are out of scope for Camoucli's local browser daemon.
 
 ## Common Flags
 

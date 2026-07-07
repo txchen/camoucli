@@ -15,12 +15,12 @@ Use it when you need:
 - stable `@eN` refs from page snapshots
 - machine-readable browser automation via `--json`
 - Camoufox version install/switch/diagnostics
-- programmatic control from Node scripts using a real Playwright `BrowserContext`
+- programmatic control from Node scripts using a real Playwright `BrowserContext` or the daemon-backed `CamouClient`
 
 If `camou` is not installed globally, use `npx camou ...`.
 If you are working inside the Camoucli repo itself, use `npm run dev -- ...`.
 
-If the user wants a reusable Node script, test, or automation module, prefer importing from the `camou` package instead of shelling out to the CLI for every step.
+If the user wants a reusable Node script, test, or automation module, prefer importing from the `camou` package instead of shelling out to the CLI for every step. Use `Camoufox` for direct Playwright access and `CamouClient` for stable daemon-owned sessions, tabs, snapshot refs, and state workflows. Check the command-parity matrix before using newer network/debug/artifact methods from agent code.
 
 ## Core Workflow
 
@@ -182,7 +182,7 @@ camou doctor --json   # Emit JSON compatibility diagnostics
 
 ### Use the Node API for scripts and test code
 
-If the user wants code instead of one-off shell commands, use the package API.
+If the user wants code instead of one-off shell commands, use the package API. `Camoufox` is the direct Playwright surface; `CamouClient` is the stable daemon surface for the same `open -> snapshot -> interact with @refs` workflow agents already use in the CLI.
 
 ```ts
 import { Camoufox } from 'camou';
@@ -209,6 +209,18 @@ await Camoufox.with({ session: 'script' }, async (camou) => {
 });
 ```
 
+Daemon-client helper:
+
+```ts
+import { CamouClient } from 'camou';
+
+const camou = CamouClient.create({ session: 'script', tabName: 'main' });
+await camou.open('https://example.com');
+await camou.snapshot({ interactive: true });
+await camou.click('@e1');
+await camou.close();
+```
+
 Useful script exports:
 
 - `Camoufox.launch()`
@@ -219,6 +231,9 @@ Useful script exports:
 - `launchCamoufoxContext()`
 - `resolveCamoufoxLaunchSpec()`
 - `withCamoufox()`
+- `CamouClient`
+- `createCamouClient()`
+- `withCamouClient()`
 - `installCamoufox()`
 - `listInstalledBrowsers()`
 - `setCurrentBrowser()`

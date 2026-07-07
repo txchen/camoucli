@@ -426,6 +426,7 @@ describe('CLI program parsing', () => {
     expect(help).toContain('inspect');
     expect(help).toContain('profiler');
     expect(help).toContain('pdf');
+    expect(help).toContain('structured migration error');
     const openHelp = program.commands.find((command) => command.name() === 'open')?.helpInformation();
     expect(openHelp).toContain('--headed');
     expect(openHelp).toContain('--proxy-bypass <hosts>');
