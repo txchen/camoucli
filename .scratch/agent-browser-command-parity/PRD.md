@@ -1,7 +1,7 @@
 # Agent Browser Command Parity PRD
 
 Labels: ready-for-agent
-Status: ready-for-agent
+Status: done
 
 ## Problem Statement
 

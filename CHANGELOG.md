@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is loosely based on Keep a Changelog and uses semantic versioning.
 
+## [0.11.0] - 2026-07-07
+
+### Added
+
+- Added the typed `CamouClient` daemon API for command-parity workflows without shelling out.
+- Added Agent Browser command-parity and migration documentation covering supported, adapted, unsupported, and out-of-scope command families.
+
+### Changed
+
+- Clarified the Node API split between direct Playwright `Camoufox` launches and daemon-owned `CamouClient` workflows.
+- Updated README, command help, and agent workflow docs for the completed command-parity surface.
+
 ## [0.7.0] - 2026-03-21
 
 ### Added
