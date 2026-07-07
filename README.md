@@ -16,6 +16,8 @@ Camou is built for agent-style browser workflows:
 
 Camou takes strong inspiration from [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) and [BUNotesAI/agent-browser-session](https://github.com/BUNotesAI/agent-browser-session), but is built for the Camoufox + Playwright Firefox path and persistent local daemon workflows.
 
+See [Agent Browser command parity](docs/agent-browser-command-parity.md) for supported compatibility aliases, adapted commands, and deferred command families.
+
 ## Why Camou
 
 | Feature | Why it matters |
@@ -344,6 +346,8 @@ camou open https://example.com --session canary --browser 135.0.1-beta.24 # Pin 
 camou snapshot -i --json                        # JSON interactive snapshot
 camou get title --json                          # JSON scalar output
 camou eval 'document.title' --json              # JSON eval result
+camou eval --base64 ZG9jdW1lbnQudGl0bGU= --json # Decode and evaluate JavaScript
+printf 'document.title' | camou eval --stdin --json # Read JavaScript from stdin
 camou cookies export --json                     # JSON cookie export
 camou doctor --json                             # JSON diagnostics
 camou remote-versions --json | jq -r '.remoteVersions[].version' # Extract versions
@@ -381,10 +385,14 @@ camou doctor               # Diagnose install and launch issues
 
 ```bash
 camou open <url>                  # Open a URL in the current tab
+camou goto <url>                  # Alias for open: navigate the current tab
+camou navigate <url>              # Alias for open: navigate the current tab
 camou back                        # Go back in the current tab history
 camou forward                     # Go forward in the current tab history
 camou reload                      # Reload the current page
 camou eval <expression>           # Run JavaScript in the current tab
+camou eval --base64 <script>      # Decode base64 JavaScript, then run it
+camou eval --stdin                # Run JavaScript read from stdin
 camou snapshot                    # Capture page state and refs
 camou snapshot -i                 # Interactive elements only; recommended
 camou click <selectorOrRef>       # Click a selector or @eN ref
@@ -395,8 +403,10 @@ camou check <selectorOrRef>       # Check a checkbox or radio input
 camou uncheck <selectorOrRef>     # Uncheck a checkbox
 camou select <selectorOrRef> <value> # Choose a select option
 camou press <key>                 # Press a keyboard key in the page
+camou key <key>                   # Alias for press
 camou scroll <direction> [amount] # Scroll up, down, left, or right
 camou scrollintoview <selectorOrRef> # Scroll until visible
+camou scrollinto <selectorOrRef>  # Alias for scrollintoview
 camou wait [selectorOrRef] [--text <text>] [--load <state>] # Wait for element, text, or load
 camou screenshot [path]           # Save a screenshot of the current page
 camou get url                     # Read the current page URL

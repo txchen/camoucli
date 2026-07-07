@@ -213,6 +213,40 @@ describe('CLI defaults resolution', () => {
     expect(applyCliDefaultsToPayload('session.stop', { action: 'session.stop' }, resolved)).not.toHaveProperty('browser');
   });
 
+  it('applies resolved defaults to canonical actions used by command aliases', () => {
+    const resolved = {
+      session: 'workspace',
+      tabname: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    };
+
+    expect(
+      applyCliDefaultsToPayload('open', { action: 'open', url: 'https://example.com' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('press', { action: 'press', key: 'Enter' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('scroll.intoView', { action: 'scroll.intoView', target: '@e1' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+  });
+
   it('rejects invalid boolean env defaults', async () => {
     await expect(
       resolveSharedOptions({}, { cwd: rootDir, env: { CAMOU_HEADLESS: 'sometimes' } }),

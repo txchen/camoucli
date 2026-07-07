@@ -1,8 +1,11 @@
 import { Command } from 'commander';
+import { stdin as defaultStdin } from 'node:process';
+import type { Readable } from 'node:stream';
 
 import packageJson from '../../package.json' with { type: 'json' };
 
 import type { LaunchInput } from '../camoufox/config.js';
+import { ValidationError } from '../util/errors.js';
 
 export interface SharedOptions {
   session?: string | undefined;
@@ -58,6 +61,12 @@ export interface CliHandlers {
 
 export interface ProgramOptions {
   quietErrors?: boolean | undefined;
+  stdin?: Readable | undefined;
+}
+
+interface EvalOptions extends SharedOptions {
+  base64?: string | undefined;
+  stdin?: boolean | undefined;
 }
 
 function collectValues(value: string, previous: string[] = []): string[] {
@@ -129,8 +138,89 @@ export function toLaunchInput(options: SharedOptions): LaunchInput {
   };
 }
 
+const SUPPORTED_NAVIGATION_SCHEME_PATTERN = /^(?:https?|about|data|file|chrome|chrome-extension):/i;
+const EXPLICIT_SCHEME_PATTERN = /^([a-z][a-z0-9+.-]*):(?!\d)/i;
+
+export function normalizeNavigationUrl(input: string): string {
+  const url = input.trim();
+  if (!url) {
+    throw new ValidationError('URL is required.');
+  }
+
+  if (SUPPORTED_NAVIGATION_SCHEME_PATTERN.test(url)) {
+    return url;
+  }
+
+  const explicitScheme = EXPLICIT_SCHEME_PATTERN.exec(url)?.[1];
+  if (explicitScheme) {
+    throw new ValidationError(
+      `Unsupported URL scheme "${explicitScheme}". Supported explicit schemes: http, https, about, data, file, chrome, chrome-extension.`,
+    );
+  }
+
+  return `https://${url}`;
+}
+
+function invalidBase64Error(): ValidationError {
+  return new ValidationError('Invalid base64 eval script.');
+}
+
+export function decodeEvalBase64(input: string): string {
+  const normalized = input.replace(/\s+/g, '');
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]*={0,2}$/.test(normalized)) {
+    throw invalidBase64Error();
+  }
+
+  const decoded = Buffer.from(normalized, 'base64');
+  const canonical = decoded.toString('base64').replace(/=+$/u, '');
+  if (normalized.replace(/=+$/u, '') !== canonical) {
+    throw invalidBase64Error();
+  }
+
+  const script = decoded.toString('utf8');
+  if (!script) {
+    throw new ValidationError('Eval base64 input decoded to an empty script.');
+  }
+
+  return script;
+}
+
+async function readStream(stream: Readable): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+  }
+
+  return Buffer.concat(chunks).toString('utf8');
+}
+
+async function resolveEvalExpression(expression: string | undefined, options: EvalOptions, stdin: Readable): Promise<string> {
+  const modeCount = [expression !== undefined, options.base64 !== undefined, options.stdin === true].filter(Boolean).length;
+  if (modeCount === 0) {
+    throw new ValidationError('eval requires an expression, --base64, or --stdin.');
+  }
+  if (modeCount > 1) {
+    throw new ValidationError('Choose exactly one eval input mode: expression, --base64, or --stdin.');
+  }
+
+  if (options.base64 !== undefined) {
+    return decodeEvalBase64(options.base64);
+  }
+
+  if (options.stdin === true) {
+    const script = await readStream(stdin);
+    if (!script) {
+      throw new ValidationError('Eval stdin input is empty.');
+    }
+    return script;
+  }
+
+  return expression ?? '';
+}
+
 export function createProgram(handlers: CliHandlers, options?: ProgramOptions): Command {
   const program = new Command();
+  const stdin = options?.stdin ?? defaultStdin;
   program.exitOverride();
   program.configureOutput({
     writeErr: (str) => {
@@ -242,11 +332,14 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
-      .command('eval <expression>')
+      .command('eval [expression]')
       .description('Evaluate JavaScript in the current tab')
-      .action(async (expression: string, options: SharedOptions) => {
+      .option('-b, --base64 <script>', 'base64-encoded JavaScript to evaluate')
+      .option('--stdin', 'read JavaScript to evaluate from stdin')
+      .action(async (expression: string | undefined, options: EvalOptions) => {
+        const resolvedExpression = await resolveEvalExpression(expression, options, stdin);
         const shared: SharedOptions = { ...options, json: options.json, verbose: options.verbose };
-        await handlers.onDaemonAction('eval', { action: 'eval', expression, session: options.session, tabName: options.tabname }, shared);
+        await handlers.onDaemonAction('eval', { action: 'eval', expression: resolvedExpression, session: options.session, tabName: options.tabname }, shared);
       }),
   );
 
@@ -284,14 +377,24 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  addSharedBrowserOptions(
-    program
-      .command('open <url>')
-      .description('Open a URL in the current tab')
-      .action(async (url: string, options: SharedOptions) => {
-        await handlers.onDaemonAction('open', { action: 'open', url, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
-      }),
-  );
+  const addNavigationCommand = (name: string, description: string): void => {
+    addSharedBrowserOptions(
+      program
+        .command(`${name} <url>`)
+        .description(description)
+        .action(async (url: string, options: SharedOptions) => {
+          await handlers.onDaemonAction(
+            'open',
+            { action: 'open', url: normalizeNavigationUrl(url), session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+            options,
+          );
+        }),
+    );
+  };
+
+  addNavigationCommand('open', 'Open a URL in the current tab');
+  addNavigationCommand('goto', 'Navigate the current tab to a URL');
+  addNavigationCommand('navigate', 'Navigate the current tab to a URL');
 
   addSharedBrowserOptions(
     program
@@ -397,14 +500,19 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  addSharedBrowserOptions(
-    program
-      .command('press <key>')
-      .description('Press a keyboard key in the current tab')
-      .action(async (key: string, options: SharedOptions) => {
-        await handlers.onDaemonAction('press', { action: 'press', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
-      }),
-  );
+  const addPressCommand = (name: string, description: string): void => {
+    addSharedBrowserOptions(
+      program
+        .command(`${name} <key>`)
+        .description(description)
+        .action(async (key: string, options: SharedOptions) => {
+          await handlers.onDaemonAction('press', { action: 'press', key, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+        }),
+    );
+  };
+
+  addPressCommand('press', 'Press a keyboard key in the current tab');
+  addPressCommand('key', 'Alias for press: press a keyboard key in the current tab');
 
   addSharedBrowserOptions(
     program
@@ -419,18 +527,23 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       }),
   );
 
-  addSharedBrowserOptions(
-    program
-      .command('scrollintoview <target>')
-      .description('Scroll a selector or @ref into view')
-      .action(async (target: string, options: SharedOptions) => {
-        await handlers.onDaemonAction(
-          'scroll.intoView',
-          { action: 'scroll.intoView', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
-          options,
-        );
-      }),
-  );
+  const addScrollIntoViewCommand = (name: string, description: string): void => {
+    addSharedBrowserOptions(
+      program
+        .command(`${name} <target>`)
+        .description(description)
+        .action(async (target: string, options: SharedOptions) => {
+          await handlers.onDaemonAction(
+            'scroll.intoView',
+            { action: 'scroll.intoView', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+            options,
+          );
+        }),
+    );
+  };
+
+  addScrollIntoViewCommand('scrollintoview', 'Scroll a selector or @ref into view');
+  addScrollIntoViewCommand('scrollinto', 'Alias for scrollintoview: scroll a selector or @ref into view');
 
   addSharedBrowserOptions(
     program

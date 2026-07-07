@@ -53,6 +53,21 @@ describe('CLI JSON errors', () => {
     expect(payload.error.message).toContain('missing required argument');
     expect(result.stdout).toBe('');
   });
+
+  it('prints invalid eval base64 as structured JSON before starting the daemon', async () => {
+    const result = await runCli(['node', 'camou', 'eval', '--base64', 'not base64!', '--json'], rootDir);
+    const payload = JSON.parse(result.stderr) as {
+      success: boolean;
+      error: { code: string; message: string };
+      exitCode: number;
+    };
+
+    expect(result.code).toBe(2);
+    expect(payload.success).toBe(false);
+    expect(payload.error.code).toBe('validation_error');
+    expect(payload.error.message).toContain('Invalid base64');
+    expect(result.stdout).toBe('');
+  });
 });
 
 async function runCli(argv: string[], rootDir: string): Promise<CliResult> {

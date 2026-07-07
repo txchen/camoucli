@@ -1,8 +1,159 @@
+import { Readable } from 'node:stream';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import { createProgram } from '../src/cli/program.js';
 
 describe('CLI program parsing', () => {
+  it('routes navigation aliases through open with URL normalization', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'open', 'example.com/docs'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'goto', 'localhost:3000/app'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'navigate', 'about:blank'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'navigate', 'data:text/html,hello'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'navigate', 'file:///tmp/page.html'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'navigate', 'chrome://version'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'navigate', 'chrome-extension://abc/page.html'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'https://example.com/docs' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'https://localhost:3000/app' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'about:blank' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      4,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'data:text/html,hello' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      5,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'file:///tmp/page.html' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      6,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'chrome://version' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      7,
+      'open',
+      expect.objectContaining({ action: 'open', url: 'chrome-extension://abc/page.html' }),
+      expect.any(Object),
+    );
+  });
+
+  it('requires URLs for goto and navigate aliases', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'goto'], { from: 'node' })).rejects.toThrow('missing required argument');
+    await expect(program.parseAsync(['node', 'camou', 'navigate'], { from: 'node' })).rejects.toThrow('missing required argument');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported explicit navigation schemes before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'open', 'ftp://example.com'], { from: 'node' })).rejects.toThrow('Unsupported URL scheme "ftp"');
+    await expect(program.parseAsync(['node', 'camou', 'navigate', 'javascript:alert(1)'], { from: 'node' })).rejects.toThrow('Unsupported URL scheme "javascript"');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
+  it('routes key and scrollinto aliases to existing daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'key', 'Enter'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'scrollinto', '@e1'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'press',
+      expect.objectContaining({ action: 'press', key: 'Enter' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'scroll.intoView',
+      expect.objectContaining({ action: 'scroll.intoView', target: '@e1' }),
+      expect.any(Object),
+    );
+  });
+
+  it('routes eval input modes to the page evaluation handler', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), {
+      stdin: Readable.from(['window.location.href']),
+    });
+
+    await program.parseAsync(['node', 'camou', 'eval', 'document.title'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'eval', '--base64', 'ZG9jdW1lbnQuYm9keS5pbm5lclRleHQ='], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'eval', '--stdin'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'eval',
+      expect.objectContaining({ action: 'eval', expression: 'document.title' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'eval',
+      expect.objectContaining({ action: 'eval', expression: 'document.body.innerText' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'eval',
+      expect.objectContaining({ action: 'eval', expression: 'window.location.href' }),
+      expect.any(Object),
+    );
+  });
+
+  it('rejects invalid eval input before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'eval', '--base64', 'not base64!'], { from: 'node' })).rejects.toThrow('Invalid base64');
+    await expect(program.parseAsync(['node', 'camou', 'eval', 'document.title', '--stdin'], { from: 'node' })).rejects.toThrow('Choose exactly one eval input mode');
+    await expect(program.parseAsync(['node', 'camou', 'eval'], { from: 'node' })).rejects.toThrow('eval requires an expression');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
+  it('lists core alias and eval input modes in help', () => {
+    const program = createProgram(createHandlers(async () => undefined));
+    const help = program.helpInformation();
+
+    expect(help).toContain('goto [options] <url>');
+    expect(help).toContain('navigate [options] <url>');
+    expect(help).toContain('key [options] <key>');
+    expect(help).toContain('scrollinto [options] <target>');
+
+    const evalHelp = program.commands.find((command) => command.name() === 'eval')?.helpInformation();
+    expect(evalHelp).toContain('--base64 <script>');
+    expect(evalHelp).toContain('--stdin');
+  });
+
   it('maps open command flags into a daemon payload', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram({
@@ -620,3 +771,18 @@ describe('CLI program parsing', () => {
     expect(onFingerprintProfiles).toHaveBeenCalledWith(expect.objectContaining({ json: true }));
   });
 });
+
+function createHandlers(onDaemonAction: (action: string, payload: Record<string, unknown>, options: Record<string, unknown>) => Promise<void>) {
+  return {
+    onInstall: async () => undefined,
+    onRemove: async () => undefined,
+    onUse: async () => undefined,
+    onVersions: async () => undefined,
+    onPresets: async () => undefined,
+    onFingerprintProfiles: async () => undefined,
+    onPath: async () => undefined,
+    onVersion: async () => undefined,
+    onDoctor: async () => undefined,
+    onDaemonAction,
+  };
+}
