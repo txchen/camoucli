@@ -132,6 +132,23 @@ interface ReadOptions extends SharedOptions {
   timeout?: number | undefined;
 }
 
+interface NetworkRouteOptions extends SharedOptions {
+  abort?: boolean | undefined;
+  body?: string | undefined;
+  resourceType?: string[] | undefined;
+  status?: number | undefined;
+  contentType?: string | undefined;
+}
+
+interface NetworkRequestsOptions extends SharedOptions {
+  clear?: boolean | undefined;
+  filter?: string | undefined;
+  type?: string[] | undefined;
+  resourceType?: string[] | undefined;
+  method?: string | undefined;
+  status?: number | undefined;
+}
+
 function collectValues(value: string, previous: string[] = []): string[] {
   return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
@@ -270,6 +287,19 @@ function parseBooleanInput(value: string): boolean {
     return false;
   }
   throw new ValidationError('Expected a boolean value: true or false.');
+}
+
+function normalizeNetworkRoute(options: NetworkRouteOptions): { abort?: boolean | undefined; body?: string | undefined } {
+  if (options.abort && options.body !== undefined) {
+    throw new ValidationError('network route accepts either --abort or --body, not both.');
+  }
+  if (!options.abort && options.body === undefined) {
+    throw new ValidationError('network route requires --abort or --body.');
+  }
+  return {
+    ...(options.abort ? { abort: true } : {}),
+    ...(options.body !== undefined ? { body: options.body } : {}),
+  };
 }
 
 function readMode(options: ReadOptions): 'text' | 'raw' | 'outline' {
@@ -717,6 +747,96 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .description('Rename a managed storage-state snapshot')
       .action(async (from: string, to: string, options: OutputOptions) => {
         await handlers.onDaemonAction('state.rename', { action: 'state.rename', from, to }, { json: options.json, verbose: options.verbose });
+      }),
+  );
+
+  const networkCommand = program.command('network').description('Inspect and control session network activity');
+  addSharedBrowserOptions(
+    networkCommand
+      .command('route <url>')
+      .description('Route matching requests with abort or fulfill behavior')
+      .option('--abort', 'abort matching requests')
+      .option('--body <body>', 'fulfill matching requests with this response body')
+      .option('--resource-type <type>', 'resource type filter (repeat or comma-separated)', collectValues)
+      .option('--status <code>', 'fulfill response status', parseInteger)
+      .option('--content-type <value>', 'fulfill response content type')
+      .action(async (url: string, options: NetworkRouteOptions) => {
+        const behavior = normalizeNetworkRoute(options);
+        await handlers.onDaemonAction(
+          'network.route',
+          {
+            action: 'network.route',
+            url,
+            ...behavior,
+            ...(options.resourceType ? { resourceTypes: options.resourceType } : {}),
+            ...(options.status !== undefined ? { status: options.status } : {}),
+            ...(options.contentType ? { contentType: options.contentType } : {}),
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    networkCommand
+      .command('unroute [url]')
+      .description('Remove network routes for the current session')
+      .action(async (url: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction('network.unroute', { action: 'network.unroute', session: options.session, ...(url ? { url } : {}) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    networkCommand
+      .command('requests')
+      .description('List buffered network requests')
+      .option('--clear', 'clear the request buffer after listing')
+      .option('--filter <text>', 'filter by URL, method, resource type, or status')
+      .option('--type <type>', 'resource type filter (repeat or comma-separated)', collectValues)
+      .option('--resource-type <type>', 'resource type filter (repeat or comma-separated)', collectValues)
+      .option('--method <method>', 'HTTP method filter')
+      .option('--status <code>', 'HTTP status filter', parseInteger)
+      .action(async (options: NetworkRequestsOptions) => {
+        const resourceTypes = [...(options.type ?? []), ...(options.resourceType ?? [])];
+        await handlers.onDaemonAction(
+          'network.requests',
+          {
+            action: 'network.requests',
+            session: options.session,
+            clear: options.clear ?? false,
+            ...(options.filter ? { filter: options.filter } : {}),
+            ...(resourceTypes.length > 0 ? { resourceTypes } : {}),
+            ...(options.method ? { method: options.method } : {}),
+            ...(options.status !== undefined ? { status: options.status } : {}),
+          },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    networkCommand
+      .command('request <requestId>')
+      .description('Show details for one buffered network request')
+      .action(async (requestId: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('network.request', { action: 'network.request', session: options.session, requestId }, options);
+      }),
+  );
+  const networkHarCommand = networkCommand.command('har').description('Capture a portable in-memory HAR artifact');
+  addSharedBrowserOptions(
+    networkHarCommand
+      .command('start')
+      .description('Start HAR capture for the current session')
+      .action(async (options: SharedOptions) => {
+        await handlers.onDaemonAction('network.har.start', { action: 'network.har.start', session: options.session }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    networkHarCommand
+      .command('stop [path]')
+      .description('Stop HAR capture and write a HAR 1.2 JSON file')
+      .action(async (filePath: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction('network.har.stop', { action: 'network.har.stop', session: options.session, ...(filePath ? { path: filePath } : {}) }, options);
       }),
   );
 

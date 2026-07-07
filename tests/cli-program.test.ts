@@ -288,6 +288,36 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).toHaveBeenNthCalledWith(16, 'state.rename', expect.objectContaining({ from: 'old', to: 'new' }), expect.any(Object));
   });
 
+  it('routes network commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'network', 'route', '**/api', '--abort', '--resource-type', 'xhr,fetch', '--session', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'route', 'https://example.com/mock', '--body', '{"ok":true}', '--status', '201', '--content-type', 'application/json'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'unroute', '**/api'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'requests', '--filter', 'api', '--type', 'xhr', '--method', 'GET', '--status', '200', '--clear'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'request', 'net_1'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'har', 'start'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'network', 'har', 'stop', 'capture.har'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'network.route', expect.objectContaining({ action: 'network.route', url: '**/api', abort: true, resourceTypes: ['xhr', 'fetch'], session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'network.route', expect.objectContaining({ body: '{"ok":true}', status: 201, contentType: 'application/json' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'network.unroute', expect.objectContaining({ url: '**/api' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'network.requests', expect.objectContaining({ filter: 'api', resourceTypes: ['xhr'], method: 'GET', status: 200, clear: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'network.request', expect.objectContaining({ requestId: 'net_1' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'network.har.start', expect.objectContaining({ action: 'network.har.start' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'network.har.stop', expect.objectContaining({ path: 'capture.har' }), expect.any(Object));
+  });
+
+  it('rejects no-op network routes before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'network', 'route', '**/api'], { from: 'node' })).rejects.toThrow('requires --abort or --body');
+    await expect(program.parseAsync(['node', 'camou', 'network', 'route', '**/api', '--abort', '--body', 'ok'], { from: 'node' })).rejects.toThrow('either --abort or --body');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
   it('lists core alias and eval input modes in help', () => {
     const program = createProgram(createHandlers(async () => undefined));
     const help = program.helpInformation();
@@ -328,6 +358,8 @@ describe('CLI program parsing', () => {
     expect(program.commands.find((command) => command.name() === 'cookies')?.helpInformation()).toContain('set');
     expect(program.commands.find((command) => command.name() === 'storage')?.helpInformation()).toContain('local');
     expect(program.commands.find((command) => command.name() === 'state')?.helpInformation()).toContain('save');
+    expect(program.commands.find((command) => command.name() === 'network')?.helpInformation()).toContain('requests');
+    expect(program.commands.find((command) => command.name() === 'network')?.commands.find((command) => command.name() === 'har')?.helpInformation()).toContain('stop');
   });
 
   it('maps open command flags into a daemon payload', async () => {

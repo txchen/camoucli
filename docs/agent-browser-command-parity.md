@@ -23,7 +23,7 @@ Statuses:
 | `eval -b <script>` / `eval --base64 <script>` | `eval -b <script>` / `eval --base64 <script>` | supported | Decodes UTF-8 JavaScript in the CLI and rejects invalid base64 before contacting the daemon. |
 | `eval --stdin` | `eval --stdin` | supported | Reads JavaScript from stdin in the CLI and sends the existing eval daemon action. |
 
-Later parity slices will add broader storage/network commands and debug/artifact commands.
+Later parity slices will add debug/artifact commands.
 
 ## Direct Playwright Automation Commands
 
@@ -81,7 +81,7 @@ These commands add daemon-owned active-tab behavior while preserving explicit `-
 | `click <target> --new-tab [--label <name>]` | same | adapted | Waits for a popup/new page, tracks it as a tab, switches active tab, and returns a structured timeout error if no page opens. |
 | `window new [url] [--label <name>]` | same | adapted | Creates a new tracked Playwright page. Firefox/Playwright does not guarantee this is a separate OS window. |
 
-Still deferred from the broader core automation plan: PDF, screenshot annotation, storage commands, network logs/routes, and debug event buffers.
+Still deferred from the broader core automation plan: PDF, screenshot annotation, and debug event buffers.
 
 ## Stateful Runtime Commands
 
@@ -123,3 +123,19 @@ Launch globals apply when the daemon starts a new persistent Camoufox session. I
 | portable state files | `state save/list/show/clear/clean/rename` | supported | Managed names resolve under Camoucli's state directory. `state clear --all` removes managed snapshots only and does not remove persistent profiles. |
 | direct Node launch | `extraHTTPHeaders`, `userAgent`, `ignoreHTTPSErrors`, `colorScheme`, `reducedMotion`, `initScripts`, `storageState` | supported | Programmatic `Camoufox.launch()` and `launchCamoufox()` expose idiomatic Playwright-style names while preserving Camoucli-native launch fields. |
 | executable path, browser engine, CDP/provider, extensions, restore policy | none | unsupported | These remain outside local Camoufox persistent-session scope. Camoucli keeps registry-managed executables and centralized named profiles. |
+
+## Network Route, Request Log, And HAR
+
+Network commands are local Playwright-backed session features. Routes, request buffers, and HAR buffers live only in the running daemon process for the current session. They are not written into browser profiles, state snapshots, or registry files, and they clear when the session stops or the daemon exits.
+
+| Agent Browser command | Camoucli command | Status | Notes |
+| --- | --- | --- | --- |
+| `network route <url> --abort` | same | supported | Registers a Playwright context route for the current session. Matching requests can be filtered with `--resource-type <type>`; repeat the flag or pass comma-separated values. |
+| `network route <url> --body <body>` | same | supported | Fulfills matching requests with the supplied body. Optional `--status <code>` and `--content-type <value>` shape the synthetic response. A route without `--abort` or `--body` is rejected. |
+| `network unroute [url]` | same | supported | Removes routes for the current session. With a URL it removes matching route registrations; without one it removes all session routes. |
+| `network requests` | same | supported | Lists an in-memory ring buffer of request summaries. Supports `--filter <text>`, `--type <type>`, `--resource-type <type>`, `--method <method>`, `--status <code>`, and `--clear`. |
+| `network request <requestId>` | same | supported | Shows one buffered request with request, response, failure, timing, and tab/page metadata. Response bodies are intentionally not captured. |
+| `network har start` | same | supported | Starts a fresh in-memory HAR buffer for the session. |
+| `network har stop [path]` | same | supported | Writes a HAR 1.2 JSON artifact. Relative paths resolve under `profiles/<session>/artifacts/har/`; omitted paths get a timestamped managed filename. |
+
+CDP Fetch/Network, provider request inspection, persisted network state, and response body capture remain unsupported for this local parity slice.

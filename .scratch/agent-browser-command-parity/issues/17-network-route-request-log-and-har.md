@@ -1,4 +1,4 @@
-Status: ready-for-agent
+Status: done
 Type: task
 
 # Network Route, Request Log, And HAR
@@ -15,16 +15,16 @@ Do not implement CDP Fetch/Network, provider request inspection, persisted netwo
 
 ## Acceptance criteria
 
-- [ ] `network route <url>` supports abort or fulfill-body behavior with optional resource-type filters and rejects no-op routes.
-- [ ] `network unroute [url]` removes one route or all relevant routes for the current session.
-- [ ] Network routes are scoped to the session context, apply to current and future tabs, and clear on session stop or daemon shutdown.
-- [ ] Request/response/failure listeners populate a per-session in-memory request ring buffer.
-- [ ] `network requests` returns filtered request summaries and supports clearing the buffer.
-- [ ] `network request <requestId>` returns useful request, response, failure, timing, and tab/page metadata for one buffered request.
-- [ ] `network har start` starts a per-session HAR buffer, and `network har stop [path]` writes a HAR 1.2 JSON artifact through daemon-owned path resolution.
-- [ ] Network logs, routes, and HAR buffers do not persist into profiles or state snapshots.
-- [ ] The slice includes schema/parser/defaults/output/help/docs coverage, request filter tests, HAR shape tests, and fake-browser route/request tests.
-- [ ] `npm run build` and `npm test` pass.
+- [x] `network route <url>` supports abort or fulfill-body behavior with optional resource-type filters and rejects no-op routes.
+- [x] `network unroute [url]` removes one route or all relevant routes for the current session.
+- [x] Network routes are scoped to the session context, apply to current and future tabs, and clear on session stop or daemon shutdown.
+- [x] Request/response/failure listeners populate a per-session in-memory request ring buffer.
+- [x] `network requests` returns filtered request summaries and supports clearing the buffer.
+- [x] `network request <requestId>` returns useful request, response, failure, timing, and tab/page metadata for one buffered request.
+- [x] `network har start` starts a per-session HAR buffer, and `network har stop [path]` writes a HAR 1.2 JSON artifact through daemon-owned path resolution.
+- [x] Network logs, routes, and HAR buffers do not persist into profiles or state snapshots.
+- [x] The slice includes schema/parser/defaults/output/help/docs coverage, request filter tests, HAR shape tests, and fake-browser route/request tests.
+- [x] `npm run build` and `npm test` pass.
 
 ## Blocked by
 

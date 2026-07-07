@@ -42,6 +42,18 @@ interface FakeCookie {
   path: string;
 }
 
+interface FakeRouteRegistration {
+  url: string;
+  handler: (route: FakeRoute, request: FakeRequest) => Promise<void>;
+}
+
+interface FakeRouteResult {
+  action: 'continue' | 'abort' | 'fulfill';
+  status?: number;
+  body?: string;
+  contentType?: string;
+}
+
 interface StoredProfileState {
   pages: StoredPageState[];
   cookies: FakeCookie[];
@@ -238,6 +250,99 @@ class FakeDownload {
 
   async saveAs(filePath: string): Promise<void> {
     await writeFile(filePath, this.content, 'utf8');
+  }
+}
+
+class FakeRequest {
+  private readonly startedAt = Date.now();
+  private failedText?: string | undefined;
+
+  constructor(
+    private readonly requestUrl: string,
+    private readonly requestPage: FakePage,
+    private readonly requestMethod = 'GET',
+    private readonly requestResourceType = 'document',
+  ) {}
+
+  url(): string {
+    return this.requestUrl;
+  }
+
+  method(): string {
+    return this.requestMethod;
+  }
+
+  resourceType(): string {
+    return this.requestResourceType;
+  }
+
+  headers(): Record<string, string> {
+    return {};
+  }
+
+  postData(): string | null {
+    return null;
+  }
+
+  timing(): { startTime: number; responseEnd: number } {
+    return { startTime: this.startedAt, responseEnd: Date.now() };
+  }
+
+  frame(): { page: () => FakePage } {
+    return { page: () => this.requestPage };
+  }
+
+  failure(): { errorText: string } | null {
+    return this.failedText ? { errorText: this.failedText } : null;
+  }
+
+  markFailed(errorText: string): void {
+    this.failedText = errorText;
+  }
+}
+
+class FakeResponse {
+  constructor(
+    private readonly responseRequest: FakeRequest,
+    private readonly responseStatus: number,
+    private readonly responseHeaders: Record<string, string> = {},
+  ) {}
+
+  request(): FakeRequest {
+    return this.responseRequest;
+  }
+
+  status(): number {
+    return this.responseStatus;
+  }
+
+  statusText(): string {
+    return this.responseStatus >= 400 ? 'Error' : 'OK';
+  }
+
+  headers(): Record<string, string> {
+    return { ...this.responseHeaders };
+  }
+}
+
+class FakeRoute {
+  result: FakeRouteResult | undefined;
+
+  async continue(): Promise<void> {
+    this.result = { action: 'continue' };
+  }
+
+  async abort(): Promise<void> {
+    this.result = { action: 'abort' };
+  }
+
+  async fulfill(options: { status?: number; body?: string; contentType?: string }): Promise<void> {
+    this.result = {
+      action: 'fulfill',
+      status: options.status ?? 200,
+      body: options.body ?? '',
+      contentType: options.contentType,
+    };
   }
 }
 
@@ -579,7 +684,20 @@ class FakePage extends EventEmitter {
   }
 
   async goto(url: string): Promise<void> {
-    const nextState = parsePageState(url);
+    const networkResult = await this.context?.dispatchRequest(this, url);
+    if (networkResult?.action === 'abort') {
+      throw new Error(`Request aborted: ${url}`);
+    }
+    const nextState = networkResult?.action === 'fulfill' && networkResult.body !== undefined
+      ? {
+          url,
+          title: /<title>(.*?)<\/title>/is.exec(networkResult.body)?.[1]?.trim() ?? url,
+          html: networkResult.body,
+          localStorage: {},
+          sessionStorage: {},
+          elements: parseElements(networkResult.body),
+        }
+      : parsePageState(url);
     this.history = this.history.slice(0, this.historyIndex + 1);
     this.history.push(cloneState(nextState));
     this.historyIndex = this.history.length - 1;
@@ -945,6 +1063,7 @@ export class FakeBrowserContext extends EventEmitter {
   private pagesList: FakePage[];
   private cookiesList: FakeCookie[];
   private readonly localStorageByOrigin = new Map<string, Record<string, string>>();
+  private readonly routes: FakeRouteRegistration[] = [];
   private closed = false;
   geolocation?: { latitude: number; longitude: number; accuracy?: number | undefined } | undefined;
   offline = false;
@@ -1018,6 +1137,43 @@ export class FakeBrowserContext extends EventEmitter {
     this.credentials = { ...credentials };
   }
 
+  async route(url: string, handler: (route: FakeRoute, request: FakeRequest) => Promise<void>): Promise<void> {
+    this.routes.push({ url, handler });
+  }
+
+  async unroute(url: string, handler?: (route: FakeRoute, request: FakeRequest) => Promise<void>): Promise<void> {
+    const index = this.routes.findIndex((route) => route.url === url && (!handler || route.handler === handler));
+    if (index >= 0) {
+      this.routes.splice(index, 1);
+    }
+  }
+
+  routeCount(): number {
+    return this.routes.length;
+  }
+
+  async dispatchRequest(page: FakePage, url: string): Promise<FakeRouteResult> {
+    const request = new FakeRequest(url, page);
+    this.emit('request', request);
+    const registration = this.routes.find((route) => routeUrlMatches(route.url, url));
+    if (registration) {
+      const route = new FakeRoute();
+      await registration.handler(route, request);
+      const result = route.result ?? { action: 'continue' };
+      if (result.action === 'abort') {
+        request.markFailed('net::ERR_FAILED');
+        this.emit('requestfailed', request);
+        return result;
+      }
+      this.emit('response', new FakeResponse(request, result.action === 'fulfill' ? result.status ?? 200 : 200, result.contentType ? { 'content-type': result.contentType } : {}));
+      return result;
+    }
+
+    const result = { action: 'continue' } as const;
+    this.emit('response', new FakeResponse(request, 200));
+    return result;
+  }
+
   async close(): Promise<void> {
     if (this.closed) {
       return;
@@ -1033,6 +1189,17 @@ export class FakeBrowserContext extends EventEmitter {
     });
     this.emit('close');
   }
+}
+
+function routeUrlMatches(pattern: string, url: string): boolean {
+  if (pattern === url) {
+    return true;
+  }
+  if (!pattern.includes('*')) {
+    return false;
+  }
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, '\\$&').replace(/\*/gu, '.*');
+  return new RegExp(`^${escaped}$`, 'u').test(url);
 }
 
 export function createFakeBrowserContext(profileDir: string): FakeBrowserContext {

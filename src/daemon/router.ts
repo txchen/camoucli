@@ -107,6 +107,18 @@ export class DaemonRouter {
         return this.browserManager.find(request);
       case 'eval':
         return this.browserManager.eval(request);
+      case 'network.route':
+        return this.browserManager.networkRoute(request);
+      case 'network.unroute':
+        return this.browserManager.networkUnroute(request);
+      case 'network.requests':
+        return this.browserManager.networkRequestsList(request);
+      case 'network.request':
+        return this.browserManager.networkRequest(request);
+      case 'network.har.start':
+        return this.browserManager.networkHarStart(request);
+      case 'network.har.stop':
+        return this.browserManager.networkHarStop(request);
       case 'cookies.get':
         return this.browserManager.getCookies({ session: request.session ?? 'default', urls: request.urls });
       case 'cookies.set':

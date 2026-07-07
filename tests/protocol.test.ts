@@ -124,6 +124,31 @@ describe('daemon IPC protocol', () => {
     });
   });
 
+  it('accepts network route request log and HAR requests', () => {
+    expect(daemonRequestSchema.parse({ ...base, action: 'network.route', url: '**/api', abort: true, resourceTypes: ['xhr'] })).toMatchObject({
+      action: 'network.route',
+      url: '**/api',
+      abort: true,
+      resourceTypes: ['xhr'],
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-11', action: 'network.requests', session: 'default', clear: true, method: 'GET', status: 200 })).toMatchObject({
+      action: 'network.requests',
+      clear: true,
+      status: 200,
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-12', action: 'network.request', session: 'default', requestId: 'net_1' })).toMatchObject({
+      action: 'network.request',
+      requestId: 'net_1',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-13', action: 'network.har.start', session: 'default' })).toMatchObject({
+      action: 'network.har.start',
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-14', action: 'network.har.stop', session: 'default', path: 'capture.har' })).toMatchObject({
+      action: 'network.har.stop',
+      path: 'capture.har',
+    });
+  });
+
   it('rejects invalid direct automation request shapes', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'upload', target: '#file', files: [] })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();

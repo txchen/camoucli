@@ -454,6 +454,86 @@ describe('daemon integration', () => {
     expect(cleared.values.token).toBeNull();
   });
 
+  it('routes requests logs details and writes a portable HAR artifact', async () => {
+    const interceptedUrl = 'https://example.test/intercept';
+    await sendDaemonRequest(paths, {
+      action: 'network.har.start',
+      session: 'network-session',
+    });
+    const routed = (await sendDaemonRequest(paths, {
+      action: 'network.route',
+      session: 'network-session',
+      url: interceptedUrl,
+      body: '<title>Intercepted</title><button>OK</button>',
+      status: 201,
+      contentType: 'text/html',
+      resourceTypes: ['document'],
+    })) as { routeId: string; behavior: string; routes: number };
+
+    const opened = (await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'network-session',
+      tabName: 'main',
+      url: interceptedUrl,
+    })) as { title: string };
+
+    const listed = (await sendDaemonRequest(paths, {
+      action: 'network.requests',
+      session: 'network-session',
+      status: 201,
+      resourceTypes: ['document'],
+    })) as { count: number; requests: Array<{ requestId: string; status: number; tabName: string; url: string }> };
+    const requestId = listed.requests[0]?.requestId ?? '';
+    const detail = (await sendDaemonRequest(paths, {
+      action: 'network.request',
+      session: 'network-session',
+      requestId,
+    })) as { request: { response: { status: number }; tabName: string; url: string } };
+
+    const harResult = (await sendDaemonRequest(paths, {
+      action: 'network.har.stop',
+      session: 'network-session',
+      path: 'capture.har',
+    })) as { path: string; entries: number };
+    const har = JSON.parse(await readFile(harResult.path, 'utf8')) as { log: { version: string; entries: Array<{ request: { url: string }; response: { status: number } }> } };
+
+    const unrouted = (await sendDaemonRequest(paths, {
+      action: 'network.unroute',
+      session: 'network-session',
+      url: interceptedUrl,
+    })) as { removed: number; routes: number };
+
+    await sendDaemonRequest(paths, {
+      action: 'network.route',
+      session: 'network-session',
+      url: 'https://example.test/abort',
+      abort: true,
+    });
+    await expect(sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'network-session',
+      tabName: 'main',
+      url: 'https://example.test/abort',
+    })).rejects.toThrow();
+    const failed = (await sendDaemonRequest(paths, {
+      action: 'network.requests',
+      session: 'network-session',
+      filter: 'ERR_FAILED',
+    })) as { count: number; requests: Array<{ failed: boolean; errorText: string }> };
+
+    expect(routed).toMatchObject({ behavior: 'fulfill', routes: 1 });
+    expect(opened.title).toBe('Intercepted');
+    expect(listed).toMatchObject({ count: 1 });
+    expect(listed.requests[0]).toMatchObject({ status: 201, tabName: 'main', url: interceptedUrl });
+    expect(detail.request).toMatchObject({ response: { status: 201 }, tabName: 'main', url: interceptedUrl });
+    expect(harResult.path).toBe(path.join(paths.profilesDir, 'network-session', 'artifacts', 'har', 'capture.har'));
+    expect(harResult.entries).toBe(1);
+    expect(har.log).toMatchObject({ version: '1.2' });
+    expect(har.log.entries[0]).toMatchObject({ request: { url: interceptedUrl }, response: { status: 201 } });
+    expect(unrouted).toMatchObject({ removed: 1, routes: 0 });
+    expect(failed.requests[0]).toMatchObject({ failed: true, errorText: 'net::ERR_FAILED' });
+  });
+
   it('manages portable state snapshots without deleting profiles', async () => {
     await ensureSessionPaths(paths, 'stored-profile');
     await sendDaemonRequest(paths, {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import type { Download, Frame, Locator, Page } from 'playwright-core';
+import type { Download, Frame, Locator, Page, Request, Route } from 'playwright-core';
 
 import { hasLaunchFingerprintHelpers, parseExtraHTTPHeaders, parseProxyString, resolveInitScripts, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
@@ -14,6 +14,19 @@ import { SessionError, TimeoutError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { frameLocatorForTarget, locatorForTarget, pageOrActiveFrame } from './actions.js';
 import { parseCookieInput, parseCookieJsonArray, validateCookieScope, type CookieInput } from './cookie-input.js';
+import {
+  applyRouteBehavior,
+  buildHar,
+  createNetworkRuntime,
+  matchesRequestFilter,
+  normalizeResourceTypes,
+  pushRequestRecord,
+  routeMatchesResourceType,
+  summarizeRequest,
+  unrouteEntries,
+  validateRouteBehavior,
+  type NetworkRequestRecord,
+} from './network.js';
 import { clearSnapshotRefs, takeSnapshot } from './snapshot.js';
 import { createTabRuntime, type SessionRuntime, type TabRuntime } from './tabs.js';
 
@@ -40,6 +53,7 @@ export class BrowserManager {
   private readonly logger: Logger;
   private readonly sessions = new Map<string, SessionRuntime>();
   private readonly startingSessions = new Map<string, Promise<SessionRuntime>>();
+  private readonly networkRequests = new WeakMap<Request, NetworkRequestRecord>();
 
   constructor(options: BrowserManagerOptions) {
     this.paths = options.paths;
@@ -1255,6 +1269,150 @@ export class BrowserManager {
     return this.tabSummaries(session);
   }
 
+  async networkRoute(input: LaunchInput & {
+    session: string;
+    url: string;
+    abort?: boolean | undefined;
+    body?: string | undefined;
+    status?: number | undefined;
+    contentType?: string | undefined;
+    resourceTypes?: string[] | undefined;
+  }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, input);
+    const behavior = validateRouteBehavior(input);
+    const resourceTypes = normalizeResourceTypes(input.resourceTypes);
+    const routeId = `route_${session.network.nextRouteSequence++}`;
+    const handler = async (route: Route, request: Request): Promise<void> => {
+      if (!routeMatchesResourceType(request, resourceTypes)) {
+        await route.continue();
+        return;
+      }
+      await applyRouteBehavior(route, behavior);
+    };
+
+    await session.context.route(input.url, handler);
+    const entry = {
+      id: routeId,
+      url: input.url,
+      ...(resourceTypes ? { resourceTypes } : {}),
+      behavior,
+      handler,
+      createdAt: new Date().toISOString(),
+    };
+    session.network.routes.push(entry);
+
+    return {
+      sessionName: session.name,
+      routeId,
+      url: input.url,
+      behavior: behavior.kind,
+      ...(behavior.kind === 'fulfill' ? { status: behavior.status, bodyLength: behavior.body.length, contentType: behavior.contentType } : {}),
+      ...(resourceTypes ? { resourceTypes } : {}),
+      routes: session.network.routes.length,
+    };
+  }
+
+  async networkUnroute(input: { session: string; url?: string | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const removed = input.url
+      ? session.network.routes.filter((route) => route.url === input.url)
+      : [...session.network.routes];
+    if (removed.length === 0) {
+      return { sessionName: session.name, url: input.url, removed: 0, routes: session.network.routes.length };
+    }
+
+    await unrouteEntries(session.context, removed);
+    const removedIds = new Set(removed.map((route) => route.id));
+    session.network.routes = session.network.routes.filter((route) => !removedIds.has(route.id));
+    return {
+      sessionName: session.name,
+      ...(input.url ? { url: input.url } : {}),
+      removed: removed.length,
+      routes: session.network.routes.length,
+    };
+  }
+
+  async networkRequestsList(input: {
+    session: string;
+    clear?: boolean | undefined;
+    filter?: string | undefined;
+    resourceTypes?: string[] | undefined;
+    method?: string | undefined;
+    status?: number | undefined;
+  }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const resourceType = normalizeResourceTypes(input.resourceTypes);
+    const requests = session.network.requests.filter((record) => matchesRequestFilter(record, {
+      filter: input.filter,
+      resourceType,
+      method: input.method,
+      status: input.status,
+    }));
+    const summaries = requests.map(summarizeRequest);
+    const total = session.network.requests.length;
+    if (input.clear) {
+      session.network.requests = [];
+    }
+    return {
+      sessionName: session.name,
+      count: summaries.length,
+      total,
+      cleared: input.clear === true ? total : 0,
+      requests: summaries,
+    };
+  }
+
+  async networkRequest(input: { session: string; requestId: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const record = session.network.requests.find((request) => request.id === input.requestId);
+    if (!record) {
+      throw new ValidationError(`Network request ${input.requestId} was not found in session ${session.name}.`);
+    }
+    return {
+      sessionName: session.name,
+      request: record,
+    };
+  }
+
+  async networkHarStart(input: { session: string }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const startedAt = new Date().toISOString();
+    session.network.har = {
+      active: true,
+      startedAt,
+      entries: [],
+    };
+    return {
+      sessionName: session.name,
+      active: true,
+      startedAt,
+    };
+  }
+
+  async networkHarStop(input: { session: string; path?: string | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    if (!session.network.har.active) {
+      throw new ValidationError(`Network HAR capture is not active in session ${session.name}.`);
+    }
+    const filePath = input.path
+      ? path.isAbsolute(input.path) ? input.path : path.join(session.paths.artifactsDir, 'har', input.path)
+      : path.join(session.paths.artifactsDir, 'har', `network-${Date.now()}.har`);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const har = buildHar(session.network.har.entries, session.network.har.startedAt);
+    await writeFile(filePath, `${JSON.stringify(har, null, 2)}\n`, 'utf8');
+    const entries = session.network.har.entries.length;
+    session.network.har = {
+      active: false,
+      entries: [],
+    };
+    return {
+      sessionName: session.name,
+      active: false,
+      path: filePath,
+      entries,
+    };
+  }
+
   async newTab(
     input: LaunchInput & { session: string; tabName?: string | undefined; url?: string | undefined; label?: string | undefined },
   ): Promise<Record<string, unknown>> {
@@ -1397,6 +1555,7 @@ export class BrowserManager {
         resolvedConfig: launched.resolvedConfig,
         launchInput: input,
         startedAt: new Date().toISOString(),
+        network: createNetworkRuntime(),
       };
 
       const pages = session.context.pages();
@@ -1414,6 +1573,7 @@ export class BrowserManager {
         session.status = 'stopped';
         this.sessions.delete(session.name);
       });
+      this.attachNetworkListeners(session);
 
       this.sessions.set(sessionName, session);
       this.logger.info('Started browser session', { sessionName, browserVersion: session.browserVersion });
@@ -1700,6 +1860,67 @@ export class BrowserManager {
 
   private tabListSummaries(session: SessionRuntime): Array<Record<string, unknown>> {
     return Array.from(session.tabs.values()).map((tab) => this.tabListSummary(session, tab));
+  }
+
+  private attachNetworkListeners(session: SessionRuntime): void {
+    session.context.on('request', (request) => {
+      const now = new Date().toISOString();
+      const record: NetworkRequestRecord = {
+        id: `net_${session.network.nextRequestSequence++}`,
+        url: request.url(),
+        method: request.method(),
+        resourceType: request.resourceType(),
+        requestHeaders: request.headers(),
+        ...(request.postData() !== null ? { postData: request.postData() ?? undefined } : {}),
+        startedAt: now,
+        timing: request.timing(),
+        ...this.requestPageMetadata(session, request),
+      };
+      this.networkRequests.set(request, record);
+      pushRequestRecord(session.network, record);
+    });
+
+    session.context.on('response', (response) => {
+      const request = response.request();
+      const record = this.networkRequests.get(request);
+      if (!record) {
+        return;
+      }
+      record.finishedAt = new Date().toISOString();
+      record.response = {
+        status: response.status(),
+        statusText: response.statusText(),
+        headers: response.headers(),
+      };
+      record.timing = request.timing();
+      Object.assign(record, this.requestPageMetadata(session, request));
+    });
+
+    session.context.on('requestfailed', (request) => {
+      const record = this.networkRequests.get(request);
+      if (!record) {
+        return;
+      }
+      record.finishedAt = new Date().toISOString();
+      record.failure = {
+        errorText: request.failure()?.errorText ?? 'request failed',
+      };
+      record.timing = request.timing();
+      Object.assign(record, this.requestPageMetadata(session, request));
+    });
+  }
+
+  private requestPageMetadata(session: SessionRuntime, request: Request): Partial<NetworkRequestRecord> {
+    try {
+      const page = request.frame().page();
+      const tab = Array.from(session.tabs.values()).find((candidate) => candidate.page === page);
+      return {
+        ...(tab ? { tabName: tab.name, tabId: tab.tabId } : {}),
+        pageUrl: page.url(),
+      };
+    } catch {
+      return {};
+    }
   }
 
   private cookieFromSetInput(input: {

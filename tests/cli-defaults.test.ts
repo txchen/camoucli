@@ -382,6 +382,19 @@ describe('CLI defaults resolution', () => {
       headless: true,
     });
     expect(
+      applyCliDefaultsToPayload('network.route', { action: 'network.route', url: '**/api', abort: true }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('network.requests', { action: 'network.requests' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+    });
+    expect(applyCliDefaultsToPayload('network.requests', { action: 'network.requests' }, resolved)).not.toHaveProperty('browser');
+    expect(
       applyCliDefaultsToPayload('frame', { action: 'frame', target: '#child' }, resolved),
     ).toMatchObject({
       session: 'workspace',

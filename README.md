@@ -12,6 +12,7 @@ Camou is built for agent-style browser workflows:
 - preserve login state with persistent profiles
 - operate named tabs in parallel without ref collisions
 - interact through stable `@eN` refs from text snapshots
+- route requests, inspect an in-memory request log, and capture portable HAR artifacts
 - install, switch, and diagnose Camoufox browser versions from the CLI
 
 Camou takes strong inspiration from [vercel-labs/agent-browser](https://github.com/vercel-labs/agent-browser) and [BUNotesAI/agent-browser-session](https://github.com/BUNotesAI/agent-browser-session), but is built for the Camoufox + Playwright Firefox path and persistent local daemon workflows.
@@ -26,6 +27,7 @@ See [Agent Browser command parity](docs/agent-browser-command-parity.md) for sup
 | Named sessions | Keep separate workspaces like `work`, `shopping`, or `github` isolated |
 | Named tabs | Run multiple agents against the same browser session without fighting over one active page |
 | Snapshot refs | Use `@e1`, `@e2`, ... from `snapshot` instead of brittle selectors when driving pages |
+| Network controls | Route local Playwright requests, inspect per-session request logs, and write HAR artifacts |
 | Version manager | Install and switch Camoufox builds without bundling the browser into the npm package |
 | Doctor diagnostics | Check launch compatibility, bundle health, and Linux shared-library issues quickly |
 
@@ -107,6 +109,19 @@ What happens behind the scenes:
 Important ref rule:
 
 - Re-run `snapshot` after navigation or major page changes. Refs are per tab and are invalidated on navigation or a new snapshot.
+
+Network example:
+
+```bash
+camou network route '**/api/mock' --body '{"ok":true}' --content-type application/json
+camou open https://example.com
+camou network requests --filter api
+camou network har start
+camou reload
+camou network har stop capture.har
+```
+
+Network routes, request logs, and HAR buffers are in-memory daemon/session state. They do not persist into browser profiles or saved state snapshots.
 
 ## Project Defaults
 

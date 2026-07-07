@@ -247,6 +247,60 @@ function printStateRenameResult(data: Record<string, unknown>): void {
   process.stdout.write(`Renamed state ${String(data.from ?? '')} to ${String(data.to ?? '')} ${String(data.path ?? '')}\n`);
 }
 
+function printNetworkRouteResult(data: Record<string, unknown>): void {
+  const resourceTypes = Array.isArray(data.resourceTypes) ? ` ${data.resourceTypes.map(String).join(',')}` : '';
+  process.stdout.write(`Added network route ${String(data.routeId ?? '')} ${String(data.behavior ?? '')} ${String(data.url ?? '')}${resourceTypes}\n`);
+}
+
+function printNetworkUnrouteResult(data: Record<string, unknown>): void {
+  const url = typeof data.url === 'string' ? ` ${data.url}` : '';
+  process.stdout.write(`Removed ${String(data.removed ?? 0)} network routes${url}\n`);
+}
+
+function printNetworkRequestsResult(data: Record<string, unknown>): void {
+  const requests = Array.isArray(data.requests) ? data.requests : [];
+  process.stdout.write(`Network requests for ${String(data.sessionName ?? 'session')}: ${String(data.count ?? requests.length)}\n`);
+  for (const request of requests) {
+    if (!request || typeof request !== 'object') {
+      continue;
+    }
+    const record = request as Record<string, unknown>;
+    const status = record.status !== undefined ? ` ${String(record.status)}` : record.failed === true ? ' failed' : '';
+    const tab = typeof record.tabName === 'string' ? ` ${record.tabName}` : '';
+    process.stdout.write(`- ${String(record.requestId ?? '')} ${String(record.method ?? '')}${status} ${String(record.resourceType ?? '')}${tab} ${String(record.url ?? '')}\n`);
+  }
+  if (data.cleared !== undefined && Number(data.cleared) > 0) {
+    process.stdout.write(`Cleared ${String(data.cleared)} buffered requests\n`);
+  }
+}
+
+function printNetworkRequestResult(data: Record<string, unknown>): void {
+  const request = typeof data.request === 'object' && data.request ? (data.request as Record<string, unknown>) : {};
+  process.stdout.write(`${String(request.id ?? '')} ${String(request.method ?? '')} ${String(request.url ?? '')}\n`);
+  if (typeof request.resourceType === 'string') {
+    process.stdout.write(`Type: ${request.resourceType}\n`);
+  }
+  const response = typeof request.response === 'object' && request.response ? (request.response as Record<string, unknown>) : undefined;
+  if (response) {
+    process.stdout.write(`Response: ${String(response.status ?? 0)} ${String(response.statusText ?? '')}\n`);
+  }
+  const failure = typeof request.failure === 'object' && request.failure ? (request.failure as Record<string, unknown>) : undefined;
+  if (failure) {
+    process.stdout.write(`Failure: ${String(failure.errorText ?? '')}\n`);
+  }
+  if (typeof request.tabName === 'string' || typeof request.pageUrl === 'string') {
+    process.stdout.write(`Page: ${String(request.tabName ?? 'unknown')} ${String(request.pageUrl ?? '')}\n`);
+  }
+}
+
+function printNetworkHarStartResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Started HAR capture for ${String(data.sessionName ?? 'session')}\n`);
+}
+
+function printNetworkHarStopResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Wrote HAR for ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')} (${String(data.entries ?? 0)} entries)\n`);
+}
+
 function printStopAllSessionsResult(data: Record<string, unknown>): void {
   process.stdout.write(`Stopped ${String(data.stopped ?? 0)} sessions
 `);
@@ -1006,6 +1060,24 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'state.rename':
       printStateRenameResult(data as Record<string, unknown>);
+      return;
+    case 'network.route':
+      printNetworkRouteResult(data as Record<string, unknown>);
+      return;
+    case 'network.unroute':
+      printNetworkUnrouteResult(data as Record<string, unknown>);
+      return;
+    case 'network.requests':
+      printNetworkRequestsResult(data as Record<string, unknown>);
+      return;
+    case 'network.request':
+      printNetworkRequestResult(data as Record<string, unknown>);
+      return;
+    case 'network.har.start':
+      printNetworkHarStartResult(data as Record<string, unknown>);
+      return;
+    case 'network.har.stop':
+      printNetworkHarStopResult(data as Record<string, unknown>);
       return;
     case 'session.stopAll':
       printStopAllSessionsResult(data as Record<string, unknown>);

@@ -419,6 +419,40 @@ describe('CLI output', () => {
     expect(output).not.toContain('secret');
   });
 
+  it('prints network route request and HAR summaries', () => {
+    const output = captureStdout(() => {
+      printOutput('network.route', { sessionName: 'work', routeId: 'route_1', behavior: 'fulfill', url: '**/api', resourceTypes: ['xhr'] }, false);
+      printOutput('network.requests', {
+        sessionName: 'work',
+        count: 1,
+        requests: [{ requestId: 'net_1', method: 'GET', status: 200, resourceType: 'xhr', tabName: 'main', url: 'https://example.com/api' }],
+        cleared: 1,
+      }, false);
+      printOutput('network.request', {
+        request: {
+          id: 'net_1',
+          method: 'GET',
+          url: 'https://example.com/api',
+          resourceType: 'xhr',
+          response: { status: 200, statusText: 'OK' },
+          tabName: 'main',
+          pageUrl: 'https://example.com/api',
+        },
+      }, false);
+      printOutput('network.har.start', { sessionName: 'work' }, false);
+      printOutput('network.har.stop', { sessionName: 'work', path: '/tmp/capture.har', entries: 1 }, false);
+      printOutput('network.unroute', { removed: 1, url: '**/api' }, false);
+    });
+
+    expect(output).toContain('Added network route route_1 fulfill **/api xhr');
+    expect(output).toContain('- net_1 GET 200 xhr main https://example.com/api');
+    expect(output).toContain('Cleared 1 buffered requests');
+    expect(output).toContain('Response: 200 OK');
+    expect(output).toContain('Started HAR capture for work');
+    expect(output).toContain('Wrote HAR for work to /tmp/capture.har (1 entries)');
+    expect(output).toContain('Removed 1 network routes **/api');
+  });
+
   it('prints state show JSON as portable storage-state JSON', () => {
     const output = captureStdout(() => {
       printOutput('state.show', { path: '/tmp/auth.json', cookies: 1, origins: 0, state: { cookies: [{ name: 'sid', value: 'secret' }], origins: [] } }, true);

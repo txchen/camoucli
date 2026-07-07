@@ -329,6 +329,54 @@ const evalRequestSchema = browserRequestBase.extend({
   expression: z.string().min(1),
 });
 
+const networkRouteRequestSchema = browserRequestBase.extend({
+  action: z.literal('network.route'),
+  url: z.string().min(1),
+  abort: z.boolean().optional(),
+  body: z.string().optional(),
+  status: z.number().int().min(100).max(599).optional(),
+  contentType: z.string().min(1).optional(),
+  resourceTypes: z.array(z.string().min(1)).optional(),
+});
+
+const networkUnrouteRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('network.unroute'),
+  session: z.string().min(1),
+  url: z.string().min(1).optional(),
+});
+
+const networkRequestsRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('network.requests'),
+  session: z.string().min(1),
+  clear: z.boolean().default(false),
+  filter: z.string().min(1).optional(),
+  resourceTypes: z.array(z.string().min(1)).optional(),
+  method: z.string().min(1).optional(),
+  status: z.number().int().min(100).max(599).optional(),
+});
+
+const networkRequestRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('network.request'),
+  session: z.string().min(1),
+  requestId: z.string().min(1),
+});
+
+const networkHarStartRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('network.har.start'),
+  session: z.string().min(1),
+});
+
+const networkHarStopRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('network.har.stop'),
+  session: z.string().min(1),
+  path: z.string().min(1).optional(),
+});
+
 const cookiesExportRequestSchema = z.object({
   id: z.string(),
   action: z.literal('cookies.export'),
@@ -541,6 +589,12 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   readRequestSchema,
   findRequestSchema,
   evalRequestSchema,
+  networkRouteRequestSchema,
+  networkUnrouteRequestSchema,
+  networkRequestsRequestSchema,
+  networkRequestRequestSchema,
+  networkHarStartRequestSchema,
+  networkHarStopRequestSchema,
   cookiesExportRequestSchema,
   cookiesGetRequestSchema,
   cookiesSetRequestSchema,
