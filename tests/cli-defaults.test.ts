@@ -482,6 +482,22 @@ describe('CLI defaults resolution', () => {
       headless: true,
     });
     expect(
+      applyCliDefaultsToPayload('cookies.set', { action: 'cookies.set', name: 'sid', value: 'secret', domain: 'example.com', path: '/' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('storage.local', { action: 'storage.local', operation: 'get' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
       applyCliDefaultsToPayload('removeinitscript', { action: 'removeinitscript', scriptId: 'init_1' }, resolved),
     ).toMatchObject({
       session: 'workspace',

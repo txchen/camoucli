@@ -153,6 +153,48 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).not.toHaveBeenCalled();
   });
 
+  it('routes batch JSON-array commands to the batch handler', async () => {
+    const onBatch = vi.fn(async () => undefined);
+    const program = createProgram({
+      ...createHandlers(async () => undefined),
+      onBatch,
+    });
+
+    await program.parseAsync([
+      'node',
+      'camou',
+      'batch',
+      '--session',
+      'work',
+      '--headless',
+      '["open"]',
+      '["network","route","*","--abort","--resource-type","script"]',
+      '["navigate","localhost:3000/target"]',
+    ], { from: 'node' });
+
+    expect(onBatch).toHaveBeenCalledWith(
+      [
+        ['open'],
+        ['network', 'route', '*', '--abort', '--resource-type', 'script'],
+        ['navigate', 'localhost:3000/target'],
+      ],
+      expect.objectContaining({ session: 'work', headless: true }),
+    );
+  });
+
+  it('rejects invalid batch command specs before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const onBatch = vi.fn(async () => undefined);
+    const program = createProgram({ ...createHandlers(onDaemonAction), onBatch }, { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'batch', '{"open":true}'], { from: 'node' })).rejects.toThrow('non-empty JSON array of strings');
+    await expect(program.parseAsync(['node', 'camou', 'batch', '[]'], { from: 'node' })).rejects.toThrow('non-empty JSON array of strings');
+    await expect(program.parseAsync(['node', 'camou', 'batch', '["open",3]'], { from: 'node' })).rejects.toThrow('non-empty JSON array of strings');
+    await expect(program.parseAsync(['node', 'camou', 'batch', 'not-json'], { from: 'node' })).rejects.toThrow('valid JSON');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+    expect(onBatch).not.toHaveBeenCalled();
+  });
+
   it('routes stateful runtime commands to daemon actions', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram(createHandlers(onDaemonAction));

@@ -60,6 +60,18 @@ camou snapshot -i --session work --tabname main --json
 
 Top-level CLI errors are structured with `--json`. The `skills` command uses `{ "success": true, "data": ... }` and `{ "success": false, "error": "..." }` envelopes.
 
+Use `batch` when several normal commands should run in one agent turn, especially when state must be staged before the first real navigation:
+
+```bash
+camou batch --session work --json \
+  '["open"]' \
+  '["network","route","*","--abort","--resource-type","script"]' \
+  '["cookies","set","--curl","cookies.curl","--domain","localhost"]' \
+  '["navigate","http://localhost:3000/target"]'
+```
+
+Each batch item is a JSON array of command argv. Commands run sequentially and stop on the first failure. Batch-level shared browser flags apply unless a child command overrides them.
+
 ## Reading And Inspection
 
 Use these commands to understand the current page:

@@ -1062,6 +1062,19 @@ function printBrowserCompatibilityResult(prefix: string, data: Record<string, un
   }
 }
 
+function printBatchResult(data: Record<string, unknown>): void {
+  const results = Array.isArray(data.results) ? data.results : [];
+  process.stdout.write(`Batch completed ${String(data.count ?? results.length)} commands\n`);
+  for (const result of results) {
+    if (!result || typeof result !== 'object') {
+      continue;
+    }
+    const record = result as Record<string, unknown>;
+    const argv = Array.isArray(record.argv) ? JSON.stringify(record.argv.map(String)) : '';
+    process.stdout.write(`- ${String(record.index ?? '?')} ${String(record.action ?? 'unknown')}${argv ? ` ${argv}` : ''}\n`);
+  }
+}
+
 export function printOutput(action: string, data: unknown, asJson: boolean): void {
   if (asJson) {
     if (action === 'state.show' && data && typeof data === 'object' && 'state' in data) {
@@ -1099,6 +1112,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'fingerprint-profiles':
       printFingerprintProfiles(data as Record<string, unknown>);
+      return;
+    case 'batch':
+      printBatchResult(data as Record<string, unknown>);
       return;
     case 'session.list':
       printSessionList(data);

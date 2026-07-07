@@ -62,6 +62,8 @@ export interface SkillsOptions extends OutputOptions {
   all?: boolean | undefined;
 }
 
+export type BatchCommandSpec = string[];
+
 export interface CliHandlers {
   onInstall: (version: string | undefined, options: OutputOptions) => Promise<void>;
   onRemove: (version: string | undefined, options: OutputOptions) => Promise<void>;
@@ -81,6 +83,7 @@ export interface CliHandlers {
   onDaemonRestart?: (options: OutputOptions) => Promise<void>;
   onDaemonCleanup?: (options: OutputOptions) => Promise<void>;
   onSkills?: (args: string[], options: SkillsOptions) => Promise<void>;
+  onBatch?: (commands: BatchCommandSpec[], options: SharedOptions) => Promise<void>;
 }
 
 export interface ProgramOptions {
@@ -279,6 +282,27 @@ function addSharedBrowserOptions(command: Command): Command {
 
 function addSharedOutputOptions(command: Command): Command {
   return command.option('--json', 'JSON output').option('--verbose', 'verbose output');
+}
+
+export function parseBatchCommandSpecs(values: string[]): BatchCommandSpec[] {
+  if (values.length === 0) {
+    throw new ValidationError('batch requires at least one JSON-array command.');
+  }
+
+  return values.map((value, index) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value);
+    } catch (error) {
+      throw new ValidationError(`batch command ${index + 1} must be valid JSON.`, undefined, error);
+    }
+
+    if (!Array.isArray(parsed) || parsed.length === 0 || !parsed.every((item) => typeof item === 'string')) {
+      throw new ValidationError(`batch command ${index + 1} must be a non-empty JSON array of strings.`);
+    }
+
+    return parsed;
+  });
 }
 
 function inheritedSharedOptions(options: OutputOptions & { session?: string | undefined; parent?: Command | undefined; opts?: () => OutputOptions & { session?: string | undefined } }): SharedOptions {
@@ -665,6 +689,18 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
       .description('Show environment diagnostics')
       .action(async (options: OutputOptions) => {
         await handlers.onDoctor(options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('batch <commands...>')
+      .description('Run multiple JSON-array camou commands sequentially')
+      .action(async (commandValues: string[], options: SharedOptions) => {
+        if (!handlers.onBatch) {
+          throw new ValidationError('batch handler unavailable.');
+        }
+        await handlers.onBatch(parseBatchCommandSpecs(commandValues), options);
       }),
   );
 

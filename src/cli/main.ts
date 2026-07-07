@@ -12,21 +12,31 @@ import { ensureBasePaths, getCamoucliPaths } from '../state/paths.js';
 import { BrowserNotInstalledError, ValidationError, getExitCode, toErrorPayload, type CamoucliError } from '../util/errors.js';
 import { getLogger } from '../util/log.js';
 import { getDaemonStatus, sendDaemonRequest } from '../ipc/client.js';
+import { executeBatchCommands } from './batch.js';
 import { cleanupDaemon, ensureDaemonRunning, restartDaemon, stopDaemon } from './daemon.js';
 import { applyCliDefaultsToPayload, resolveSharedOptions } from './defaults.js';
 import { printOutput } from './output.js';
-import { createProgram, type OutputOptions, type SharedOptions } from './program.js';
+import { createProgram, type BatchCommandSpec, type OutputOptions, type SharedOptions } from './program.js';
 import { resolveSessionId, type SessionIdScope } from './session.js';
 import { SkillsCommandError, executeSkillsCommand, formatSkillsError } from './skills.js';
 
-async function runDaemonAction(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<void> {
+async function runDaemonActionData(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<unknown> {
   const paths = getCamoucliPaths();
   await ensureBasePaths(paths);
   await ensureDaemonRunning(paths, options.verbose ?? false);
   const resolvedOptions = await resolveSharedOptions(options);
   const normalizedPayload = applyCliDefaultsToPayload(action, payload, resolvedOptions);
-  const data = await sendDaemonRequest(paths, normalizedPayload as never);
+  return await sendDaemonRequest(paths, normalizedPayload as never);
+}
+
+async function runDaemonAction(action: string, payload: Record<string, unknown>, options: SharedOptions): Promise<void> {
+  const data = await runDaemonActionData(action, payload, options);
   printOutput(action, data, options.json ?? false);
+}
+
+async function runBatch(commands: BatchCommandSpec[], options: SharedOptions): Promise<void> {
+  const result = await executeBatchCommands(commands, options, runDaemonActionData);
+  printOutput('batch', result, options.json ?? false);
 }
 
 async function runSessionCurrent(options: SharedOptions): Promise<void> {
@@ -248,6 +258,7 @@ export async function main(argv: string[] = process.argv): Promise<number> {
         printOutput('doctor', data, options.json ?? false);
     },
     onDaemonAction: runDaemonAction,
+    onBatch: runBatch,
     onSessionCurrent: runSessionCurrent,
     onSessionId: runSessionId,
     onSessionInfo: runSessionInfo,

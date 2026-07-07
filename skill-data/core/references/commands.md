@@ -73,9 +73,24 @@ camou back
 camou forward
 camou reload
 camou pushstate <url>
+camou batch '["open"]' '["navigate","https://example.com"]'
 ```
 
 `goto` and `navigate` are aliases for URL navigation through `open`. URL-less `open` starts or focuses the current session/tab.
+
+### Pre-navigation Batch
+
+```bash
+camou batch \
+  '["open"]' \
+  '["network","route","*","--abort","--resource-type","script"]' \
+  '["cookies","set","--curl","cookies.curl","--domain","localhost"]' \
+  '["navigate","http://localhost:3000/target"]'
+```
+
+Each batch argument is a JSON array of normal `camou` command argv. Commands run sequentially and stop on the first failure. Batch-level shared browser flags such as `--session`, `--tabname`, `--headless`, and `--browser` apply to every child command unless that child command supplies its own flag.
+
+Use URL-less `open` first when routes, cookies, state, or init scripts must be installed before the first real navigation.
 
 ## Snapshot And Refs
 

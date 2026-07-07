@@ -502,6 +502,28 @@ describe('CLI output', () => {
     expect(output).toContain('Readable text');
   });
 
+  it('prints batch summaries and preserves full JSON data', () => {
+    const data = {
+      count: 2,
+      results: [
+        { index: 1, argv: ['open'], action: 'open', data: { sessionName: 'work' } },
+        { index: 2, argv: ['get', 'title'], action: 'get.title', data: { title: 'Example' } },
+      ],
+    };
+
+    const human = captureStdout(() => {
+      printOutput('batch', data, false);
+    });
+    const json = captureStdout(() => {
+      printOutput('batch', data, true);
+    });
+
+    expect(human).toContain('Batch completed 2 commands');
+    expect(human).toContain('- 1 open ["open"]');
+    expect(human).toContain('- 2 get.title ["get","title"]');
+    expect(JSON.parse(json)).toEqual(data);
+  });
+
   it('prints common browser actions in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

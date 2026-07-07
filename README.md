@@ -468,6 +468,7 @@ camou reload                      # Reload the current page
 camou eval <expression>           # Run JavaScript in the current tab
 camou eval --base64 <script>      # Decode base64 JavaScript, then run it
 camou eval --stdin                # Run JavaScript read from stdin
+camou batch '["open"]' '["navigate","https://example.com"]' # Run JSON-array commands sequentially
 camou snapshot                    # Capture page state and refs
 camou snapshot -i                 # Interactive elements only; recommended
 camou click <selectorOrRef>       # Click a selector or @eN ref
@@ -497,6 +498,18 @@ camou get value <selectorOrRef>   # Read an element's form value
 camou find role button --name Save # Use semantic Playwright locator helpers
 camou is visible <selectorOrRef>  # Return element predicate booleans
 ```
+
+Use `batch` for pre-navigation setup when routes, cookies, state, or init scripts must be installed before the first real page load:
+
+```bash
+camou batch --session work \
+  '["open"]' \
+  '["network","route","*","--abort","--resource-type","script"]' \
+  '["cookies","set","--curl","cookies.curl","--domain","localhost"]' \
+  '["navigate","http://localhost:3000/target"]'
+```
+
+Batch-level shared browser flags apply to every child command unless that child command supplies its own flag. Commands stop on the first failure.
 
 ### Debug and artifacts
 

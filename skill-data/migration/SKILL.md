@@ -36,9 +36,12 @@ agent-browser scrollintoview @e1  -> camou scrollintoview @e1
 agent-browser scrollinto @e1      -> camou scrollinto @e1
 agent-browser screenshot page.png -> camou screenshot page.png
 agent-browser close --all         -> camou close --all
+agent-browser batch '["open"]'    -> camou batch '["open"]'
 ```
 
 After every navigation or page mutation, run `camou snapshot -i` again. Refs are per tab and clear on navigation or a new snapshot.
+
+`batch` takes JSON arrays of normal command argv and runs them sequentially. Use it for Agent Browser pre-navigation setup patterns such as URL-less `open`, network routes, cookies, and then `navigate`.
 
 ## Sessions And State
 

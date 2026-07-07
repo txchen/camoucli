@@ -597,8 +597,11 @@ const ACTION_REQUIRES_SESSION = new Set([
   'trace.stop',
   'session.stop',
   'session.info',
+  'cookies.set',
   'cookies.export',
   'cookies.import',
+  'storage.local',
+  'storage.session',
   'tab.list',
   'tab.new',
   'tab.close',
@@ -667,6 +670,9 @@ const ACTION_REQUIRES_TAB = new Set([
   'eval',
   'vitals',
   'pushstate',
+  'cookies.set',
+  'storage.local',
+  'storage.session',
 ]);
 
 const ACTION_SUPPORTS_LAUNCH_DEFAULTS = new Set([
@@ -730,6 +736,9 @@ const ACTION_SUPPORTS_LAUNCH_DEFAULTS = new Set([
   'vitals',
   'pushstate',
   'addinitscript',
+  'cookies.set',
+  'storage.local',
+  'storage.session',
   'network.route',
   'trace.start',
   'tab.new',
