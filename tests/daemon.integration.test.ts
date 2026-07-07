@@ -9,7 +9,7 @@ import { requireInstalledBrowser, setCurrentBrowser, setInstalledBrowser } from 
 import type { CamoucliPaths } from '../src/state/paths.js';
 import { ensureBasePaths, ensureSessionPaths } from '../src/state/paths.js';
 import { Logger } from '../src/util/log.js';
-import { createFakeBrowserContext, getFakeLaunchLog, getProfileState, recordFakeLaunch, resetFakeBrowserState } from './helpers/fake-browser.js';
+import { createFakeBrowserContext, getFakeContexts, getFakeLaunchLog, getProfileState, recordFakeLaunch, resetFakeBrowserState } from './helpers/fake-browser.js';
 import { createTestPaths } from './helpers/temp-paths.js';
 
 vi.mock('../src/camoufox/launcher.js', async () => ({
@@ -532,6 +532,129 @@ describe('daemon integration', () => {
     expect(har.log.entries[0]).toMatchObject({ request: { url: interceptedUrl }, response: { status: 201 } });
     expect(unrouted).toMatchObject({ removed: 1, routes: 0 });
     expect(failed.requests[0]).toMatchObject({ failed: true, errorText: 'net::ERR_FAILED' });
+  });
+
+  it('buffers console and page-error events in memory and clears them with counts', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'debug-events',
+      tabName: 'main',
+      url: dataPage('<title>Debug</title><button id="target">Target</button>'),
+      headless: true,
+    });
+
+    const page = getFakeContexts().at(-1)?.pageAt(0);
+    page?.emitConsole('warning', 'careful', ['careful']);
+    page?.emitPageError(new TypeError('boom'));
+
+    const consoleResult = (await sendDaemonRequest(paths, {
+      action: 'console',
+      session: 'debug-events',
+    })) as { count: number; entries: Array<{ text: string; type: string; tabName: string; title: string }> };
+    const errorsResult = (await sendDaemonRequest(paths, {
+      action: 'errors',
+      session: 'debug-events',
+    })) as { count: number; errors: Array<{ message: string; name: string; tabName: string; title: string }> };
+
+    const clearedConsole = (await sendDaemonRequest(paths, {
+      action: 'console',
+      session: 'debug-events',
+      clear: true,
+    })) as { cleared: number; count: number };
+    const clearedErrors = (await sendDaemonRequest(paths, {
+      action: 'errors',
+      session: 'debug-events',
+      clear: true,
+    })) as { cleared: number; count: number };
+    const emptyConsole = (await sendDaemonRequest(paths, {
+      action: 'console',
+      session: 'debug-events',
+    })) as { count: number };
+
+    expect(consoleResult).toMatchObject({ count: 1 });
+    expect(consoleResult.entries[0]).toMatchObject({ text: 'careful', type: 'warning', tabName: 'main', title: 'Debug' });
+    expect(errorsResult).toMatchObject({ count: 1 });
+    expect(errorsResult.errors[0]).toMatchObject({ message: 'boom', name: 'TypeError', tabName: 'main', title: 'Debug' });
+    expect(clearedConsole).toMatchObject({ count: 1, cleared: 1 });
+    expect(clearedErrors).toMatchObject({ count: 1, cleared: 1 });
+    expect(emptyConsole.count).toBe(0);
+  });
+
+  it('highlights refs, uses page clipboard APIs, traces, and daemon-owned artifact paths', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'debug-artifacts',
+      tabName: 'main',
+      url: dataPage('<title>Artifacts</title><button id="target">Target</button>'),
+      headless: true,
+    });
+    const snapshot = (await sendDaemonRequest(paths, {
+      action: 'snapshot',
+      session: 'debug-artifacts',
+      tabName: 'main',
+      interactive: true,
+    })) as { count: number };
+    expect(snapshot.count).toBe(1);
+
+    const highlighted = (await sendDaemonRequest(paths, {
+      action: 'highlight',
+      session: 'debug-artifacts',
+      tabName: 'main',
+      target: '@e1',
+      durationMs: 25,
+    })) as { target: string; durationMs: number };
+
+    const wrote = (await sendDaemonRequest(paths, {
+      action: 'clipboard.write',
+      session: 'debug-artifacts',
+      tabName: 'main',
+      text: 'clip text',
+    })) as { valueLength: number };
+    const read = (await sendDaemonRequest(paths, {
+      action: 'clipboard.read',
+      session: 'debug-artifacts',
+      tabName: 'main',
+    })) as { text: string; valueLength: number };
+
+    await sendDaemonRequest(paths, {
+      action: 'clipboard.copy',
+      session: 'debug-artifacts',
+      tabName: 'main',
+    });
+    await sendDaemonRequest(paths, {
+      action: 'clipboard.paste',
+      session: 'debug-artifacts',
+      tabName: 'main',
+    });
+
+    const screenshot = (await sendDaemonRequest(paths, {
+      action: 'screenshot',
+      session: 'debug-artifacts',
+      tabName: 'main',
+      format: 'png',
+    })) as { path: string };
+
+    const traceStarted = (await sendDaemonRequest(paths, {
+      action: 'trace.start',
+      session: 'debug-artifacts',
+      screenshots: false,
+      snapshots: true,
+      sources: true,
+    })) as { active: boolean; screenshots: boolean; snapshots: boolean; sources: boolean };
+    const traceStopped = (await sendDaemonRequest(paths, {
+      action: 'trace.stop',
+      session: 'debug-artifacts',
+      path: 'debug.zip',
+    })) as { path: string; active: boolean };
+    const traceFile = await readFile(traceStopped.path, 'utf8');
+
+    expect(highlighted).toMatchObject({ target: '@e1', durationMs: 25 });
+    expect(wrote.valueLength).toBe(9);
+    expect(read).toMatchObject({ text: 'clip text', valueLength: 9 });
+    expect(screenshot.path).toMatch(new RegExp(`${path.join('debug-artifacts', 'artifacts', 'screenshots').replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')}`));
+    expect(traceStarted).toMatchObject({ active: true, screenshots: false, snapshots: true, sources: true });
+    expect(traceStopped).toMatchObject({ path: path.join(paths.profilesDir, 'debug-artifacts', 'artifacts', 'traces', 'debug.zip'), active: false });
+    expect(traceFile).toContain('fake trace zip');
   });
 
   it('manages portable state snapshots without deleting profiles', async () => {

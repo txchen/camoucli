@@ -50,7 +50,7 @@ These commands operate on the current resolved session/tab and keep using Camouc
 | `wait --text <text>` / `wait --load <state>` | same | supported | Existing text/load-state waits remain supported. |
 | `wait --url <pattern>` | `wait --url <pattern>` | supported | Uses Playwright URL waiting with consistent `--timeout`. |
 | `wait --fn <expression>` | `wait --fn <expression>` | supported | Uses Playwright function waiting with consistent `--timeout`. |
-| `screenshot` | `screenshot [targetOrPath] [path] [--selector <target>] [--full|--viewport] [--format png|jpeg] [--quality <n>]` | adapted | Page screenshots preserve daemon-owned artifact paths when no path is supplied. Selector screenshots can use `--selector` or `screenshot <selector> <path>`. |
+| `screenshot` | `screenshot [targetOrPath] [path] [--selector <target>] [--full|--viewport] [--format png|jpeg] [--quality <n>]` | adapted | Page screenshots preserve daemon-owned artifact paths when no path is supplied. Relative paths resolve under `profiles/<session>/artifacts/screenshots/`. Selector screenshots can use `--selector` or `screenshot <selector> <path>`. |
 | `get html <target>` | `get html <target>` | supported | Returns element inner HTML. |
 | `get attr <target> <attribute>` | `get attr <target> <attribute>` | supported | Returns the attribute value or null in JSON output. |
 | `get count <target>` | `get count <target>` | supported | Returns locator count. |
@@ -81,7 +81,7 @@ These commands add daemon-owned active-tab behavior while preserving explicit `-
 | `click <target> --new-tab [--label <name>]` | same | adapted | Waits for a popup/new page, tracks it as a tab, switches active tab, and returns a structured timeout error if no page opens. |
 | `window new [url] [--label <name>]` | same | adapted | Creates a new tracked Playwright page. Firefox/Playwright does not guarantee this is a separate OS window. |
 
-Still deferred from the broader core automation plan: PDF, screenshot annotation, and debug event buffers.
+Still deferred from the broader core automation plan: PDF and screenshot annotation.
 
 ## Stateful Runtime Commands
 
@@ -139,3 +139,20 @@ Network commands are local Playwright-backed session features. Routes, request b
 | `network har stop [path]` | same | supported | Writes a HAR 1.2 JSON artifact. Relative paths resolve under `profiles/<session>/artifacts/har/`; omitted paths get a timestamped managed filename. |
 
 CDP Fetch/Network, provider request inspection, persisted network state, and response body capture remain unsupported for this local parity slice.
+
+## Debug Events And Artifact Foundation
+
+Debug commands are daemon-owned runtime features. Console and page-error buffers are bounded in memory, include session/tab/page metadata, and are not written into profiles, state snapshots, HARs, traces, or registry files. Buffers clear when the session stops or the daemon exits.
+
+| Agent Browser command | Camoucli command | Status | Notes |
+| --- | --- | --- | --- |
+| `console` | `console [--clear]` | supported | Lists buffered Playwright console messages for the current session. `--clear` returns count metadata and clears the buffer after listing. |
+| `errors` | `errors [--clear]` | supported | Lists buffered uncaught page errors for the current session. `--clear` returns count metadata and clears the buffer after listing. |
+| `highlight <target>` | `highlight <target> [--duration <ms>]` | supported | Resolves selectors and current-tab `@eN` refs, then applies a temporary page outline/overlay. |
+| `clipboard read` | same | adapted | Uses `navigator.clipboard.readText()` in the browser page. Failures mention the focus, permission, and secure-context requirements. |
+| `clipboard write <text>` | same | adapted | Uses `navigator.clipboard.writeText()` in the browser page with the same browser permission limits. |
+| `clipboard copy` / `clipboard paste` | same | adapted | Sends the platform copy/paste keyboard shortcuts to the current tab. |
+| `trace start` | `trace start [--no-screenshots] [--no-snapshots] [--sources]` | supported | Starts Playwright context tracing for the current session. |
+| `trace stop [path]` | same | supported | Stops Playwright tracing and writes a trace zip artifact. Relative paths resolve under `profiles/<session>/artifacts/traces/`; omitted paths get a timestamped managed filename. |
+
+Default artifact directories are consistent by artifact family: screenshots use `artifacts/screenshots/`, traces use `artifacts/traces/`, HARs use `artifacts/har/`, and future diff, PDF, and video artifacts should use `artifacts/diffs/`, `artifacts/pdfs/`, and `artifacts/videos/`.

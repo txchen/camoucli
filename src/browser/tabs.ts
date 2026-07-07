@@ -4,6 +4,7 @@ import type { SessionPaths } from '../state/paths.js';
 import type { LaunchInput, ResolvedLaunchConfig } from '../camoufox/config.js';
 import type { SnapshotResult } from './snapshot.js';
 import type { NetworkRuntime } from './network.js';
+import type { DebugRuntime } from './debug.js';
 
 export type SessionStatus = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -39,6 +40,11 @@ export interface SessionRuntime {
   launchInput: LaunchInput;
   startedAt: string;
   network: NetworkRuntime;
+  debug: DebugRuntime;
+  trace?: {
+    active: boolean;
+    startedAt?: string | undefined;
+  } | undefined;
 }
 
 export function createTabRuntime(name: string, tabId: string, page: Page): TabRuntime {

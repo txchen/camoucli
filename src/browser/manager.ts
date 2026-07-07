@@ -13,7 +13,9 @@ import { resolveStateSnapshotPath } from '../state/states.js';
 import { SessionError, TimeoutError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
 import { frameLocatorForTarget, locatorForTarget, pageOrActiveFrame } from './actions.js';
+import { resolveArtifactPath } from './artifacts.js';
 import { parseCookieInput, parseCookieJsonArray, validateCookieScope, type CookieInput } from './cookie-input.js';
+import { createDebugRuntime, pushBounded, serializeConsoleMessage, summarizePage } from './debug.js';
 import {
   applyRouteBehavior,
   buildHar,
@@ -640,7 +642,7 @@ export class BrowserManager {
     const tab = await this.ensureTab(input.session, input.tabName, input);
     const session = await this.ensureSession(input.session, input);
     const format = input.format ?? (input.path?.toLowerCase().endsWith('.jpg') || input.path?.toLowerCase().endsWith('.jpeg') ? 'jpeg' : 'png');
-    const filePath = input.path ?? path.join(session.paths.artifactsDir, `${tab.name}-${Date.now()}.${format === 'jpeg' ? 'jpg' : 'png'}`);
+    const filePath = resolveArtifactPath(session.paths, 'screenshots', input.path, `${tab.name}`, format === 'jpeg' ? 'jpg' : 'png');
     await mkdir(path.dirname(filePath), { recursive: true });
     const screenshotOptions = {
       path: filePath,
@@ -1394,9 +1396,7 @@ export class BrowserManager {
     if (!session.network.har.active) {
       throw new ValidationError(`Network HAR capture is not active in session ${session.name}.`);
     }
-    const filePath = input.path
-      ? path.isAbsolute(input.path) ? input.path : path.join(session.paths.artifactsDir, 'har', input.path)
-      : path.join(session.paths.artifactsDir, 'har', `network-${Date.now()}.har`);
+    const filePath = resolveArtifactPath(session.paths, 'har', input.path, 'network');
     await mkdir(path.dirname(filePath), { recursive: true });
     const har = buildHar(session.network.har.entries, session.network.har.startedAt);
     await writeFile(filePath, `${JSON.stringify(har, null, 2)}\n`, 'utf8');
@@ -1410,6 +1410,163 @@ export class BrowserManager {
       active: false,
       path: filePath,
       entries,
+    };
+  }
+
+  async consoleEvents(input: { session: string; clear?: boolean | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const entries = [...session.debug.console];
+    const total = session.debug.console.length;
+    if (input.clear) {
+      session.debug.console = [];
+    }
+    return {
+      sessionName: session.name,
+      count: entries.length,
+      total,
+      cleared: input.clear === true ? total : 0,
+      entries,
+    };
+  }
+
+  async pageErrors(input: { session: string; clear?: boolean | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    const entries = [...session.debug.errors];
+    const total = session.debug.errors.length;
+    if (input.clear) {
+      session.debug.errors = [];
+    }
+    return {
+      sessionName: session.name,
+      count: entries.length,
+      total,
+      cleared: input.clear === true ? total : 0,
+      errors: entries,
+    };
+  }
+
+  async highlight(input: LaunchInput & { session: string; tabName?: string | undefined; target: string; durationMs?: number | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const durationMs = input.durationMs ?? 1_500;
+    await locatorForTarget(tab.page, tab, input.target).evaluate((element, duration) => {
+      const target = element as HTMLElement;
+      const documentRef = target.ownerDocument;
+      const previousOutline = target.style.outline;
+      const previousOutlineOffset = target.style.outlineOffset;
+      target.style.outline = '3px solid #ff3366';
+      target.style.outlineOffset = '2px';
+
+      const rect = target.getBoundingClientRect();
+      const overlay = documentRef.createElement('div');
+      overlay.setAttribute('data-camoucli-highlight', 'true');
+      Object.assign(overlay.style, {
+        position: 'fixed',
+        left: `${rect.left}px`,
+        top: `${rect.top}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        border: '2px solid #ff3366',
+        background: 'rgba(255, 51, 102, 0.12)',
+        pointerEvents: 'none',
+        zIndex: '2147483647',
+      });
+      documentRef.documentElement.appendChild(overlay);
+      setTimeout(() => {
+        target.style.outline = previousOutline;
+        target.style.outlineOffset = previousOutlineOffset;
+        overlay.remove();
+      }, duration);
+    }, durationMs);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      durationMs,
+    };
+  }
+
+  async clipboardRead(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const text = await this.evaluateClipboard<string>(tab, 'readText');
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      text,
+      valueLength: text.length,
+    };
+  }
+
+  async clipboardWrite(input: LaunchInput & { session: string; tabName?: string | undefined; text: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    await this.evaluateClipboard<void>(tab, 'writeText', input.text);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      valueLength: input.text.length,
+    };
+  }
+
+  async clipboardCopy(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const shortcut = process.platform === 'darwin' ? 'Meta+C' : 'Control+C';
+    await this.pressClipboardShortcut(tab, shortcut, 'copy');
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      shortcut,
+    };
+  }
+
+  async clipboardPaste(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const shortcut = process.platform === 'darwin' ? 'Meta+V' : 'Control+V';
+    await this.pressClipboardShortcut(tab, shortcut, 'paste');
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      shortcut,
+    };
+  }
+
+  async traceStart(input: { session: string; screenshots?: boolean | undefined; snapshots?: boolean | undefined; sources?: boolean | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    if (session.trace?.active) {
+      throw new ValidationError(`Trace capture is already active in session ${session.name}.`);
+    }
+    const tracing = this.requireTracing(session);
+    const startedAt = new Date().toISOString();
+    await tracing.start({
+      screenshots: input.screenshots ?? true,
+      snapshots: input.snapshots ?? true,
+      sources: input.sources ?? false,
+    });
+    session.trace = { active: true, startedAt };
+    return {
+      sessionName: session.name,
+      active: true,
+      startedAt,
+      screenshots: input.screenshots ?? true,
+      snapshots: input.snapshots ?? true,
+      sources: input.sources ?? false,
+    };
+  }
+
+  async traceStop(input: { session: string; path?: string | undefined }): Promise<Record<string, unknown>> {
+    const session = await this.ensureSession(input.session, {});
+    if (!session.trace?.active) {
+      throw new ValidationError(`Trace capture is not active in session ${session.name}.`);
+    }
+    const filePath = resolveArtifactPath(session.paths, 'traces', input.path, 'trace');
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await this.requireTracing(session).stop({ path: filePath });
+    const startedAt = session.trace.startedAt;
+    session.trace = { active: false };
+    return {
+      sessionName: session.name,
+      active: false,
+      path: filePath,
+      startedAt,
+      stoppedAt: new Date().toISOString(),
     };
   }
 
@@ -1556,6 +1713,7 @@ export class BrowserManager {
         launchInput: input,
         startedAt: new Date().toISOString(),
         network: createNetworkRuntime(),
+        debug: createDebugRuntime(),
       };
 
       const pages = session.context.pages();
@@ -1750,11 +1908,112 @@ export class BrowserManager {
       this.ensureActiveTabAfterClose(session, tab.name);
     });
 
+    page.on('console', (message) => {
+      void this.captureConsoleEvent(session, tab, message);
+    });
+
+    page.on('pageerror', (error) => {
+      void this.capturePageError(session, tab, error);
+    });
+
     session.tabs.set(tabName, tab);
     if (activate) {
       session.activeTabName = tab.name;
     }
     return tab;
+  }
+
+  private async captureConsoleEvent(session: SessionRuntime, tab: TabRuntime, message: Parameters<typeof serializeConsoleMessage>[0]): Promise<void> {
+    const page = await summarizePage(tab.page);
+    const serialized = serializeConsoleMessage(message);
+    pushBounded(session.debug.console, {
+      id: `console_${session.debug.nextConsoleSequence++}`,
+      ...serialized,
+      sessionName: session.name,
+      tabName: tab.name,
+      tabId: tab.tabId,
+      pageUrl: page.url,
+      ...(page.title ? { title: page.title } : {}),
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private async capturePageError(session: SessionRuntime, tab: TabRuntime, error: Error): Promise<void> {
+    const page = await summarizePage(tab.page);
+    pushBounded(session.debug.errors, {
+      id: `error_${session.debug.nextErrorSequence++}`,
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      sessionName: session.name,
+      tabName: tab.name,
+      tabId: tab.tabId,
+      pageUrl: page.url,
+      ...(page.title ? { title: page.title } : {}),
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private async evaluateClipboard<T>(tab: TabRuntime, method: 'readText' | 'writeText', text?: string | undefined): Promise<T> {
+    try {
+      return await tab.page.evaluate(
+        async ({ method: clipboardMethod, text: value }) => {
+          if (!globalThis.isSecureContext) {
+            throw new Error('Clipboard requires a secure browser context.');
+          }
+          if (!navigator.clipboard) {
+            throw new Error('Browser-page clipboard API is not available.');
+          }
+          if (clipboardMethod === 'readText') {
+            return navigator.clipboard.readText();
+          }
+          await navigator.clipboard.writeText(value ?? '');
+          return undefined;
+        },
+        { method, text },
+      ) as T;
+    } catch (error) {
+      throw new ValidationError(
+        `Clipboard ${method === 'readText' ? 'read' : 'write'} failed. Browser clipboard access requires page focus, permission, and a secure context.`,
+        { tabName: tab.name, url: tab.page.url() },
+        error,
+      );
+    }
+  }
+
+  private requireTracing(session: SessionRuntime): {
+    start: (options: { screenshots?: boolean; snapshots?: boolean; sources?: boolean }) => Promise<void>;
+    stop: (options: { path: string }) => Promise<void>;
+  } {
+    const context = session.context as typeof session.context & {
+      tracing?: {
+        start?: (options: { screenshots?: boolean; snapshots?: boolean; sources?: boolean }) => Promise<void>;
+        stop?: (options: { path: string }) => Promise<void>;
+      };
+    };
+    if (typeof context.tracing?.start !== 'function' || typeof context.tracing.stop !== 'function') {
+      throw new ValidationError('Playwright tracing is not supported by the installed browser context.');
+    }
+    return {
+      start: context.tracing.start.bind(context.tracing),
+      stop: context.tracing.stop.bind(context.tracing),
+    };
+  }
+
+  private async pressClipboardShortcut(tab: TabRuntime, shortcut: string, operation: 'copy' | 'paste'): Promise<void> {
+    try {
+      const focused = await tab.page.evaluate(() => document.hasFocus());
+      if (focused !== true) {
+        throw new Error('Page is not focused.');
+      }
+      await tab.page.keyboard.press(shortcut);
+    } catch (error) {
+      throw new ValidationError(
+        `Clipboard ${operation} failed. Browser shortcut clipboard workflows require page focus and may require clipboard permission in the active browser context.`,
+        { tabName: tab.name, url: tab.page.url(), shortcut },
+        error,
+      );
+    }
   }
 
   private findTab(session: SessionRuntime, target: string): TabRuntime | undefined {

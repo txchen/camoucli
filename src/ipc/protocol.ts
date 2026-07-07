@@ -183,6 +183,43 @@ const screenshotRequestSchema = browserRequestBase.extend({
   quality: z.number().int().min(0).max(100).optional(),
 });
 
+const consoleEventsRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('console'),
+  session: z.string().min(1),
+  clear: z.boolean().default(false),
+});
+
+const pageErrorsRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('errors'),
+  session: z.string().min(1),
+  clear: z.boolean().default(false),
+});
+
+const highlightRequestSchema = browserRequestBase.extend({
+  action: z.literal('highlight'),
+  target: z.string().min(1),
+  durationMs: z.number().int().positive().optional(),
+});
+
+const clipboardReadRequestSchema = browserRequestBase.extend({
+  action: z.literal('clipboard.read'),
+});
+
+const clipboardWriteRequestSchema = browserRequestBase.extend({
+  action: z.literal('clipboard.write'),
+  text: z.string(),
+});
+
+const clipboardCopyRequestSchema = browserRequestBase.extend({
+  action: z.literal('clipboard.copy'),
+});
+
+const clipboardPasteRequestSchema = browserRequestBase.extend({
+  action: z.literal('clipboard.paste'),
+});
+
 const getUrlRequestSchema = browserRequestBase.extend({
   action: z.literal('get.url'),
 });
@@ -377,6 +414,22 @@ const networkHarStopRequestSchema = z.object({
   path: z.string().min(1).optional(),
 });
 
+const traceStartRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('trace.start'),
+  session: z.string().min(1),
+  screenshots: z.boolean().optional(),
+  snapshots: z.boolean().optional(),
+  sources: z.boolean().optional(),
+});
+
+const traceStopRequestSchema = z.object({
+  id: z.string(),
+  action: z.literal('trace.stop'),
+  session: z.string().min(1),
+  path: z.string().min(1).optional(),
+});
+
 const cookiesExportRequestSchema = z.object({
   id: z.string(),
   action: z.literal('cookies.export'),
@@ -540,7 +593,7 @@ const windowNewRequestSchema = browserRequestBase.extend({
   label: z.string().min(1).optional(),
 });
 
-export const daemonRequestSchema = z.discriminatedUnion('action', [
+export const daemonRequestSchema: z.ZodTypeAny = z.discriminatedUnion('action', [
   pingRequestSchema,
   openRequestSchema,
   backRequestSchema,
@@ -571,6 +624,13 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   uploadRequestSchema,
   dragRequestSchema,
   screenshotRequestSchema,
+  consoleEventsRequestSchema,
+  pageErrorsRequestSchema,
+  highlightRequestSchema,
+  clipboardReadRequestSchema,
+  clipboardWriteRequestSchema,
+  clipboardCopyRequestSchema,
+  clipboardPasteRequestSchema,
   getUrlRequestSchema,
   getTitleRequestSchema,
   getTextRequestSchema,
@@ -595,6 +655,8 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   networkRequestRequestSchema,
   networkHarStartRequestSchema,
   networkHarStopRequestSchema,
+  traceStartRequestSchema,
+  traceStopRequestSchema,
   cookiesExportRequestSchema,
   cookiesGetRequestSchema,
   cookiesSetRequestSchema,
@@ -642,7 +704,95 @@ const failureResponseSchema = z.object({
 
 export const daemonResponseSchema = z.union([successResponseSchema, failureResponseSchema]);
 
-export type DaemonRequest = z.infer<typeof daemonRequestSchema>;
+export type DaemonRequest =
+  | z.infer<typeof pingRequestSchema>
+  | z.infer<typeof openRequestSchema>
+  | z.infer<typeof backRequestSchema>
+  | z.infer<typeof forwardRequestSchema>
+  | z.infer<typeof reloadRequestSchema>
+  | z.infer<typeof snapshotRequestSchema>
+  | z.infer<typeof clickRequestSchema>
+  | z.infer<typeof downloadRequestSchema>
+  | z.infer<typeof dblclickRequestSchema>
+  | z.infer<typeof hoverRequestSchema>
+  | z.infer<typeof focusRequestSchema>
+  | z.infer<typeof fillRequestSchema>
+  | z.infer<typeof typeRequestSchema>
+  | z.infer<typeof checkRequestSchema>
+  | z.infer<typeof uncheckRequestSchema>
+  | z.infer<typeof selectRequestSchema>
+  | z.infer<typeof pressRequestSchema>
+  | z.infer<typeof keyboardDownRequestSchema>
+  | z.infer<typeof keyboardUpRequestSchema>
+  | z.infer<typeof keyboardTypeRequestSchema>
+  | z.infer<typeof keyboardInsertTextRequestSchema>
+  | z.infer<typeof mouseMoveRequestSchema>
+  | z.infer<typeof mouseDownRequestSchema>
+  | z.infer<typeof mouseUpRequestSchema>
+  | z.infer<typeof mouseWheelRequestSchema>
+  | z.infer<typeof scrollRequestSchema>
+  | z.infer<typeof scrollIntoViewRequestSchema>
+  | z.infer<typeof uploadRequestSchema>
+  | z.infer<typeof dragRequestSchema>
+  | z.infer<typeof screenshotRequestSchema>
+  | z.infer<typeof consoleEventsRequestSchema>
+  | z.infer<typeof pageErrorsRequestSchema>
+  | z.infer<typeof highlightRequestSchema>
+  | z.infer<typeof clipboardReadRequestSchema>
+  | z.infer<typeof clipboardWriteRequestSchema>
+  | z.infer<typeof clipboardCopyRequestSchema>
+  | z.infer<typeof clipboardPasteRequestSchema>
+  | z.infer<typeof getUrlRequestSchema>
+  | z.infer<typeof getTitleRequestSchema>
+  | z.infer<typeof getTextRequestSchema>
+  | z.infer<typeof getValueRequestSchema>
+  | z.infer<typeof getHtmlRequestSchema>
+  | z.infer<typeof getAttributeRequestSchema>
+  | z.infer<typeof getCountRequestSchema>
+  | z.infer<typeof getBoxRequestSchema>
+  | z.infer<typeof getStylesRequestSchema>
+  | z.infer<typeof elementPredicateRequestSchema>
+  | z.infer<typeof waitRequestSchema>
+  | z.infer<typeof runtimeSetRequestSchema>
+  | z.infer<typeof frameRequestSchema>
+  | z.infer<typeof dialogStatusRequestSchema>
+  | z.infer<typeof dialogResolveRequestSchema>
+  | z.infer<typeof readRequestSchema>
+  | z.infer<typeof findRequestSchema>
+  | z.infer<typeof evalRequestSchema>
+  | z.infer<typeof networkRouteRequestSchema>
+  | z.infer<typeof networkUnrouteRequestSchema>
+  | z.infer<typeof networkRequestsRequestSchema>
+  | z.infer<typeof networkRequestRequestSchema>
+  | z.infer<typeof networkHarStartRequestSchema>
+  | z.infer<typeof networkHarStopRequestSchema>
+  | z.infer<typeof traceStartRequestSchema>
+  | z.infer<typeof traceStopRequestSchema>
+  | z.infer<typeof cookiesExportRequestSchema>
+  | z.infer<typeof cookiesGetRequestSchema>
+  | z.infer<typeof cookiesSetRequestSchema>
+  | z.infer<typeof cookiesClearRequestSchema>
+  | z.infer<typeof cookiesImportRequestSchema>
+  | z.infer<typeof storageRequestSchema>
+  | z.infer<typeof stateSaveRequestSchema>
+  | z.infer<typeof stateLoadRequestSchema>
+  | z.infer<typeof stateListRequestSchema>
+  | z.infer<typeof stateShowRequestSchema>
+  | z.infer<typeof stateClearRequestSchema>
+  | z.infer<typeof stateCleanRequestSchema>
+  | z.infer<typeof stateRenameRequestSchema>
+  | z.infer<typeof sessionListRequestSchema>
+  | z.infer<typeof sessionStopRequestSchema>
+  | z.infer<typeof sessionStopAllRequestSchema>
+  | z.infer<typeof sessionInfoRequestSchema>
+  | z.infer<typeof profileListRequestSchema>
+  | z.infer<typeof profileInspectRequestSchema>
+  | z.infer<typeof profileRemoveRequestSchema>
+  | z.infer<typeof tabListRequestSchema>
+  | z.infer<typeof tabNewRequestSchema>
+  | z.infer<typeof tabCloseRequestSchema>
+  | z.infer<typeof tabActivateRequestSchema>
+  | z.infer<typeof windowNewRequestSchema>;
 export type DaemonResponse = z.infer<typeof daemonResponseSchema>;
 export type DaemonSuccessResponse = z.infer<typeof successResponseSchema>;
 export type DaemonFailureResponse = z.infer<typeof failureResponseSchema>;

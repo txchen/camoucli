@@ -149,6 +149,22 @@ interface NetworkRequestsOptions extends SharedOptions {
   status?: number | undefined;
 }
 
+interface DebugListOptions extends SharedOptions {
+  clear?: boolean | undefined;
+}
+
+interface HighlightOptions extends SharedOptions {
+  duration?: number | undefined;
+}
+
+interface TraceStartOptions extends SharedOptions {
+  screenshots?: boolean | undefined;
+  noScreenshots?: boolean | undefined;
+  snapshots?: boolean | undefined;
+  noSnapshots?: boolean | undefined;
+  sources?: boolean | undefined;
+}
+
 function collectValues(value: string, previous: string[] = []): string[] {
   return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
@@ -1254,6 +1270,107 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
           },
           options,
         );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('console')
+      .description('List buffered page console messages')
+      .option('--clear', 'clear the console buffer after listing')
+      .action(async (options: DebugListOptions) => {
+        await handlers.onDaemonAction('console', { action: 'console', session: options.session, clear: options.clear ?? false }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('errors')
+      .description('List buffered uncaught page errors')
+      .option('--clear', 'clear the page-error buffer after listing')
+      .action(async (options: DebugListOptions) => {
+        await handlers.onDaemonAction('errors', { action: 'errors', session: options.session, clear: options.clear ?? false }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('highlight <target>')
+      .description('Temporarily highlight a selector or @ref')
+      .option('--duration <ms>', 'highlight duration in milliseconds', parseInteger)
+      .action(async (target: string, options: HighlightOptions) => {
+        await handlers.onDaemonAction(
+          'highlight',
+          { action: 'highlight', target, durationMs: options.duration, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  const clipboardCommand = program.command('clipboard').description('Use browser-page clipboard APIs and copy/paste shortcuts');
+  addSharedBrowserOptions(
+    clipboardCommand
+      .command('read')
+      .description('Read text through the browser-page clipboard API')
+      .action(async (options: SharedOptions) => {
+        await handlers.onDaemonAction('clipboard.read', { action: 'clipboard.read', session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    clipboardCommand
+      .command('write <text>')
+      .description('Write text through the browser-page clipboard API')
+      .action(async (text: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('clipboard.write', { action: 'clipboard.write', text, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    clipboardCommand
+      .command('copy')
+      .description('Synthesize the platform copy shortcut in the current tab')
+      .action(async (options: SharedOptions) => {
+        await handlers.onDaemonAction('clipboard.copy', { action: 'clipboard.copy', session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    clipboardCommand
+      .command('paste')
+      .description('Synthesize the platform paste shortcut in the current tab')
+      .action(async (options: SharedOptions) => {
+        await handlers.onDaemonAction('clipboard.paste', { action: 'clipboard.paste', session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  const traceCommand = program.command('trace').description('Capture Playwright trace zip artifacts');
+  addSharedBrowserOptions(
+    traceCommand
+      .command('start')
+      .description('Start Playwright tracing for the current session')
+      .option('--screenshots', 'include screenshots in the trace')
+      .option('--no-screenshots', 'do not include screenshots in the trace')
+      .option('--snapshots', 'include DOM snapshots in the trace')
+      .option('--no-snapshots', 'do not include DOM snapshots in the trace')
+      .option('--sources', 'include source files in the trace')
+      .action(async (options: TraceStartOptions) => {
+        await handlers.onDaemonAction(
+          'trace.start',
+          {
+            action: 'trace.start',
+            session: options.session,
+            ...(options.screenshots !== undefined ? { screenshots: options.screenshots } : {}),
+            ...(options.snapshots !== undefined ? { snapshots: options.snapshots } : {}),
+            ...(options.sources !== undefined ? { sources: options.sources } : {}),
+          },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    traceCommand
+      .command('stop [path]')
+      .description('Stop Playwright tracing and write a trace zip artifact')
+      .action(async (filePath: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction('trace.stop', { action: 'trace.stop', session: options.session, ...(filePath ? { path: filePath } : {}) }, options);
       }),
   );
 

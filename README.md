@@ -424,12 +424,30 @@ camou scroll <direction> [amount] # Scroll up, down, left, or right
 camou scrollintoview <selectorOrRef> # Scroll until visible
 camou scrollinto <selectorOrRef>  # Alias for scrollintoview
 camou wait [selectorOrRef] [--text <text>] [--load <state>] # Wait for element, text, or load
-camou screenshot [path]           # Save a screenshot of the current page
+camou screenshot [path]           # Save a screenshot under artifacts/screenshots by default
 camou get url                     # Read the current page URL
 camou get title                   # Read the current page title
 camou get text <selectorOrRef>    # Read visible text from an element
 camou get value <selectorOrRef>   # Read an element's form value
 ```
+
+### Debug and artifacts
+
+Debug buffers and traces are daemon-owned runtime state. Console events, page errors, network requests, HAR buffers, and traces live only in the running daemon process; they clear when a session stops or the daemon exits.
+
+```bash
+camou console [--clear]           # List or clear buffered page console messages
+camou errors [--clear]            # List or clear buffered uncaught page errors
+camou highlight <selectorOrRef>   # Temporarily outline a target in the page
+camou clipboard read              # Read via the browser-page clipboard API
+camou clipboard write <text>      # Write via the browser-page clipboard API
+camou clipboard copy              # Synthesize the platform copy shortcut
+camou clipboard paste             # Synthesize the platform paste shortcut
+camou trace start                 # Start Playwright tracing for the session
+camou trace stop [path]           # Write a trace zip under artifacts/traces by default
+```
+
+Relative artifact paths resolve under per-family directories in `profiles/<session>/artifacts/`: screenshots under `screenshots/`, traces under `traces/`, HARs under `har/`, and future diff/PDF/video artifacts under their own matching directories.
 
 ### Sessions and tabs
 

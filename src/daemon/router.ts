@@ -68,6 +68,20 @@ export class DaemonRouter {
         return this.browserManager.drag(request);
       case 'screenshot':
         return this.browserManager.screenshot(request);
+      case 'console':
+        return this.browserManager.consoleEvents(request);
+      case 'errors':
+        return this.browserManager.pageErrors(request);
+      case 'highlight':
+        return this.browserManager.highlight(request);
+      case 'clipboard.read':
+        return this.browserManager.clipboardRead(request);
+      case 'clipboard.write':
+        return this.browserManager.clipboardWrite(request);
+      case 'clipboard.copy':
+        return this.browserManager.clipboardCopy(request);
+      case 'clipboard.paste':
+        return this.browserManager.clipboardPaste(request);
       case 'get.url':
         return this.browserManager.getUrl(request);
       case 'get.title':
@@ -119,6 +133,10 @@ export class DaemonRouter {
         return this.browserManager.networkHarStart(request);
       case 'network.har.stop':
         return this.browserManager.networkHarStop(request);
+      case 'trace.start':
+        return this.browserManager.traceStart(request);
+      case 'trace.stop':
+        return this.browserManager.traceStop(request);
       case 'cookies.get':
         return this.browserManager.getCookies({ session: request.session ?? 'default', urls: request.urls });
       case 'cookies.set':

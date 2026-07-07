@@ -309,6 +309,31 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'network.har.stop', expect.objectContaining({ path: 'capture.har' }), expect.any(Object));
   });
 
+  it('routes debug event artifact commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'console', '--clear', '--session', 'work'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'errors', '--clear'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'highlight', '@e1', '--duration', '750'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'clipboard', 'read'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'clipboard', 'write', 'hello'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'clipboard', 'copy'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'clipboard', 'paste'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'trace', 'start', '--no-screenshots', '--sources'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'trace', 'stop', 'debug.zip'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(1, 'console', expect.objectContaining({ action: 'console', clear: true, session: 'work' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(2, 'errors', expect.objectContaining({ action: 'errors', clear: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(3, 'highlight', expect.objectContaining({ action: 'highlight', target: '@e1', durationMs: 750 }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(4, 'clipboard.read', expect.objectContaining({ action: 'clipboard.read' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(5, 'clipboard.write', expect.objectContaining({ action: 'clipboard.write', text: 'hello' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(6, 'clipboard.copy', expect.objectContaining({ action: 'clipboard.copy' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(7, 'clipboard.paste', expect.objectContaining({ action: 'clipboard.paste' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(8, 'trace.start', expect.objectContaining({ action: 'trace.start', screenshots: false, sources: true }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(9, 'trace.stop', expect.objectContaining({ action: 'trace.stop', path: 'debug.zip' }), expect.any(Object));
+  });
+
   it('rejects no-op network routes before contacting the daemon', async () => {
     const onDaemonAction = vi.fn(async () => undefined);
     const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
@@ -360,6 +385,12 @@ describe('CLI program parsing', () => {
     expect(program.commands.find((command) => command.name() === 'state')?.helpInformation()).toContain('save');
     expect(program.commands.find((command) => command.name() === 'network')?.helpInformation()).toContain('requests');
     expect(program.commands.find((command) => command.name() === 'network')?.commands.find((command) => command.name() === 'har')?.helpInformation()).toContain('stop');
+    expect(help).toContain('console');
+    expect(help).toContain('errors');
+    expect(help).toContain('highlight');
+    expect(help).toContain('clipboard');
+    expect(help).toContain('trace');
+    expect(program.commands.find((command) => command.name() === 'trace')?.helpInformation()).toContain('Playwright trace zip');
   });
 
   it('maps open command flags into a daemon payload', async () => {

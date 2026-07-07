@@ -301,6 +301,65 @@ function printNetworkHarStopResult(data: Record<string, unknown>): void {
   process.stdout.write(`Wrote HAR for ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')} (${String(data.entries ?? 0)} entries)\n`);
 }
 
+function printConsoleEventsResult(data: Record<string, unknown>): void {
+  const entries = Array.isArray(data.entries) ? data.entries : [];
+  process.stdout.write(`Console events for ${String(data.sessionName ?? 'session')}: ${String(data.count ?? entries.length)}\n`);
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const tab = typeof record.tabName === 'string' ? ` ${record.tabName}` : '';
+    process.stdout.write(`- ${String(record.id ?? '')} ${String(record.type ?? 'log')}${tab} ${String(record.text ?? '')}\n`);
+  }
+  if (data.cleared !== undefined && Number(data.cleared) > 0) {
+    process.stdout.write(`Cleared ${String(data.cleared)} console events\n`);
+  }
+}
+
+function printPageErrorsResult(data: Record<string, unknown>): void {
+  const errors = Array.isArray(data.errors) ? data.errors : [];
+  process.stdout.write(`Page errors for ${String(data.sessionName ?? 'session')}: ${String(data.count ?? errors.length)}\n`);
+  for (const error of errors) {
+    if (!error || typeof error !== 'object') {
+      continue;
+    }
+    const record = error as Record<string, unknown>;
+    const tab = typeof record.tabName === 'string' ? ` ${record.tabName}` : '';
+    process.stdout.write(`- ${String(record.id ?? '')}${tab} ${String(record.name ?? 'Error')}: ${String(record.message ?? '')}\n`);
+  }
+  if (data.cleared !== undefined && Number(data.cleared) > 0) {
+    process.stdout.write(`Cleared ${String(data.cleared)} page errors\n`);
+  }
+}
+
+function printHighlightResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  process.stdout.write(`Highlighted ${location} ${String(data.target ?? 'target')} (${String(data.durationMs ?? 0)}ms)\n`);
+}
+
+function printClipboardTextResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String(data.text ?? '')}\n`);
+}
+
+function printClipboardWriteResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  process.stdout.write(`Wrote clipboard text ${location} (${String(data.valueLength ?? 0)} chars)\n`);
+}
+
+function printClipboardShortcutResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  process.stdout.write(`${prefix} ${location} ${String(data.shortcut ?? '')}\n`);
+}
+
+function printTraceStartResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Started Playwright trace for ${String(data.sessionName ?? 'session')}\n`);
+}
+
+function printTraceStopResult(data: Record<string, unknown>): void {
+  process.stdout.write(`Wrote Playwright trace for ${String(data.sessionName ?? 'session')} to ${String(data.path ?? '')}\n`);
+}
+
 function printStopAllSessionsResult(data: Record<string, unknown>): void {
   process.stdout.write(`Stopped ${String(data.stopped ?? 0)} sessions
 `);
@@ -1078,6 +1137,33 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'network.har.stop':
       printNetworkHarStopResult(data as Record<string, unknown>);
+      return;
+    case 'console':
+      printConsoleEventsResult(data as Record<string, unknown>);
+      return;
+    case 'errors':
+      printPageErrorsResult(data as Record<string, unknown>);
+      return;
+    case 'highlight':
+      printHighlightResult(data as Record<string, unknown>);
+      return;
+    case 'clipboard.read':
+      printClipboardTextResult(data as Record<string, unknown>);
+      return;
+    case 'clipboard.write':
+      printClipboardWriteResult(data as Record<string, unknown>);
+      return;
+    case 'clipboard.copy':
+      printClipboardShortcutResult('Copied', data as Record<string, unknown>);
+      return;
+    case 'clipboard.paste':
+      printClipboardShortcutResult('Pasted', data as Record<string, unknown>);
+      return;
+    case 'trace.start':
+      printTraceStartResult(data as Record<string, unknown>);
+      return;
+    case 'trace.stop':
+      printTraceStopResult(data as Record<string, unknown>);
       return;
     case 'session.stopAll':
       printStopAllSessionsResult(data as Record<string, unknown>);

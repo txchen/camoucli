@@ -54,6 +54,30 @@ interface FakeRouteResult {
   contentType?: string;
 }
 
+class FakeConsoleMessage {
+  constructor(
+    private readonly messageType: string,
+    private readonly messageText: string,
+    private readonly messageArgs: unknown[] = [],
+  ) {}
+
+  type(): string {
+    return this.messageType;
+  }
+
+  text(): string {
+    return this.messageText;
+  }
+
+  args(): unknown[] {
+    return this.messageArgs;
+  }
+
+  location(): { url: string; lineNumber: number; columnNumber: number } {
+    return { url: 'fake://console', lineNumber: 1, columnNumber: 1 };
+  }
+}
+
 interface StoredProfileState {
   pages: StoredPageState[];
   cookies: FakeCookie[];
@@ -62,6 +86,7 @@ interface StoredProfileState {
 
 const profileStore = new Map<string, StoredProfileState>();
 const launchLog: FakeLaunchRecord[] = [];
+const contextLog: FakeBrowserContext[] = [];
 
 function cloneState(state: StoredPageState): StoredPageState {
   return {
@@ -538,7 +563,7 @@ class FakeLocator {
     }
   }
 
-  async evaluate(pageFunction: unknown): Promise<unknown> {
+  async evaluate(pageFunction: unknown, arg?: unknown): Promise<unknown> {
     const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
@@ -547,6 +572,10 @@ class FakeLocator {
     const source = String(pageFunction);
     if (source.includes('getComputedStyle')) {
       return { display: 'block', visibility: 'visible' };
+    }
+    if (source.includes('data-camoucli-highlight')) {
+      element.attributes = { ...(element.attributes ?? {}), 'data-camoucli-highlighted': String(arg ?? true) };
+      return undefined;
     }
 
     return undefined;
@@ -843,6 +872,14 @@ class FakePage extends EventEmitter {
     this.media = { ...media };
   }
 
+  emitConsole(type: string, text: string, args: unknown[] = []): void {
+    this.emit('console', new FakeConsoleMessage(type, text, args));
+  }
+
+  emitPageError(error: Error): void {
+    this.emit('pageerror', error);
+  }
+
   isClosed(): boolean {
     return this.closed;
   }
@@ -853,6 +890,22 @@ class FakePage extends EventEmitter {
   }
 
   async evaluate(_pageFunction: unknown, arg?: unknown): Promise<unknown> {
+    if (String(_pageFunction).includes('document.hasFocus')) {
+      return true;
+    }
+
+    if (arg && typeof arg === 'object' && 'method' in arg) {
+      const options = arg as { method: 'readText' | 'writeText'; text?: string | undefined };
+      if (!this.context) {
+        throw new Error('Fake page is not attached to a context');
+      }
+      if (options.method === 'readText') {
+        return this.context.clipboardText;
+      }
+      this.context.clipboardText = options.text ?? '';
+      return undefined;
+    }
+
     if (typeof arg === 'string') {
       const location = { href: this.state.url };
       const document = { title: this.state.title };
@@ -1069,6 +1122,23 @@ export class FakeBrowserContext extends EventEmitter {
   offline = false;
   headers: Record<string, string> = {};
   credentials?: { origin?: string | undefined; username: string; password: string } | undefined;
+  clipboardText = '';
+  tracingStarted = false;
+  tracingOptions?: { screenshots?: boolean; snapshots?: boolean; sources?: boolean } | undefined;
+
+  readonly tracing = {
+    start: async (options: { screenshots?: boolean; snapshots?: boolean; sources?: boolean }) => {
+      this.tracingStarted = true;
+      this.tracingOptions = { ...options };
+    },
+    stop: async (options: { path: string }) => {
+      if (!this.tracingStarted) {
+        throw new Error('Tracing is not active');
+      }
+      this.tracingStarted = false;
+      await writeFile(options.path, 'fake trace zip\n', 'utf8');
+    },
+  };
 
   constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[], initialOrigins: Array<{ origin: string; localStorage: Record<string, string> }>) {
     super();
@@ -1081,6 +1151,10 @@ export class FakeBrowserContext extends EventEmitter {
 
   pages(): FakePage[] {
     return this.pagesList.filter((page) => !page.isClosed());
+  }
+
+  pageAt(index: number): FakePage | undefined {
+    return this.pages()[index];
   }
 
   async newPage(url = 'about:blank'): Promise<FakePage> {
@@ -1207,12 +1281,15 @@ export function createFakeBrowserContext(profileDir: string): FakeBrowserContext
   const initialPages = stored?.pages ?? [parsePageState('about:blank')];
   const initialCookies = stored?.cookies ?? [];
   const initialOrigins = stored?.origins ?? [];
-  return new FakeBrowserContext(profileDir, initialPages, initialCookies, initialOrigins);
+  const context = new FakeBrowserContext(profileDir, initialPages, initialCookies, initialOrigins);
+  contextLog.push(context);
+  return context;
 }
 
 export function resetFakeBrowserState(): void {
   profileStore.clear();
   launchLog.length = 0;
+  contextLog.length = 0;
 }
 
 export function recordFakeLaunch(record: FakeLaunchRecord): void {
@@ -1221,6 +1298,10 @@ export function recordFakeLaunch(record: FakeLaunchRecord): void {
 
 export function getFakeLaunchLog(): FakeLaunchRecord[] {
   return [...launchLog];
+}
+
+export function getFakeContexts(): FakeBrowserContext[] {
+  return [...contextLog];
 }
 
 export function getProfileState(profileDir: string): StoredPageState[] | undefined {

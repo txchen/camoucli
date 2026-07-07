@@ -395,6 +395,46 @@ describe('CLI defaults resolution', () => {
     });
     expect(applyCliDefaultsToPayload('network.requests', { action: 'network.requests' }, resolved)).not.toHaveProperty('browser');
     expect(
+      applyCliDefaultsToPayload('console', { action: 'console' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+    });
+    expect(applyCliDefaultsToPayload('console', { action: 'console' }, resolved)).not.toHaveProperty('browser');
+    expect(
+      applyCliDefaultsToPayload('errors', { action: 'errors' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+    });
+    expect(
+      applyCliDefaultsToPayload('highlight', { action: 'highlight', target: '@e1' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('clipboard.read', { action: 'clipboard.read' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('trace.start', { action: 'trace.start' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('trace.stop', { action: 'trace.stop' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+    });
+    expect(applyCliDefaultsToPayload('trace.stop', { action: 'trace.stop' }, resolved)).not.toHaveProperty('browser');
+    expect(
       applyCliDefaultsToPayload('frame', { action: 'frame', target: '#child' }, resolved),
     ).toMatchObject({
       session: 'workspace',

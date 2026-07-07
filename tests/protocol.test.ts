@@ -149,6 +149,38 @@ describe('daemon IPC protocol', () => {
     });
   });
 
+  it('accepts debug event clipboard highlight and trace requests', () => {
+    expect(daemonRequestSchema.parse({ id: 'request-15', action: 'console', session: 'default', clear: true })).toMatchObject({
+      action: 'console',
+      clear: true,
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-16', action: 'errors', session: 'default', clear: true })).toMatchObject({
+      action: 'errors',
+      clear: true,
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'highlight', target: '@e1', durationMs: 500 })).toMatchObject({
+      action: 'highlight',
+      target: '@e1',
+      durationMs: 500,
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'clipboard.read' })).toMatchObject({ action: 'clipboard.read' });
+    expect(daemonRequestSchema.parse({ ...base, action: 'clipboard.write', text: 'hello' })).toMatchObject({
+      action: 'clipboard.write',
+      text: 'hello',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'clipboard.copy' })).toMatchObject({ action: 'clipboard.copy' });
+    expect(daemonRequestSchema.parse({ ...base, action: 'clipboard.paste' })).toMatchObject({ action: 'clipboard.paste' });
+    expect(daemonRequestSchema.parse({ id: 'request-17', action: 'trace.start', session: 'default', screenshots: false, sources: true })).toMatchObject({
+      action: 'trace.start',
+      screenshots: false,
+      sources: true,
+    });
+    expect(daemonRequestSchema.parse({ id: 'request-18', action: 'trace.stop', session: 'default', path: 'trace.zip' })).toMatchObject({
+      action: 'trace.stop',
+      path: 'trace.zip',
+    });
+  });
+
   it('rejects invalid direct automation request shapes', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'upload', target: '#file', files: [] })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();
@@ -156,6 +188,8 @@ describe('daemon IPC protocol', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'find', locatorType: 'css', value: '#submit' })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'runtime.set', runtime: { setting: 'viewport', width: 0, height: 768 } })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'read', mode: 'markdown' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'highlight', target: '#submit', durationMs: 0 })).toThrow();
+    expect(() => daemonRequestSchema.parse({ id: 'bad-trace', action: 'trace.stop', session: 'default', path: '' })).toThrow();
   });
 
   it('rejects unsupported migration launch surfaces instead of stripping them', () => {
