@@ -1,4 +1,4 @@
-import type { BrowserContext, Page } from 'playwright-core';
+import type { BrowserContext, Dialog, Frame, Page } from 'playwright-core';
 
 import type { SessionPaths } from '../state/paths.js';
 import type { LaunchInput, ResolvedLaunchConfig } from '../camoufox/config.js';
@@ -12,6 +12,16 @@ export interface TabRuntime {
   page: Page;
   refMap: Map<string, string>;
   lastSnapshot?: SnapshotResult | undefined;
+  activeFrame?: Frame | undefined;
+  activeFrameTarget?: string | undefined;
+  pendingDialog?: {
+    id: string;
+    dialog: Dialog;
+    type: string;
+    message: string;
+    defaultValue?: string | undefined;
+    openedAt: string;
+  } | undefined;
 }
 
 export interface SessionRuntime {

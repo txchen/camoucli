@@ -23,11 +23,13 @@ interface FakeElement {
   options?: string[];
   files?: string[];
   attributes?: Record<string, string>;
+  frameState?: StoredPageState;
 }
 
 interface StoredPageState {
   url: string;
   title: string;
+  html: string;
   elements: FakeElement[];
 }
 
@@ -50,11 +52,13 @@ function cloneState(state: StoredPageState): StoredPageState {
   return {
     url: state.url,
     title: state.title,
+    html: state.html,
     elements: state.elements.map((element) => ({
       ...element,
       options: element.options ? [...element.options] : undefined,
       files: element.files ? [...element.files] : undefined,
       attributes: element.attributes ? { ...element.attributes } : undefined,
+      frameState: element.frameState ? cloneState(element.frameState) : undefined,
     })),
   };
 }
@@ -76,6 +80,8 @@ function parseElements(html: string): FakeElement[] {
     { regex: /<textarea([^>]*)>(.*?)<\/textarea>/gis, tag: 'textarea' },
     { regex: /<select([^>]*)>(.*?)<\/select>/gis, tag: 'select' },
     { regex: /<img([^>]*)>/gis, tag: 'img' },
+    { regex: /<iframe([^>]*)>(.*?)<\/iframe>/gis, tag: 'iframe' },
+    { regex: /<iframe([^>]*)>/gis, tag: 'iframe' },
     { regex: /<div([^>]*)>(.*?)<\/div>/gis, tag: 'div' },
     { regex: /<p([^>]*)>(.*?)<\/p>/gis, tag: 'p' },
   ] as const;
@@ -91,6 +97,8 @@ function parseElements(html: string): FakeElement[] {
       const alt = /alt=["']([^"']+)["']/i.exec(attrs)?.[1];
       const title = /title=["']([^"']+)["']/i.exec(attrs)?.[1];
       const testId = /data-testid=["']([^"']+)["']/i.exec(attrs)?.[1];
+      const srcdoc = /srcdoc=["']([^"']*)["']/i.exec(attrs)?.[1];
+      const frameText = /data-frame-text=["']([^"']*)["']/i.exec(attrs)?.[1];
       const inputType = /type=["']([^"']+)["']/i.exec(attrs)?.[1] ?? (pattern.tag === 'input' ? 'text' : undefined);
       const checked = /checked/i.test(attrs);
       const attributePairs = Array.from(attrs.matchAll(/([a-zA-Z_:][a-zA-Z0-9_:.-]*)=["']([^"']*)["']/g));
@@ -120,6 +128,12 @@ function parseElements(html: string): FakeElement[] {
         checked: pattern.tag === 'input' ? checked : undefined,
         options: pattern.tag === 'select' ? options : undefined,
         attributes,
+        frameState: pattern.tag === 'iframe' && (srcdoc || frameText) ? {
+          url: `about:srcdoc#${id ?? elements.length + 1}`,
+          title: /<title>(.*?)<\/title>/is.exec(srcdoc)?.[1]?.trim() ?? 'Frame',
+          html: srcdoc ?? `<button id="inside">${frameText}</button>`,
+          elements: parseElements(srcdoc ?? `<button id="inside">${frameText}</button>`),
+        } : undefined,
       });
     }
   }
@@ -134,14 +148,17 @@ function parsePageState(url: string): StoredPageState {
     return {
       url,
       title,
+      html,
       elements: parseElements(html),
     };
   }
 
   if (url.startsWith('https://example.com')) {
+    const html = '<a href="https://www.iana.org/domains/example">Learn more</a>';
     return {
       url: 'https://example.com/',
       title: 'Example Domain',
+      html,
       elements: [{ tag: 'a', text: 'Learn more', href: 'https://www.iana.org/domains/example' }],
     };
   }
@@ -149,8 +166,66 @@ function parsePageState(url: string): StoredPageState {
   return {
     url,
     title: url,
+    html: '',
     elements: [],
   };
+}
+
+class FakeDialog {
+  accepted = false;
+  dismissed = false;
+  promptText?: string | undefined;
+
+  constructor(
+    private readonly dialogType: string,
+    private readonly dialogMessage: string,
+    private readonly dialogDefaultValue = '',
+  ) {}
+
+  type(): string {
+    return this.dialogType;
+  }
+
+  message(): string {
+    return this.dialogMessage;
+  }
+
+  defaultValue(): string {
+    return this.dialogDefaultValue;
+  }
+
+  async accept(text?: string): Promise<void> {
+    this.accepted = true;
+    this.promptText = text;
+  }
+
+  async dismiss(): Promise<void> {
+    this.dismissed = true;
+  }
+}
+
+class FakeDownload {
+  constructor(
+    private readonly downloadUrl: string,
+    private readonly filename: string,
+    private readonly content: string,
+  ) {}
+
+  suggestedFilename(): string {
+    return this.filename;
+  }
+
+  url(): string {
+    return this.downloadUrl;
+  }
+
+  async failure(): Promise<string | null> {
+    return null;
+  }
+
+  async saveAs(filePath: string): Promise<void> {
+    await writeFile(filePath, this.content, 'utf8');
+  }
 }
 
 class FakeLocator {
@@ -168,6 +243,24 @@ class FakeLocator {
     const element = this.resolveElement();
     if (!element) {
       throw new Error(`No element matches ${this.selector}`);
+    }
+
+    if (element.attributes?.['data-dialog']) {
+      this.page.openDialog(
+        element.attributes['data-dialog'],
+        element.attributes['data-dialog-message'] ?? element.text,
+        element.attributes['data-dialog-default'] ?? '',
+      );
+      return;
+    }
+
+    if (element.attributes?.download !== undefined || element.attributes?.['data-download'] !== undefined) {
+      await this.page.startDownload(
+        element.href ?? '#',
+        element.attributes.download || element.attributes['data-filename'] || 'download.txt',
+        element.attributes['data-download'] ?? element.text,
+      );
+      return;
     }
 
     if (element.href && element.href !== '#') {
@@ -375,6 +468,64 @@ class FakeLocator {
       throw new Error(`No element matches ${this.selector}`);
     }
   }
+
+  async elementHandle(): Promise<{ contentFrame: () => Promise<FakeFrame | null> } | null> {
+    const element = this.resolveElement();
+    if (!element) {
+      return null;
+    }
+    return {
+      contentFrame: async () => element.frameState ? new FakeFrame(element.frameState) : null,
+    };
+  }
+}
+
+class FakeFrame {
+  constructor(private readonly state: StoredPageState) {}
+
+  url(): string {
+    return this.state.url;
+  }
+
+  name(): string {
+    return this.state.title;
+  }
+
+  locator(selector: string): FakeLocator {
+    return new FakeLocator(new FakePage(this.state), selector);
+  }
+
+  getByText(text: string): FakeLocator {
+    return this.locator(`text=${text}`);
+  }
+
+  getByRole(role: string, options?: { name?: string; exact?: boolean }): FakeLocator {
+    return this.locator(`role=${role}${options?.name ? `[name=${options.name}]` : ''}${options?.exact ? '[exact]' : ''}`);
+  }
+
+  getByLabel(label: string): FakeLocator {
+    return this.locator(`label=${label}`);
+  }
+
+  getByPlaceholder(placeholder: string): FakeLocator {
+    return this.locator(`placeholder=${placeholder}`);
+  }
+
+  getByAltText(alt: string): FakeLocator {
+    return this.locator(`alt=${alt}`);
+  }
+
+  getByTitle(title: string): FakeLocator {
+    return this.locator(`title=${title}`);
+  }
+
+  getByTestId(testId: string): FakeLocator {
+    return this.locator(`testid=${testId}`);
+  }
+
+  async evaluate(pageFunction: unknown, arg?: unknown): Promise<unknown> {
+    return new FakePage(this.state).evaluate(pageFunction, arg);
+  }
 }
 
 class FakePage extends EventEmitter {
@@ -400,6 +551,9 @@ class FakePage extends EventEmitter {
     wheel: async (_deltaX: number, _deltaY: number) => undefined,
   };
 
+  viewportSize?: { width: number; height: number } | undefined;
+  media?: { colorScheme?: string | undefined; reducedMotion?: string | undefined } | undefined;
+
   constructor(initialState: StoredPageState, private readonly context?: FakeBrowserContext | undefined) {
     super();
     this.state = cloneState(initialState);
@@ -421,13 +575,15 @@ class FakePage extends EventEmitter {
     this.emit('framenavigated', this.mainFrameRef);
   }
 
-  async waitForEvent(eventName: 'popup', options?: { timeout?: number }): Promise<FakePage> {
+  async waitForEvent(eventName: 'popup', options?: { timeout?: number }): Promise<FakePage>;
+  async waitForEvent(eventName: 'download', options?: { timeout?: number }): Promise<FakeDownload>;
+  async waitForEvent(eventName: string, options?: { timeout?: number }): Promise<FakePage | FakeDownload> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.off(eventName, onEvent);
         reject(new Error(`Timed out waiting for ${eventName}`));
       }, options?.timeout ?? 30_000);
-      const onEvent = (page: FakePage) => {
+      const onEvent = (page: FakePage | FakeDownload) => {
         clearTimeout(timeout);
         resolve(page);
       };
@@ -442,6 +598,18 @@ class FakePage extends EventEmitter {
     }
     this.emit('popup', popup);
     return popup;
+  }
+
+  async startDownload(url: string, filename: string, content: string): Promise<FakeDownload> {
+    const download = new FakeDownload(url, filename, content);
+    this.emit('download', download);
+    return download;
+  }
+
+  openDialog(type: string, message: string, defaultValue: string): FakeDialog {
+    const dialog = new FakeDialog(type, message, defaultValue);
+    this.emit('dialog', dialog);
+    return dialog;
   }
 
   async goBack(): Promise<FakePage | null> {
@@ -536,6 +704,14 @@ class FakePage extends EventEmitter {
     await writeFile(options.path, `fake screenshot for ${this.state.url}\n`, 'utf8');
   }
 
+  async setViewportSize(viewport: { width: number; height: number }): Promise<void> {
+    this.viewportSize = { ...viewport };
+  }
+
+  async emulateMedia(media: { colorScheme?: string | undefined; reducedMotion?: string | undefined }): Promise<void> {
+    this.media = { ...media };
+  }
+
   isClosed(): boolean {
     return this.closed;
   }
@@ -564,12 +740,33 @@ class FakePage extends EventEmitter {
       }
     }
 
-    if (!arg || typeof arg !== 'object') {
-      this.refs.clear();
-      return undefined;
+    if (arg && typeof arg === 'object' && 'mode' in arg) {
+      const options = arg as { mode?: 'text' | 'raw' | 'outline'; filter?: string | undefined };
+      const matchesFilter = (value: string): boolean => !options.filter || value.toLowerCase().includes(options.filter.toLowerCase());
+      if (options.mode === 'raw') {
+        return { content: this.state.html, items: [] };
+      }
+      if (options.mode === 'outline') {
+        const items = this.state.elements
+          .filter((element) => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'button', 'input', 'textarea', 'select'].includes(element.tag))
+          .map((element) => ({
+            tag: element.tag,
+            text: element.text,
+            href: element.href,
+            label: [element.tag, element.text, element.href].filter(Boolean).join(' '),
+          }))
+          .filter((item) => matchesFilter(item.label));
+        return {
+          content: items.map((item) => `${item.tag}${item.text ? ` ${item.text}` : ''}${item.href ? ` ${item.href}` : ''}`).join('\n'),
+          items,
+        };
+      }
+      const lines = this.state.elements.map((element) => element.value || element.text).filter(Boolean);
+      const filtered = options.filter ? lines.filter(matchesFilter) : lines;
+      return { content: filtered.join('\n'), items: filtered.map((line) => ({ text: line })) };
     }
 
-    if ('interactiveOnly' in arg) {
+    if (arg && typeof arg === 'object' && 'interactiveOnly' in arg) {
       const interactiveOnly = Boolean((arg as { interactiveOnly?: boolean }).interactiveOnly);
       const elements = this.state.elements.filter((element) =>
         interactiveOnly ? ['a', 'button', 'input', 'textarea', 'select'].includes(element.tag) : true,
@@ -588,6 +785,11 @@ class FakePage extends EventEmitter {
           text: element.value || element.text,
         };
       });
+    }
+
+    if (!arg || typeof arg !== 'object') {
+      this.refs.clear();
+      return undefined;
     }
 
     this.refs.clear();
@@ -675,6 +877,10 @@ export class FakeBrowserContext extends EventEmitter {
   private pagesList: FakePage[];
   private cookiesList: FakeCookie[];
   private closed = false;
+  geolocation?: { latitude: number; longitude: number; accuracy?: number | undefined } | undefined;
+  offline = false;
+  headers: Record<string, string> = {};
+  credentials?: { origin?: string | undefined; username: string; password: string } | undefined;
 
   constructor(private readonly profileDir: string, initialPages: StoredPageState[], initialCookies: FakeCookie[]) {
     super();
@@ -698,6 +904,22 @@ export class FakeBrowserContext extends EventEmitter {
 
   async addCookies(cookies: FakeCookie[]): Promise<void> {
     this.cookiesList = cookies.map((cookie) => ({ ...cookie }));
+  }
+
+  async setGeolocation(geolocation: { latitude: number; longitude: number; accuracy?: number | undefined }): Promise<void> {
+    this.geolocation = { ...geolocation };
+  }
+
+  async setOffline(value: boolean): Promise<void> {
+    this.offline = value;
+  }
+
+  async setExtraHTTPHeaders(headers: Record<string, string>): Promise<void> {
+    this.headers = { ...headers };
+  }
+
+  async setHTTPCredentials(credentials: { origin?: string | undefined; username: string; password: string }): Promise<void> {
+    this.credentials = { ...credentials };
   }
 
   async close(): Promise<void> {

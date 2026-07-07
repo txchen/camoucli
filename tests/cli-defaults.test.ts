@@ -365,6 +365,47 @@ describe('CLI defaults resolution', () => {
       browser: '135.0.1-beta.24',
       headless: true,
     });
+    expect(
+      applyCliDefaultsToPayload('download', { action: 'download', target: '#export', path: 'out.csv' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('read', { action: 'read' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('frame', { action: 'frame', target: '#child' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('dialog.status', { action: 'dialog.status' }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+      browser: '135.0.1-beta.24',
+      headless: true,
+    });
+    expect(
+      applyCliDefaultsToPayload('runtime.set', { action: 'runtime.set', runtime: { setting: 'viewport', width: 800, height: 600 } }, resolved),
+    ).toMatchObject({
+      session: 'workspace',
+      tabName: 'assistant',
+    });
+    expect(
+      applyCliDefaultsToPayload('runtime.set', { action: 'runtime.set', runtime: { setting: 'viewport', width: 800, height: 600 } }, resolved),
+    ).not.toHaveProperty('browser');
   });
 
   it('rejects invalid boolean env defaults', async () => {

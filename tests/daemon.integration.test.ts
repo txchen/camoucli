@@ -1064,6 +1064,200 @@ describe('daemon integration', () => {
     })) as { title: string };
     expect(pageState.title).toBe('Second');
   });
+
+  it('handles downloads, runtime settings, frames, dialogs, and local DOM reads', async () => {
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'stateful',
+      tabName: 'main',
+      url: dataPage(`
+        <title>Stateful</title>
+        <a id="export" href="https://example.com/report.csv" download="report.csv" data-download="id,name">Export</a>
+        <iframe id="child" data-frame-text="Inside Frame"></iframe>
+        <button id="prompt" data-dialog="prompt" data-dialog-message="Name?" data-dialog-default="Ada">Prompt</button>
+        <p>Alpha text</p>
+        <p>Beta text</p>
+      `),
+      headless: true,
+    });
+
+    const download = (await sendDaemonRequest(paths, {
+      action: 'download',
+      session: 'stateful',
+      tabName: 'main',
+      target: '#export',
+      path: 'reports/export.csv',
+      timeoutMs: 1000,
+    })) as { path: string; suggestedFilename: string; url: string };
+    expect(download.path).toBe(path.join(paths.profilesDir, 'stateful', 'downloads', 'reports', 'export.csv'));
+    expect(download.suggestedFilename).toBe('report.csv');
+    expect(download.url).toBe('https://example.com/report.csv');
+    await expect(readFile(download.path, 'utf8')).resolves.toBe('id,name');
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'wait',
+        session: 'stateful',
+        tabName: 'main',
+        download: true,
+        timeoutMs: 5,
+      }),
+    ).rejects.toMatchObject({ code: 'timeout_error' });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'media' },
+      }),
+    ).rejects.toMatchObject({ code: 'validation_error', message: expect.stringContaining('media') });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'viewport', width: 800, height: 600 },
+      }),
+    ).resolves.toMatchObject({ setting: 'viewport', lifetime: 'tab', viewport: { width: 800, height: 600 } });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'geolocation', latitude: 47.6, longitude: -122.3, accuracy: 5 },
+      }),
+    ).resolves.toMatchObject({ setting: 'geolocation', lifetime: 'session' });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'offline', value: true },
+      }),
+    ).resolves.toMatchObject({ setting: 'offline', lifetime: 'session', offline: true });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'headers', headers: { 'x-test': '1' } },
+      }),
+    ).resolves.toMatchObject({ setting: 'headers', lifetime: 'session', headers: { 'x-test': '1' } });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'credentials', origin: 'https://example.com', username: 'ada', password: 'secret' },
+      }),
+    ).resolves.toMatchObject({ setting: 'credentials', lifetime: 'session', origin: 'https://example.com', username: 'ada' });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'runtime.set',
+        session: 'stateful',
+        tabName: 'main',
+        runtime: { setting: 'media', colorScheme: 'dark', reducedMotion: 'reduce' },
+      }),
+    ).resolves.toMatchObject({ setting: 'media', lifetime: 'tab', colorScheme: 'dark', reducedMotion: 'reduce' });
+
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'frame',
+        session: 'stateful',
+        tabName: 'main',
+        target: '#child',
+      }),
+    ).resolves.toMatchObject({ active: true, frame: '#child' });
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'get.text',
+        session: 'stateful',
+        tabName: 'main',
+        target: '#inside',
+      }),
+    ).resolves.toMatchObject({ text: 'Inside Frame' });
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'frame',
+        session: 'stateful',
+        tabName: 'main',
+        target: 'main',
+      }),
+    ).resolves.toMatchObject({ active: false });
+
+    await expect(sendDaemonRequest(paths, {
+      action: 'click',
+      session: 'stateful',
+      tabName: 'main',
+      target: '#prompt',
+    })).resolves.toMatchObject({ dialog: true });
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'dialog.status',
+        session: 'stateful',
+        tabName: 'main',
+      }),
+    ).resolves.toMatchObject({ pending: true, dialog: { type: 'prompt', message: 'Name?', defaultValue: 'Ada' } });
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'dialog.accept',
+        session: 'stateful',
+        tabName: 'main',
+        text: 'Grace',
+      }),
+    ).resolves.toMatchObject({ action: 'dialog.accept', text: 'Grace', dialog: { type: 'prompt' } });
+    await expect(
+      sendDaemonRequest(paths, {
+        action: 'dialog.status',
+        session: 'stateful',
+        tabName: 'main',
+      }),
+    ).resolves.toMatchObject({ pending: false });
+
+    const read = (await sendDaemonRequest(paths, {
+      action: 'read',
+      session: 'stateful',
+      tabName: 'main',
+      mode: 'text',
+      filter: 'Beta',
+    })) as { content: string };
+    expect(read.content).toContain('Beta text');
+    expect(read.content).not.toContain('Alpha text');
+
+    const outline = (await sendDaemonRequest(paths, {
+      action: 'read',
+      session: 'stateful',
+      tabName: 'main',
+      mode: 'outline',
+      filter: 'Export',
+    })) as { content: string };
+    expect(outline.content).toContain('a Export');
+
+    await sendDaemonRequest(paths, {
+      action: 'frame',
+      session: 'stateful',
+      tabName: 'main',
+      target: '#child',
+    });
+    await sendDaemonRequest(paths, {
+      action: 'open',
+      session: 'stateful',
+      tabName: 'main',
+      url: dataPage('<title>Next</title><p>Navigation clears frame context</p>'),
+    });
+    const tabs = (await sendDaemonRequest(paths, {
+      action: 'tab.list',
+      session: 'stateful',
+    })) as Array<{ tabName: string; activeFrame?: string }>;
+    expect(tabs.find((tab) => tab.tabName === 'main')).not.toHaveProperty('activeFrame');
+  });
 });
 
 function dataPage(html: string): string {

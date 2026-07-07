@@ -44,6 +44,33 @@ describe('daemon IPC protocol', () => {
       locatorType: 'role',
       subaction: 'text',
     });
+    expect(daemonRequestSchema.parse({ ...base, action: 'download', target: '#export', path: 'reports/out.csv' })).toMatchObject({
+      action: 'download',
+      target: '#export',
+      path: 'reports/out.csv',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'wait', download: true, path: 'next.bin' })).toMatchObject({
+      action: 'wait',
+      download: true,
+      path: 'next.bin',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'runtime.set', runtime: { setting: 'viewport', width: 1024, height: 768 } })).toMatchObject({
+      action: 'runtime.set',
+      runtime: { setting: 'viewport' },
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'frame', target: '@e1' })).toMatchObject({
+      action: 'frame',
+      target: '@e1',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'dialog.accept', text: 'ok' })).toMatchObject({
+      action: 'dialog.accept',
+      text: 'ok',
+    });
+    expect(daemonRequestSchema.parse({ ...base, action: 'read', mode: 'outline', filter: 'submit' })).toMatchObject({
+      action: 'read',
+      mode: 'outline',
+      filter: 'submit',
+    });
   });
 
   it('accepts lifecycle requests with daemon-resolved active tabs', () => {
@@ -76,6 +103,8 @@ describe('daemon IPC protocol', () => {
     expect(() => daemonRequestSchema.parse({ ...base, action: 'mouse.down', button: 'primary' })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'screenshot', format: 'gif' })).toThrow();
     expect(() => daemonRequestSchema.parse({ ...base, action: 'find', locatorType: 'css', value: '#submit' })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'runtime.set', runtime: { setting: 'viewport', width: 0, height: 768 } })).toThrow();
+    expect(() => daemonRequestSchema.parse({ ...base, action: 'read', mode: 'markdown' })).toThrow();
   });
 
   it('rejects unsupported migration launch surfaces instead of stripping them', () => {

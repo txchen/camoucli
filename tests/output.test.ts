@@ -389,6 +389,28 @@ describe('CLI output', () => {
     expect(output).toContain('Cleanup complete: stopped 2 sessions, stopped daemon, killed 3 Camoufox processes');
   });
 
+  it('prints stateful runtime command results', () => {
+    const output = captureStdout(() => {
+      printOutput('download', { sessionName: 'work', tabName: 'main', target: '#export', path: '/tmp/export.csv', suggestedFilename: 'report.csv' }, false);
+      printOutput('wait', { sessionName: 'work', tabName: 'main', download: true, path: '/tmp/next.bin', suggestedFilename: 'next.bin' }, false);
+      printOutput('runtime.set', { sessionName: 'work', tabName: 'main', setting: 'viewport', lifetime: 'tab' }, false);
+      printOutput('frame', { sessionName: 'work', tabName: 'main', frame: '#child', active: true, url: 'about:srcdoc' }, false);
+      printOutput('frame', { sessionName: 'work', tabName: 'main', active: false }, false);
+      printOutput('dialog.status', { sessionName: 'work', tabName: 'main', pending: true, dialog: { type: 'prompt', message: 'Name?' } }, false);
+      printOutput('dialog.accept', { sessionName: 'work', tabName: 'main', dialog: { type: 'prompt', message: 'Name?' } }, false);
+      printOutput('read', { content: 'Readable text' }, false);
+    });
+
+    expect(output).toContain('Downloaded work/main #export "report.csv" /tmp/export.csv');
+    expect(output).toContain('Downloaded work/main "next.bin" /tmp/next.bin');
+    expect(output).toContain('Set viewport for tab work/main');
+    expect(output).toContain('Frame context work/main #child about:srcdoc');
+    expect(output).toContain('Frame context cleared work/main');
+    expect(output).toContain('Pending dialog work/main prompt "Name?"');
+    expect(output).toContain('Accepted dialog work/main prompt "Name?"');
+    expect(output).toContain('Readable text');
+  });
+
   it('prints common browser actions in human-readable form', () => {
     const output = captureStdout(() => {
       printOutput(

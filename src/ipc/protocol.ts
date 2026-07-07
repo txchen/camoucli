@@ -46,6 +46,13 @@ const clickRequestSchema = browserRequestBase.extend({
   timeoutMs: z.number().int().positive().optional(),
 });
 
+const downloadRequestSchema = browserRequestBase.extend({
+  action: z.literal('download'),
+  target: z.string().min(1),
+  path: z.string().min(1),
+  timeoutMs: z.number().int().positive().optional(),
+});
+
 const dblclickRequestSchema = browserRequestBase.extend({
   action: z.literal('dblclick'),
   target: z.string().min(1),
@@ -235,6 +242,70 @@ const waitRequestSchema = browserRequestBase.extend({
   loadState: loadStateSchema.optional(),
   url: z.string().min(1).optional(),
   fn: z.string().min(1).optional(),
+  download: z.boolean().default(false),
+  path: z.string().min(1).optional(),
+  timeoutMs: z.number().int().positive().optional(),
+});
+
+const runtimeSettingSchema = z.union([
+  z.object({
+    setting: z.literal('viewport'),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+  }),
+  z.object({
+    setting: z.literal('geolocation'),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
+    accuracy: z.number().nonnegative().optional(),
+  }),
+  z.object({
+    setting: z.literal('offline'),
+    value: z.boolean(),
+  }),
+  z.object({
+    setting: z.literal('headers'),
+    headers: z.record(z.string(), z.string()),
+  }),
+  z.object({
+    setting: z.literal('credentials'),
+    origin: z.string().min(1),
+    username: z.string(),
+    password: z.string(),
+  }),
+  z.object({
+    setting: z.literal('media'),
+    colorScheme: z.enum(['dark', 'light', 'no-preference']).optional(),
+    reducedMotion: z.enum(['reduce', 'no-preference']).optional(),
+  }),
+]);
+
+const runtimeSetRequestSchema = browserRequestBase.extend({
+  action: z.literal('runtime.set'),
+  runtime: runtimeSettingSchema,
+});
+
+const frameRequestSchema = browserRequestBase.extend({
+  action: z.literal('frame'),
+  target: z.string().min(1),
+});
+
+const dialogStatusRequestSchema = browserRequestBase.extend({
+  action: z.literal('dialog.status'),
+});
+
+const dialogResolveRequestSchema = browserRequestBase.extend({
+  action: z.enum(['dialog.accept', 'dialog.dismiss']),
+  text: z.string().optional(),
+});
+
+const readModeSchema = z.enum(['text', 'raw', 'outline']);
+
+const readRequestSchema = browserRequestBase.extend({
+  action: z.literal('read'),
+  url: z.string().min(1).optional(),
+  mode: readModeSchema.default('text'),
+  filter: z.string().min(1).optional(),
   timeoutMs: z.number().int().positive().optional(),
 });
 
@@ -351,6 +422,7 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   reloadRequestSchema,
   snapshotRequestSchema,
   clickRequestSchema,
+  downloadRequestSchema,
   dblclickRequestSchema,
   hoverRequestSchema,
   focusRequestSchema,
@@ -384,6 +456,11 @@ export const daemonRequestSchema = z.discriminatedUnion('action', [
   getStylesRequestSchema,
   elementPredicateRequestSchema,
   waitRequestSchema,
+  runtimeSetRequestSchema,
+  frameRequestSchema,
+  dialogStatusRequestSchema,
+  dialogResolveRequestSchema,
+  readRequestSchema,
   findRequestSchema,
   evalRequestSchema,
   cookiesExportRequestSchema,

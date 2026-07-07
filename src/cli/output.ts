@@ -267,6 +267,12 @@ function printScrollIntoViewResult(data: Record<string, unknown>): void {
 
 function printWaitResult(data: Record<string, unknown>): void {
   const location = formatSessionTab(data);
+  if (data.download === true) {
+    const path = typeof data.path === 'string' ? ` ${data.path}` : '';
+    const filename = typeof data.suggestedFilename === 'string' ? ` ${formatQuoted(data.suggestedFilename)}` : '';
+    process.stdout.write(`Downloaded ${location}${filename}${path}\n`);
+    return;
+  }
   const ms = typeof data.ms === 'number' ? `${data.ms}ms` : undefined;
   const target = typeof data.target === 'string' ? data.target : undefined;
   const text = typeof data.text === 'string' ? `text=${formatQuoted(data.text)}` : undefined;
@@ -276,6 +282,52 @@ function printWaitResult(data: Record<string, unknown>): void {
   const waitedFor = [ms, target, text, loadState, urlPattern, fn].filter(Boolean).join(' ');
   const url = typeof data.url === 'string' ? data.url : '';
   process.stdout.write(`Ready ${location}${waitedFor ? ` ${waitedFor}` : ''}${url ? ` ${url}` : ''}\n`);
+}
+
+function printDownloadResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const target = String(data.target ?? 'unknown');
+  const filePath = String(data.path ?? '');
+  const filename = typeof data.suggestedFilename === 'string' ? ` ${formatQuoted(data.suggestedFilename)}` : '';
+  process.stdout.write(`Downloaded ${location} ${target}${filename}${filePath ? ` ${filePath}` : ''}\n`);
+}
+
+function printRuntimeSetResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const setting = String(data.setting ?? 'runtime');
+  const lifetime = String(data.lifetime ?? 'runtime');
+  process.stdout.write(`Set ${setting} for ${lifetime} ${location}\n`);
+}
+
+function printFrameResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  if (data.active === false) {
+    process.stdout.write(`Frame context cleared ${location}\n`);
+    return;
+  }
+  const frame = String(data.frame ?? 'unknown');
+  const url = typeof data.url === 'string' ? ` ${data.url}` : '';
+  process.stdout.write(`Frame context ${location} ${frame}${url}\n`);
+}
+
+function printDialogStatusResult(data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  if (data.pending !== true) {
+    process.stdout.write(`No pending dialog ${location}\n`);
+    return;
+  }
+  const dialog = typeof data.dialog === 'object' && data.dialog ? (data.dialog as Record<string, unknown>) : {};
+  process.stdout.write(`Pending dialog ${location} ${String(dialog.type ?? 'dialog')} ${formatQuoted(dialog.message)}\n`);
+}
+
+function printDialogResolveResult(prefix: string, data: Record<string, unknown>): void {
+  const location = formatSessionTab(data);
+  const dialog = typeof data.dialog === 'object' && data.dialog ? (data.dialog as Record<string, unknown>) : {};
+  process.stdout.write(`${prefix} dialog ${location} ${String(dialog.type ?? 'dialog')} ${formatQuoted(dialog.message)}\n`);
+}
+
+function printReadResult(data: Record<string, unknown>): void {
+  process.stdout.write(`${String(data.content ?? '')}\n`);
 }
 
 function printDaemonStopResult(data: Record<string, unknown>): void {
@@ -851,6 +903,9 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
     case 'click':
       printClickResult(data as Record<string, unknown>);
       return;
+    case 'download':
+      printDownloadResult(data as Record<string, unknown>);
+      return;
     case 'dblclick':
       printTargetActionResult('Double-clicked', data as Record<string, unknown>);
       return;
@@ -916,6 +971,24 @@ export function printOutput(action: string, data: unknown, asJson: boolean): voi
       return;
     case 'wait':
       printWaitResult(data as Record<string, unknown>);
+      return;
+    case 'runtime.set':
+      printRuntimeSetResult(data as Record<string, unknown>);
+      return;
+    case 'frame':
+      printFrameResult(data as Record<string, unknown>);
+      return;
+    case 'dialog.status':
+      printDialogStatusResult(data as Record<string, unknown>);
+      return;
+    case 'dialog.accept':
+      printDialogResolveResult('Accepted', data as Record<string, unknown>);
+      return;
+    case 'dialog.dismiss':
+      printDialogResolveResult('Dismissed', data as Record<string, unknown>);
+      return;
+    case 'read':
+      printReadResult(data as Record<string, unknown>);
       return;
     case 'find':
       printFindResult(data as Record<string, unknown>);

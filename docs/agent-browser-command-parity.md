@@ -23,7 +23,7 @@ Statuses:
 | `eval -b <script>` / `eval --base64 <script>` | `eval -b <script>` / `eval --base64 <script>` | supported | Decodes UTF-8 JavaScript in the CLI and rejects invalid base64 before contacting the daemon. |
 | `eval --stdin` | `eval --stdin` | supported | Reads JavaScript from stdin in the CLI and sends the existing eval daemon action. |
 
-Later parity slices will add broader state/storage/network commands and debug/artifact commands.
+Later parity slices will add broader storage/network commands and debug/artifact commands.
 
 ## Direct Playwright Automation Commands
 
@@ -81,7 +81,27 @@ These commands add daemon-owned active-tab behavior while preserving explicit `-
 | `click <target> --new-tab [--label <name>]` | same | adapted | Waits for a popup/new page, tracks it as a tab, switches active tab, and returns a structured timeout error if no page opens. |
 | `window new [url] [--label <name>]` | same | adapted | Creates a new tracked Playwright page. Firefox/Playwright does not guarantee this is a separate OS window. |
 
-Still deferred from the broader core automation plan: downloads, `wait --download`, frame context, dialogs, runtime `set`, local-DOM `read`, PDF, screenshot annotation, and debug event buffers.
+Still deferred from the broader core automation plan: PDF, screenshot annotation, storage commands, network logs/routes, and debug event buffers.
+
+## Stateful Runtime Commands
+
+Stateful runtime commands are coordinated by the daemon so lifetimes are explicit. Downloads, dialogs, and frame context are current-tab state. Viewport and media runtime changes apply to the current tab. Geolocation, offline mode, extra HTTP headers, and HTTP credentials apply to the current session context.
+
+| Agent Browser command | Camoucli command | Status | Notes |
+| --- | --- | --- | --- |
+| `download <target> <path>` | same | supported | Waits for a download triggered by clicking a selector/ref, creates parent directories, saves relative paths under the session downloads directory, and returns saved path plus browser metadata. |
+| `wait --download [path]` | `wait --download [--path <path>]` | adapted | Waits for the next download in the current tab. `--path` saves it through daemon-owned path resolution. Timeouts return structured `timeout_error` failures. |
+| `set viewport <width> <height>` | same | supported | Current-tab lifetime. |
+| `set geolocation <lat> <lon> [--accuracy <m>]` / `set geo ...` | same | supported | Current-session lifetime. |
+| `set offline <true|false>` | same | supported | Current-session lifetime. |
+| `set headers <json>` | same | supported | Current-session lifetime. JSON must be an object with string values. |
+| `set credentials <origin> <username> <password>` | same | supported | Current-session lifetime; rejects clearly if the underlying Playwright context cannot mutate credentials. |
+| `set media --color-scheme <value> --reduced-motion <value>` | same | supported | Current-tab lifetime. At least one media option is required. |
+| `frame <selector|ref>` | same | supported | Sets tab-scoped active frame context for later selector/ref actions. |
+| `frame main` | same | supported | Clears active frame context. Frame context also clears on navigation, tab close, and session stop. |
+| `dialog status` | same | supported | Reports pending tab dialog type, message, default value, and id. |
+| `dialog accept [text]` / `dialog dismiss` | same | supported | Resolves the pending tab dialog. `dismiss [text]` rejects because Playwright dismiss does not accept prompt text. |
+| `read [url]` | `read [url] [--raw|--outline] [--filter <text>] [--timeout <ms>]` | supported | Performs local DOM reading in the current tab or active frame. If a URL is supplied, Camoucli navigates first; no external reader service is used. |
 
 ## Launch Option Compatibility
 
@@ -95,7 +115,7 @@ Launch globals apply when the daemon starts a new persistent Camoufox session. I
 | extra headers | `--headers <json>` | supported | JSON object with string values; maps to Playwright `extraHTTPHeaders`. |
 | user agent | `--user-agent <ua>` | supported | Maps to Playwright `userAgent`. |
 | HTTPS errors | `--ignore-https-errors` | supported | Maps to Playwright `ignoreHTTPSErrors`. |
-| media preferences | `--color-scheme dark|light|no-preference`, `--reduced-motion reduce|no-preference` | supported | Maps to Playwright context media options. Runtime media mutation remains deferred. |
+| media preferences | `--color-scheme dark|light|no-preference`, `--reduced-motion reduce|no-preference` | supported | Maps to Playwright context media options at launch. Runtime tab-scoped media mutation is available through `set media`. |
 | init scripts | `--init-script <path>` | supported | Can be repeated. Scripts are registered with the context before Camoucli performs the first real navigation. |
 | storage state | `--state <path-or-name>` | adapted | For fresh session profiles only. Names resolve under Camoucli's managed state directory as `<name>.json`; explicit paths are passed through as Playwright storage-state JSON. It does not reset or merge into an existing persistent profile. |
 | direct Node launch | `extraHTTPHeaders`, `userAgent`, `ignoreHTTPSErrors`, `colorScheme`, `reducedMotion`, `initScripts`, `storageState` | supported | Programmatic `Camoufox.launch()` and `launchCamoufox()` expose idiomatic Playwright-style names while preserving Camoucli-native launch fields. |

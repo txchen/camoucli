@@ -22,6 +22,8 @@ export class DaemonRouter {
         return this.browserManager.snapshot(request);
       case 'click':
         return this.browserManager.click(request);
+      case 'download':
+        return this.browserManager.download(request);
       case 'dblclick':
         return this.browserManager.dblclick(request);
       case 'hover':
@@ -90,6 +92,17 @@ export class DaemonRouter {
         return this.browserManager.elementPredicate(request);
       case 'wait':
         return this.browserManager.wait(request);
+      case 'runtime.set':
+        return this.browserManager.setRuntime(request);
+      case 'frame':
+        return this.browserManager.setFrame(request);
+      case 'dialog.status':
+        return this.browserManager.dialogStatus(request);
+      case 'dialog.accept':
+      case 'dialog.dismiss':
+        return this.browserManager.resolveDialog(request);
+      case 'read':
+        return this.browserManager.read(request);
       case 'find':
         return this.browserManager.find(request);
       case 'eval':

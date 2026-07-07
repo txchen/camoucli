@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
-import type { Locator, Page } from 'playwright-core';
+import type { Download, Frame, Locator, Page } from 'playwright-core';
 
 import { hasLaunchFingerprintHelpers, parseExtraHTTPHeaders, parseProxyString, resolveInitScripts, type LaunchInput } from '../camoufox/config.js';
 import { launchPersistentCamoufox } from '../camoufox/launcher.js';
@@ -9,7 +10,7 @@ import type { CamoucliPaths } from '../state/paths.js';
 import { inspectStoppedSessionInfo, inspectStoredSessionProfile, listStoredSessionProfiles, removeStoredSessionProfile } from '../state/session-profiles.js';
 import { SessionError, TimeoutError, ValidationError } from '../util/errors.js';
 import type { Logger } from '../util/log.js';
-import { locatorForTarget } from './actions.js';
+import { frameLocatorForTarget, locatorForTarget, pageOrActiveFrame } from './actions.js';
 import { clearSnapshotRefs, takeSnapshot } from './snapshot.js';
 import { createTabRuntime, type SessionRuntime, type TabRuntime } from './tabs.js';
 
@@ -253,23 +254,47 @@ export class BrowserManager {
       };
     }
 
-    await locatorForTarget(tab.page, tab, input.target).click();
+    const dialogTriggered = await this.runActionReturningOnDialog(tab, () => locatorForTarget(tab.page, tab, input.target).click());
     return {
       sessionName: input.session,
       tabName: tab.name,
       target: input.target,
       url: tab.page.url(),
+      ...(dialogTriggered ? { dialog: true } : {}),
+    };
+  }
+
+  async download(
+    input: LaunchInput & { session: string; tabName?: string | undefined; target: string; path: string; timeoutMs?: number | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    const downloadPromise = this.waitForDownload(tab, input.timeoutMs);
+    const [download] = await Promise.all([
+      downloadPromise,
+      locatorForTarget(tab.page, tab, input.target).click().then(() => undefined),
+    ]);
+    const savedPath = await this.saveDownload(session, download, input.path);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      target: input.target,
+      path: savedPath,
+      suggestedFilename: download.suggestedFilename(),
+      url: download.url(),
+      failure: await download.failure(),
     };
   }
 
   async dblclick(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    await locatorForTarget(tab.page, tab, input.target).dblclick();
+    const dialogTriggered = await this.runActionReturningOnDialog(tab, () => locatorForTarget(tab.page, tab, input.target).dblclick());
     return {
       sessionName: input.session,
       tabName: tab.name,
       target: input.target,
       url: tab.page.url(),
+      ...(dialogTriggered ? { dialog: true } : {}),
     };
   }
 
@@ -721,15 +746,34 @@ export class BrowserManager {
       loadState?: 'domcontentloaded' | 'load' | 'networkidle' | undefined;
       url?: string | undefined;
       fn?: string | undefined;
+      download?: boolean | undefined;
+      path?: string | undefined;
       timeoutMs?: number | undefined;
     },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    if (input.ms === undefined && !input.target && !input.text && !input.loadState && !input.url && !input.fn) {
-      throw new ValidationError('wait requires milliseconds, a target, --text value, --load state, --url pattern, or --fn predicate.');
+    if (input.ms === undefined && !input.target && !input.text && !input.loadState && !input.url && !input.fn && !input.download) {
+      throw new ValidationError('wait requires milliseconds, a target, --text value, --load state, --url pattern, --fn predicate, or --download.');
+    }
+    if (input.path && !input.download) {
+      throw new ValidationError('wait path can only be used with --download.');
     }
 
     const waitOptions = input.timeoutMs ? { timeout: input.timeoutMs } : undefined;
+    let downloadResult: Record<string, unknown> | undefined;
+    if (input.download) {
+      const session = await this.ensureSession(input.session, input);
+      const download = await this.waitForDownload(tab, input.timeoutMs);
+      const savedPath = input.path ? await this.saveDownload(session, download, input.path) : undefined;
+      downloadResult = {
+        download: true,
+        ...(savedPath ? { path: savedPath } : {}),
+        suggestedFilename: download.suggestedFilename(),
+        url: download.url(),
+        failure: await download.failure(),
+      };
+    }
+
     if (input.ms !== undefined) {
       await new Promise((resolve) => setTimeout(resolve, input.ms));
     }
@@ -763,7 +807,214 @@ export class BrowserManager {
       ...(input.loadState ? { loadState: input.loadState } : {}),
       ...(input.url ? { urlPattern: input.url } : {}),
       ...(input.fn ? { fn: input.fn } : {}),
+      ...downloadResult,
       url: tab.page.url(),
+    };
+  }
+
+  async setRuntime(
+    input: LaunchInput & {
+      session: string;
+      tabName?: string | undefined;
+      runtime:
+        | { setting: 'viewport'; width: number; height: number }
+        | { setting: 'geolocation'; latitude: number; longitude: number; accuracy?: number | undefined }
+        | { setting: 'offline'; value: boolean }
+        | { setting: 'headers'; headers: Record<string, string> }
+        | { setting: 'credentials'; origin: string; username: string; password: string }
+        | { setting: 'media'; colorScheme?: 'dark' | 'light' | 'no-preference' | undefined; reducedMotion?: 'reduce' | 'no-preference' | undefined };
+    },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const session = await this.ensureSession(input.session, input);
+    const runtime = input.runtime;
+
+    if (runtime.setting === 'viewport') {
+      await tab.page.setViewportSize({ width: runtime.width, height: runtime.height });
+      return { sessionName: input.session, tabName: tab.name, setting: runtime.setting, lifetime: 'tab', viewport: { width: runtime.width, height: runtime.height } };
+    }
+
+    if (runtime.setting === 'geolocation') {
+      await session.context.setGeolocation({
+        latitude: runtime.latitude,
+        longitude: runtime.longitude,
+        ...(runtime.accuracy !== undefined ? { accuracy: runtime.accuracy } : {}),
+      });
+      return { sessionName: input.session, setting: runtime.setting, lifetime: 'session', geolocation: { ...runtime } };
+    }
+
+    if (runtime.setting === 'offline') {
+      await session.context.setOffline(runtime.value);
+      return { sessionName: input.session, setting: runtime.setting, lifetime: 'session', offline: runtime.value };
+    }
+
+    if (runtime.setting === 'headers') {
+      await session.context.setExtraHTTPHeaders(runtime.headers);
+      return { sessionName: input.session, setting: runtime.setting, lifetime: 'session', headers: runtime.headers };
+    }
+
+    if (runtime.setting === 'credentials') {
+      const context = session.context as typeof session.context & {
+        setHTTPCredentials?: (credentials: { username: string; password: string; origin?: string }) => Promise<void>;
+      };
+      if (typeof context.setHTTPCredentials !== 'function') {
+        throw new ValidationError('Runtime credentials are not supported by the installed Playwright context.');
+      }
+      await context.setHTTPCredentials({ origin: runtime.origin, username: runtime.username, password: runtime.password });
+      return { sessionName: input.session, setting: runtime.setting, lifetime: 'session', origin: runtime.origin, username: runtime.username };
+    }
+
+    if (runtime.setting === 'media') {
+      if (runtime.colorScheme === undefined && runtime.reducedMotion === undefined) {
+        throw new ValidationError('Runtime media setting requires colorScheme or reducedMotion.');
+      }
+      await tab.page.emulateMedia({
+        ...(runtime.colorScheme !== undefined ? { colorScheme: runtime.colorScheme } : {}),
+        ...(runtime.reducedMotion !== undefined ? { reducedMotion: runtime.reducedMotion } : {}),
+      });
+      return {
+        sessionName: input.session,
+        tabName: tab.name,
+        setting: runtime.setting,
+        lifetime: 'tab',
+        ...(runtime.colorScheme !== undefined ? { colorScheme: runtime.colorScheme } : {}),
+        ...(runtime.reducedMotion !== undefined ? { reducedMotion: runtime.reducedMotion } : {}),
+      };
+    }
+
+    throw new ValidationError(`Unsupported runtime setting ${(runtime as { setting?: string }).setting ?? 'unknown'}.`);
+  }
+
+  async setFrame(input: LaunchInput & { session: string; tabName?: string | undefined; target: string }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    if (input.target === 'main') {
+      delete tab.activeFrame;
+      delete tab.activeFrameTarget;
+      return { sessionName: input.session, tabName: tab.name, frame: 'main', active: false };
+    }
+
+    const locator = frameLocatorForTarget(tab.page, tab, input.target);
+    const frame = await this.resolveFrameFromLocator(locator, input.target);
+    tab.activeFrame = frame;
+    tab.activeFrameTarget = input.target;
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      frame: input.target,
+      active: true,
+      url: frame.url(),
+      name: frame.name(),
+    };
+  }
+
+  async dialogStatus(input: LaunchInput & { session: string; tabName?: string | undefined }): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      pending: Boolean(tab.pendingDialog),
+      ...(tab.pendingDialog
+        ? {
+            dialog: {
+              id: tab.pendingDialog.id,
+              type: tab.pendingDialog.type,
+              message: tab.pendingDialog.message,
+              defaultValue: tab.pendingDialog.defaultValue,
+              openedAt: tab.pendingDialog.openedAt,
+            },
+          }
+        : {}),
+    };
+  }
+
+  async resolveDialog(
+    input: LaunchInput & { action: 'dialog.accept' | 'dialog.dismiss'; session: string; tabName?: string | undefined; text?: string | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    const pending = tab.pendingDialog;
+    if (!pending) {
+      throw new ValidationError(`No pending dialog in ${input.session}/${tab.name}.`);
+    }
+    if (input.action === 'dialog.dismiss' && input.text !== undefined) {
+      throw new ValidationError('dialog dismiss does not accept text.');
+    }
+
+    if (input.action === 'dialog.accept') {
+      await pending.dialog.accept(input.text);
+    } else {
+      await pending.dialog.dismiss();
+    }
+    delete tab.pendingDialog;
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      action: input.action,
+      dialog: {
+        id: pending.id,
+        type: pending.type,
+        message: pending.message,
+        defaultValue: pending.defaultValue,
+      },
+      ...(input.text !== undefined ? { text: input.text } : {}),
+    };
+  }
+
+  async read(
+    input: LaunchInput & { session: string; tabName?: string | undefined; url?: string | undefined; mode?: 'text' | 'raw' | 'outline' | undefined; filter?: string | undefined; timeoutMs?: number | undefined },
+  ): Promise<Record<string, unknown>> {
+    const tab = await this.ensureTab(input.session, input.tabName, input);
+    if (input.url) {
+      await tab.page.goto(input.url, { waitUntil: 'domcontentloaded', ...(input.timeoutMs ? { timeout: input.timeoutMs } : {}) });
+    }
+    const mode = input.mode ?? 'text';
+    const context = pageOrActiveFrame(tab.page, tab);
+    const result = await context.evaluate(
+      ({ mode: readMode, filter }) => {
+        const matchesFilter = (value: string): boolean => !filter || value.toLowerCase().includes(filter.toLowerCase());
+        if (readMode === 'raw') {
+          return {
+            content: document.documentElement.outerHTML,
+            items: [],
+          };
+        }
+
+        if (readMode === 'outline') {
+          const selector = 'h1,h2,h3,h4,h5,h6,a,button,input,textarea,select';
+          const items = Array.from(document.querySelectorAll(selector)).map((element) => {
+            const tag = element.tagName.toLowerCase();
+            const text = tag === 'input'
+              ? ((element as HTMLInputElement).value || (element as HTMLInputElement).placeholder || '')
+              : (element.textContent ?? '').trim();
+            const href = element instanceof HTMLAnchorElement ? element.href : undefined;
+            const label = [tag, text, href].filter(Boolean).join(' ');
+            return { tag, text, href, label };
+          }).filter((item) => matchesFilter(item.label));
+          return {
+            content: items.map((item) => `${item.tag}${item.text ? ` ${item.text}` : ''}${item.href ? ` ${item.href}` : ''}`).join('\n'),
+            items,
+          };
+        }
+
+        const text = (document.body?.innerText ?? document.documentElement.textContent ?? '').trim();
+        const lines = text.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+        const filtered = filter ? lines.filter(matchesFilter) : lines;
+        return {
+          content: filtered.join('\n'),
+          items: filtered.map((line) => ({ text: line })),
+        };
+      },
+      { mode, filter: input.filter },
+    );
+    const data = result as { content: string; items: Array<Record<string, unknown>> };
+    return {
+      sessionName: input.session,
+      tabName: tab.name,
+      mode,
+      url: tab.page.url(),
+      title: await tab.page.title(),
+      ...(input.filter ? { filter: input.filter } : {}),
+      content: data.content,
+      items: data.items,
     };
   }
 
@@ -782,7 +1033,7 @@ export class BrowserManager {
     },
   ): Promise<Record<string, unknown>> {
     const tab = await this.ensureTab(input.session, input.tabName, input);
-    const locator = this.locatorForFind(tab.page, tab, input);
+    const locator = this.locatorForFind(pageOrActiveFrame(tab.page, tab), tab, input);
     const subaction = input.subaction ?? 'click';
     let text: string | undefined;
 
@@ -885,6 +1136,56 @@ export class BrowserManager {
       target,
       activeTabName: session.activeTabName,
     };
+  }
+
+  private async waitForDownload(tab: TabRuntime, timeoutMs?: number | undefined): Promise<Download> {
+    const timeout = timeoutMs ?? 30_000;
+    return tab.page.waitForEvent('download', { timeout }).catch((error: unknown) => {
+      throw new TimeoutError(`Timed out waiting for a download in tab ${tab.name}.`, { timeoutMs: timeout, tabName: tab.name }, error);
+    });
+  }
+
+  private async runActionReturningOnDialog(tab: TabRuntime, action: () => Promise<unknown>): Promise<boolean> {
+    let onDialog: () => void = () => undefined;
+    const dialogPromise = new Promise<boolean>((resolve) => {
+      onDialog = (): void => {
+        resolve(true);
+      };
+      tab.page.once('dialog', onDialog);
+    });
+    const actionPromise = action().then(() => false);
+    try {
+      const result = await Promise.race([actionPromise, dialogPromise]);
+      if (result) {
+        actionPromise.catch((error: unknown) => {
+          this.logger.debug('Dialog-triggering page action settled after response with an error', { tabName: tab.name, error: String(error) });
+        });
+      }
+      return result || Boolean(tab.pendingDialog);
+    } finally {
+      tab.page.off('dialog', onDialog);
+    }
+  }
+
+  private async saveDownload(session: SessionRuntime, download: Download, filePath: string): Promise<string> {
+    const resolvedPath = path.isAbsolute(filePath) ? filePath : path.join(session.paths.downloadsDir, filePath);
+    await mkdir(path.dirname(resolvedPath), { recursive: true });
+    await download.saveAs(resolvedPath);
+    return resolvedPath;
+  }
+
+  private async resolveFrameFromLocator(locator: Locator, target: string): Promise<Frame> {
+    const handle = await locator.elementHandle();
+    if (!handle) {
+      throw new ValidationError(`Frame target ${target} was not found.`);
+    }
+
+    const frame = await handle.contentFrame();
+    if (!frame) {
+      throw new ValidationError(`Frame target ${target} is not an iframe or frame element.`);
+    }
+
+    return frame;
   }
 
   private async ensureSession(sessionName: string, input: LaunchInput): Promise<SessionRuntime> {
@@ -1082,10 +1383,26 @@ export class BrowserManager {
         void clearSnapshotRefs(page);
         tab.refMap.clear();
         delete tab.lastSnapshot;
+        delete tab.activeFrame;
+        delete tab.activeFrameTarget;
       }
     });
 
+    page.on('dialog', (dialog) => {
+      tab.pendingDialog = {
+        id: `dialog_${randomUUID()}`,
+        dialog,
+        type: dialog.type(),
+        message: dialog.message(),
+        defaultValue: dialog.defaultValue(),
+        openedAt: new Date().toISOString(),
+      };
+    });
+
     page.on('close', () => {
+      delete tab.activeFrame;
+      delete tab.activeFrameTarget;
+      delete tab.pendingDialog;
       session.tabs.delete(tab.name);
       this.ensureActiveTabAfterClose(session, tab.name);
     });
@@ -1178,6 +1495,8 @@ export class BrowserManager {
       active: tab.name === session.activeTabName,
       url: tab.page.url(),
       title: tab.page.isClosed() ? '' : await tab.page.title(),
+      ...(tab.activeFrameTarget ? { activeFrame: tab.activeFrameTarget } : {}),
+      pendingDialog: Boolean(tab.pendingDialog),
     };
   }
 
@@ -1191,6 +1510,8 @@ export class BrowserManager {
       tabName: tab.name,
       active: tab.name === session.activeTabName,
       url: tab.page.url(),
+      ...(tab.activeFrameTarget ? { activeFrame: tab.activeFrameTarget } : {}),
+      pendingDialog: Boolean(tab.pendingDialog),
     };
   }
 
@@ -1229,7 +1550,7 @@ export class BrowserManager {
   }
 
   private locatorForFind(
-    page: Page,
+    page: Page | Frame,
     tab: TabRuntime,
     input: {
       locatorType: 'role' | 'text' | 'label' | 'placeholder' | 'alt' | 'title' | 'testid' | 'first' | 'last' | 'nth';
@@ -1296,7 +1617,11 @@ export class BrowserManager {
       throw new ValidationError(`find ${input.locatorType} requires a selector or @ref target.`);
     }
 
-    const locator = locatorForTarget(page, tab, input.target);
+    const selector = input.target.startsWith('@') ? tab.refMap.get(input.target) : input.target;
+    if (!selector) {
+      throw new ValidationError(`Ref ${input.target} was not found.`);
+    }
+    const locator = page.locator(selector);
     if (input.locatorType === 'first') {
       return locator.first();
     }

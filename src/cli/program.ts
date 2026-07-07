@@ -111,6 +111,27 @@ interface FindOptions extends SharedOptions {
   exact?: boolean | undefined;
 }
 
+interface DownloadOptions extends SharedOptions {
+  timeout?: number | undefined;
+}
+
+interface WaitOptions extends SharedOptions {
+  text?: string | undefined;
+  load?: string | undefined;
+  url?: string | undefined;
+  fn?: string | undefined;
+  download?: boolean | undefined;
+  path?: string | undefined;
+  timeout?: number | undefined;
+}
+
+interface ReadOptions extends SharedOptions {
+  raw?: boolean | undefined;
+  outline?: boolean | undefined;
+  filter?: string | undefined;
+  timeout?: number | undefined;
+}
+
 function collectValues(value: string, previous: string[] = []): string[] {
   return [...previous, ...value.split(',').map((item) => item.trim()).filter(Boolean)];
 }
@@ -190,6 +211,44 @@ function screenshotTargetAndPath(
 
 function normalizeFindAction(options: FindOptions): 'click' | 'fill' | 'check' | 'hover' | 'text' {
   return options.action ?? 'click';
+}
+
+function parseJsonObject(value: string, label: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch (error) {
+    throw new ValidationError(`${label} must be valid JSON.`, undefined, error);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new ValidationError(`${label} must be a JSON object.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function parseStringMap(value: string, label: string): Record<string, string> {
+  const parsed = parseJsonObject(value, label);
+  if (!Object.values(parsed).every((item) => typeof item === 'string')) {
+    throw new ValidationError(`${label} must be a JSON object with string values.`);
+  }
+  return parsed as Record<string, string>;
+}
+
+function parseBooleanInput(value: string): boolean {
+  if (['true', '1', 'yes', 'on'].includes(value.toLowerCase())) {
+    return true;
+  }
+  if (['false', '0', 'no', 'off'].includes(value.toLowerCase())) {
+    return false;
+  }
+  throw new ValidationError('Expected a boolean value: true or false.');
+}
+
+function readMode(options: ReadOptions): 'text' | 'raw' | 'outline' {
+  if (options.raw && options.outline) {
+    throw new ValidationError('Choose only one read mode: --raw or --outline.');
+  }
+  return options.raw ? 'raw' : options.outline ? 'outline' : 'text';
 }
 
 export function toLaunchInput(options: SharedOptions): LaunchInput {
@@ -576,6 +635,20 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
 
   addSharedBrowserOptions(
     program
+      .command('download <target> <path>')
+      .description('Click a selector or @ref and save the triggered download')
+      .option('--timeout <ms>', 'download wait timeout in milliseconds', parseInteger)
+      .action(async (target: string, filePath: string, options: DownloadOptions) => {
+        await handlers.onDaemonAction(
+          'download',
+          { action: 'download', target, path: filePath, timeoutMs: options.timeout, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
       .command('dblclick <target>')
       .description('Double-click a selector or @ref')
       .action(async (target: string, options: SharedOptions) => {
@@ -873,26 +946,187 @@ export function createProgram(handlers: CliHandlers, options?: ProgramOptions): 
   addSharedBrowserOptions(
     program
       .command('wait [target]')
-      .description('Wait for time, a selector, text, URL, function predicate, or load state')
+      .description('Wait for time, a selector, text, URL, function predicate, load state, or download')
       .option('--text <text>', 'wait for visible text')
       .option('--load <state>', 'wait for page load state')
       .option('--url <pattern>', 'wait for URL pattern')
       .option('--fn <expression>', 'wait for a JavaScript predicate expression')
+      .option('--download', 'wait for the next download in the current tab')
+      .option('--path <path>', 'save --download to this path')
       .option('--timeout <ms>', 'wait timeout in milliseconds', parseInteger)
-      .action(async (
-        target: string | undefined,
-        options: SharedOptions & { text?: string | undefined; load?: string | undefined; url?: string | undefined; fn?: string | undefined; timeout?: number | undefined },
-      ) => {
-        const ms = target && /^\d+$/u.test(target) && !options.text && !options.load && !options.url && !options.fn ? parseInteger(target) : undefined;
+      .action(async (target: string | undefined, options: WaitOptions) => {
+        const ms = target && /^\d+$/u.test(target) && !options.text && !options.load && !options.url && !options.fn && !options.download && !options.path ? parseInteger(target) : undefined;
+        const downloadPath = options.download ? options.path ?? target : options.path;
         await handlers.onDaemonAction(
           'wait',
           {
             action: 'wait',
-            ...(ms !== undefined ? { ms } : target ? { target } : {}),
+            ...(ms !== undefined ? { ms } : target && !options.download ? { target } : {}),
             ...(options.text ? { text: options.text } : {}),
             ...(options.load ? { loadState: options.load } : {}),
             ...(options.url ? { url: options.url } : {}),
             ...(options.fn ? { fn: options.fn } : {}),
+            download: options.download ?? false,
+            ...(downloadPath ? { path: downloadPath } : {}),
+            timeoutMs: options.timeout,
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+
+  const setCommand = program.command('set').description('Change runtime settings for the current session or tab');
+  addSharedBrowserOptions(
+    setCommand
+      .command('viewport <width> <height>')
+      .description('Set the current tab viewport size')
+      .action(async (width: string, height: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'runtime.set',
+          {
+            action: 'runtime.set',
+            runtime: { setting: 'viewport', width: parseInteger(width), height: parseInteger(height) },
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    setCommand
+      .command('geolocation <latitude> <longitude>')
+      .alias('geo')
+      .description('Set session geolocation')
+      .option('--accuracy <meters>', 'geolocation accuracy in meters', Number.parseFloat)
+      .action(async (latitude: string, longitude: string, options: SharedOptions & { accuracy?: number | undefined }) => {
+        await handlers.onDaemonAction(
+          'runtime.set',
+          {
+            action: 'runtime.set',
+            runtime: { setting: 'geolocation', latitude: Number.parseFloat(latitude), longitude: Number.parseFloat(longitude), accuracy: options.accuracy },
+            session: options.session,
+            tabName: options.tabname,
+            ...toLaunchInput(options),
+          },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    setCommand
+      .command('offline <value>')
+      .description('Set session offline mode')
+      .action(async (value: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'runtime.set',
+          { action: 'runtime.set', runtime: { setting: 'offline', value: parseBooleanInput(value) }, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    setCommand
+      .command('headers <json>')
+      .description('Set session extra HTTP headers')
+      .action(async (json: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'runtime.set',
+          { action: 'runtime.set', runtime: { setting: 'headers', headers: parseStringMap(json, 'headers') }, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    setCommand
+      .command('credentials <origin> <username> <password>')
+      .description('Set session HTTP credentials for an origin')
+      .action(async (origin: string, username: string, password: string, options: SharedOptions) => {
+        await handlers.onDaemonAction(
+          'runtime.set',
+          { action: 'runtime.set', runtime: { setting: 'credentials', origin, username, password }, session: options.session, tabName: options.tabname, ...toLaunchInput(options) },
+          options,
+        );
+      }),
+  );
+  addSharedBrowserOptions(
+    setCommand
+      .command('media')
+      .description('Set current tab media preferences')
+      .action(async (options: SharedOptions & { colorScheme?: 'dark' | 'light' | 'no-preference' | undefined; reducedMotion?: 'reduce' | 'no-preference' | undefined }) => {
+        if (!options.colorScheme && !options.reducedMotion) {
+          throw new ValidationError('set media requires --color-scheme or --reduced-motion.');
+        }
+        const launchInput = toLaunchInput({ ...options, colorScheme: undefined, reducedMotion: undefined });
+        await handlers.onDaemonAction(
+          'runtime.set',
+          {
+            action: 'runtime.set',
+            runtime: { setting: 'media', colorScheme: options.colorScheme, reducedMotion: options.reducedMotion },
+            session: options.session,
+            tabName: options.tabname,
+            ...launchInput,
+          },
+          options,
+        );
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('frame <target>')
+      .description('Set active frame context, or pass main to clear it')
+      .action(async (target: string, options: SharedOptions) => {
+        await handlers.onDaemonAction('frame', { action: 'frame', target, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  const dialogCommand = program.command('dialog').description('Inspect or resolve pending tab dialogs');
+  addSharedBrowserOptions(
+    dialogCommand
+      .command('status')
+      .description('Show pending dialog metadata')
+      .action(async (options: SharedOptions) => {
+        await handlers.onDaemonAction('dialog.status', { action: 'dialog.status', session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    dialogCommand
+      .command('accept [text]')
+      .description('Accept the pending dialog')
+      .action(async (text: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction('dialog.accept', { action: 'dialog.accept', text, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+  addSharedBrowserOptions(
+    dialogCommand
+      .command('dismiss [text]')
+      .description('Dismiss the pending dialog')
+      .action(async (text: string | undefined, options: SharedOptions) => {
+        await handlers.onDaemonAction('dialog.dismiss', { action: 'dialog.dismiss', text, session: options.session, tabName: options.tabname, ...toLaunchInput(options) }, options);
+      }),
+  );
+
+  addSharedBrowserOptions(
+    program
+      .command('read [url]')
+      .description('Read local DOM content from the current tab, optionally navigating first')
+      .option('--raw', 'return raw page HTML')
+      .option('--outline', 'return a DOM outline')
+      .option('--filter <text>', 'filter text or outline rows')
+      .option('--timeout <ms>', 'navigation timeout in milliseconds', parseInteger)
+      .action(async (url: string | undefined, options: ReadOptions) => {
+        await handlers.onDaemonAction(
+          'read',
+          {
+            action: 'read',
+            ...(url ? { url: normalizeNavigationUrl(url) } : {}),
+            mode: readMode(options),
+            ...(options.filter ? { filter: options.filter } : {}),
             timeoutMs: options.timeout,
             session: options.session,
             tabName: options.tabname,

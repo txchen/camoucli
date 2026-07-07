@@ -153,6 +153,102 @@ describe('CLI program parsing', () => {
     expect(onDaemonAction).not.toHaveBeenCalled();
   });
 
+  it('routes stateful runtime commands to daemon actions', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction));
+
+    await program.parseAsync(['node', 'camou', 'download', '#export', 'reports/out.csv', '--timeout', '1000'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'wait', '--download', '--path', 'next.bin', '--timeout', '1000'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'wait', 'positional.bin', '--download'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'viewport', '1024', '768'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'geolocation', '47.6', '-122.3', '--accuracy', '9'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'offline', 'true'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'headers', '{"x-test":"1"}'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'credentials', 'https://example.com', 'user', 'pass'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'set', 'media', '--color-scheme', 'dark', '--reduced-motion', 'reduce'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'frame', '#child'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'dialog', 'status'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'dialog', 'accept', 'typed'], { from: 'node' });
+    await program.parseAsync(['node', 'camou', 'read', 'example.com', '--outline', '--filter', 'Learn', '--timeout', '2000'], { from: 'node' });
+
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      1,
+      'download',
+      expect.objectContaining({ action: 'download', target: '#export', path: 'reports/out.csv', timeoutMs: 1000 }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      2,
+      'wait',
+      expect.objectContaining({ action: 'wait', download: true, path: 'next.bin', timeoutMs: 1000 }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      3,
+      'wait',
+      expect.objectContaining({ action: 'wait', download: true, path: 'positional.bin' }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      4,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'viewport', width: 1024, height: 768 } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      5,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'geolocation', latitude: 47.6, longitude: -122.3, accuracy: 9 } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      6,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'offline', value: true } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      7,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'headers', headers: { 'x-test': '1' } } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      8,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'credentials', origin: 'https://example.com', username: 'user', password: 'pass' } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      9,
+      'runtime.set',
+      expect.objectContaining({ runtime: { setting: 'media', colorScheme: 'dark', reducedMotion: 'reduce' } }),
+      expect.any(Object),
+    );
+    expect(onDaemonAction.mock.calls[8]?.[1].colorScheme).toBeUndefined();
+    expect(onDaemonAction.mock.calls[8]?.[1].reducedMotion).toBeUndefined();
+    expect(onDaemonAction).toHaveBeenNthCalledWith(10, 'frame', expect.objectContaining({ action: 'frame', target: '#child' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(11, 'dialog.status', expect.objectContaining({ action: 'dialog.status' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(12, 'dialog.accept', expect.objectContaining({ action: 'dialog.accept', text: 'typed' }), expect.any(Object));
+    expect(onDaemonAction).toHaveBeenNthCalledWith(
+      13,
+      'read',
+      expect.objectContaining({ action: 'read', url: 'https://example.com', mode: 'outline', filter: 'Learn', timeoutMs: 2000 }),
+      expect.any(Object),
+    );
+  });
+
+  it('rejects unsupported stateful runtime command variants before contacting the daemon', async () => {
+    const onDaemonAction = vi.fn(async () => undefined);
+    const program = createProgram(createHandlers(onDaemonAction), { quietErrors: true });
+
+    await expect(program.parseAsync(['node', 'camou', 'set', 'offline', 'sometimes'], { from: 'node' })).rejects.toThrow('Expected a boolean');
+    await expect(program.parseAsync(['node', 'camou', 'set', 'headers', '{"x":1}'], { from: 'node' })).rejects.toThrow('string values');
+    await expect(program.parseAsync(['node', 'camou', 'set', 'media'], { from: 'node' })).rejects.toThrow('set media requires');
+    await expect(program.parseAsync(['node', 'camou', 'read', '--raw', '--outline'], { from: 'node' })).rejects.toThrow('Choose only one read mode');
+    expect(onDaemonAction).not.toHaveBeenCalled();
+  });
+
   it('lists core alias and eval input modes in help', () => {
     const program = createProgram(createHandlers(async () => undefined));
     const help = program.helpInformation();
@@ -163,6 +259,10 @@ describe('CLI program parsing', () => {
     expect(help).toContain('key [options] <key>');
     expect(help).toContain('scrollinto [options] <target>');
     expect(help).toContain('window');
+    expect(help).toContain('download [options] <target> <path>');
+    expect(help).toContain('frame [options] <target>');
+    expect(help).toContain('dialog');
+    expect(help).toContain('read [options] [url]');
     const openHelp = program.commands.find((command) => command.name() === 'open')?.helpInformation();
     expect(openHelp).toContain('--headed');
     expect(openHelp).toContain('--proxy-bypass <hosts>');
@@ -183,6 +283,9 @@ describe('CLI program parsing', () => {
     expect(tabNewHelp).toContain('--label <name>');
     const windowNewHelp = program.commands.find((command) => command.name() === 'window')?.commands.find((command) => command.name() === 'new')?.helpInformation();
     expect(windowNewHelp).toContain('not guaranteed to be a separate OS window');
+    const setHelp = program.commands.find((command) => command.name() === 'set')?.helpInformation();
+    expect(setHelp).toContain('viewport');
+    expect(setHelp).toContain('media');
   });
 
   it('maps open command flags into a daemon payload', async () => {
