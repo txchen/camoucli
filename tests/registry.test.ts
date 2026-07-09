@@ -53,6 +53,8 @@ describe('browser registry', () => {
     await setInstalledBrowser(paths, {
       version: '135.0.1-beta.24',
       tag: 'v135.0.1-beta.24',
+      releaseVersion: '135.0.1-beta.24',
+      assetVersion: '135.0.1-beta.24',
       sourceRepo: 'daijro/camoufox',
       assetName: 'camoufox-135.0.1-beta.24-lin.x86_64.zip',
       assetUrl: 'https://example.com/camoufox.zip',
@@ -67,6 +69,8 @@ describe('browser registry', () => {
 
     expect(installed?.version).toBe('135.0.1-beta.24');
     expect(installed?.sourceRepo).toBe('daijro/camoufox');
+    expect(installed?.releaseVersion).toBe('135.0.1-beta.24');
+    expect(installed?.assetVersion).toBe('135.0.1-beta.24');
   });
 
   it('lists installed browsers in descending version order', async () => {
@@ -184,18 +188,26 @@ describe('browser registry', () => {
   });
 
   it('detects installs from the shared Camoufox cache layout', async () => {
-    const installRoot = path.join(paths.browsersDir, 'official', '135.0.1-beta.24');
+    const installRoot = path.join(paths.browsersDir, 'official', '152.0.4-alpha.25');
     await mkdir(installRoot, { recursive: true });
     await writeFile(
       path.join(installRoot, 'version.json'),
-      JSON.stringify({ version: '135.0.1', build: 'beta.24', prerelease: false }),
+      JSON.stringify({
+        version: '152.0.4',
+        build: 'alpha.25',
+        release_version: '152.0.2-alpha',
+        asset_version: '152.0.4-alpha.25',
+        prerelease: false,
+      }),
       'utf8',
     );
-    await writeFile(paths.camoufoxConfigFile, JSON.stringify({ active_version: 'browsers/official/135.0.1-beta.24' }), 'utf8');
+    await writeFile(paths.camoufoxConfigFile, JSON.stringify({ active_version: 'browsers/official/152.0.4-alpha.25' }), 'utf8');
 
     const installed = await resolveInstalledBrowser(paths);
 
-    expect(installed?.version).toBe('135.0.1-beta.24');
+    expect(installed?.version).toBe('152.0.4-alpha.25');
+    expect(installed?.releaseVersion).toBe('152.0.2-alpha');
+    expect(installed?.assetVersion).toBe('152.0.4-alpha.25');
     expect(installed?.rootDir).toBe(installRoot);
     expect(installed?.sourceRepo).toBe('official');
   });

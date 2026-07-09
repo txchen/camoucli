@@ -10,7 +10,7 @@ import type { CamoucliPaths } from '../state/paths.js';
 import { buildDoctorHints, buildDoctorVersionChecks, inspectBrowserBundle, inspectSharedLibraries } from '../doctor/diagnostics.js';
 import { ensureDir } from '../state/store.js';
 import { InstallError } from '../util/errors.js';
-import { buildExpectedAssetName, getPlatformTarget, normalizeReleaseVersion } from '../util/platform.js';
+import { getPlatformTarget, normalizeReleaseVersion, parseCamoufoxAssetName } from '../util/platform.js';
 import type { Logger } from '../util/log.js';
 import { probeCamoufoxLaunch, type BrowserLaunchProbe } from './launcher.js';
 import { listInstalledBrowsers, removeInstalledBrowser, resolveInstalledBrowser, setInstalledBrowser } from './registry.js';
@@ -26,6 +26,7 @@ interface GitHubAsset {
 interface GitHubRelease {
   tag_name: string;
   prerelease?: boolean;
+  published_at?: string;
   assets: GitHubAsset[];
 }
 
@@ -33,9 +34,12 @@ export interface ResolvedRelease {
   repo: string;
   tag: string;
   version: string;
+  releaseVersion: string;
+  assetVersion: string;
   assetName: string;
   assetUrl: string;
   prerelease: boolean;
+  publishedAt?: string | undefined;
 }
 
 export interface RemoteCamoufoxRelease extends ResolvedRelease {}
@@ -43,6 +47,12 @@ export interface RemoteCamoufoxRelease extends ResolvedRelease {}
 interface CamoufoxVersionMetadata {
   version: string;
   build: string;
+}
+
+interface CompatibleReleaseAsset {
+  version: string;
+  name: string;
+  url: string;
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -66,10 +76,8 @@ async function scanCompatibleReleases(options?: {
 }): Promise<RemoteCamoufoxRelease[]> {
   const target = getPlatformTarget();
   const normalizedVersion = options?.version ? normalizeReleaseVersion(options.version) : undefined;
-  const expectedAssetName = normalizedVersion
-    ? buildExpectedAssetName(normalizedVersion, target)
-    : undefined;
   const compatibleReleases = new Map<string, RemoteCamoufoxRelease>();
+  const assetVersionMatches: RemoteCamoufoxRelease[] = [];
 
   for (const repo of DEFAULT_RELEASE_REPOS) {
     const apiUrl = `https://api.github.com/repos/${repo}/releases`;
@@ -89,12 +97,8 @@ async function scanCompatibleReleases(options?: {
 
     for (const release of releases) {
       const releaseVersion = normalizeReleaseVersion(release.tag_name);
-      if (normalizedVersion && releaseVersion !== normalizedVersion) {
-        continue;
-      }
-
-      const assetName = expectedAssetName ?? buildExpectedAssetName(releaseVersion, target);
-      const asset = release.assets.find((candidate) => candidate.name === assetName);
+      const assets = listCompatibleAssets(release.assets, target);
+      const asset = selectCompatibleAsset(assets, releaseVersion, normalizedVersion);
       if (!asset) {
         continue;
       }
@@ -102,14 +106,24 @@ async function scanCompatibleReleases(options?: {
       const resolvedRelease = {
         repo,
         tag: release.tag_name,
-        version: releaseVersion,
+        version: normalizedVersion && asset.version === normalizedVersion && releaseVersion !== normalizedVersion
+          ? asset.version
+          : releaseVersion,
+        releaseVersion,
+        assetVersion: asset.version,
         assetName: asset.name,
-        assetUrl: asset.browser_download_url,
+        assetUrl: asset.url,
         prerelease: release.prerelease ?? false,
+        publishedAt: release.published_at,
       };
 
       if (normalizedVersion) {
-        return [resolvedRelease];
+        if (releaseVersion === normalizedVersion) {
+          return [resolvedRelease];
+        } else if (asset.version === normalizedVersion) {
+          assetVersionMatches.push(resolvedRelease);
+        }
+        continue;
       }
 
       if (!compatibleReleases.has(releaseVersion)) {
@@ -118,7 +132,59 @@ async function scanCompatibleReleases(options?: {
     }
   }
 
-  return Array.from(compatibleReleases.values()).sort((left, right) => right.version.localeCompare(left.version, undefined, { numeric: true }));
+  if (normalizedVersion) {
+    return assetVersionMatches;
+  }
+
+  return Array.from(compatibleReleases.values()).sort(compareReleaseOrder);
+}
+
+function compareReleaseOrder(left: RemoteCamoufoxRelease, right: RemoteCamoufoxRelease): number {
+  const leftPublishedAt = Date.parse(left.publishedAt ?? '');
+  const rightPublishedAt = Date.parse(right.publishedAt ?? '');
+
+  if (!Number.isNaN(leftPublishedAt) && !Number.isNaN(rightPublishedAt) && leftPublishedAt !== rightPublishedAt) {
+    return rightPublishedAt - leftPublishedAt;
+  }
+
+  return 0;
+}
+
+function listCompatibleAssets(assets: GitHubAsset[], target = getPlatformTarget()): CompatibleReleaseAsset[] {
+  return assets
+    .map((asset) => {
+      const parsed = parseCamoufoxAssetName(asset.name);
+      if (!parsed || parsed.os !== target.os || parsed.arch !== target.arch) {
+        return undefined;
+      }
+
+      return {
+        version: parsed.version,
+        name: asset.name,
+        url: asset.browser_download_url,
+      };
+    })
+    .filter((asset): asset is CompatibleReleaseAsset => Boolean(asset));
+}
+
+function selectCompatibleAsset(
+  assets: CompatibleReleaseAsset[],
+  releaseVersion: string,
+  requestedVersion?: string | undefined,
+): CompatibleReleaseAsset | undefined {
+  if (assets.length === 0) {
+    return undefined;
+  }
+
+  if (requestedVersion && requestedVersion !== releaseVersion) {
+    const requestedAsset = assets.find((asset) => asset.version === requestedVersion);
+    return requestedAsset;
+  }
+
+  return (
+    assets.find((asset) => asset.version === releaseVersion) ??
+    [...assets].sort((left, right) => right.version.localeCompare(left.version, undefined, { numeric: true }))[0]
+  );
 }
 
 export async function listRemoteCamoufoxReleases(): Promise<RemoteCamoufoxRelease[]> {
@@ -158,6 +224,9 @@ async function writeVersionMetadata(rootDir: string, release: ResolvedRelease): 
     `${JSON.stringify({
       version: parsed.version,
       build: parsed.build,
+      release_version: release.releaseVersion,
+      release_tag: release.tag,
+      asset_version: release.assetVersion,
       prerelease: release.prerelease,
     }, null, 2)}\n`,
     'utf8',
@@ -273,6 +342,8 @@ export async function installCamoufox(
       {
         version: release.version,
         tag: release.tag,
+        releaseVersion: release.releaseVersion,
+        assetVersion: release.assetVersion,
         sourceRepo: release.repo,
         assetName: release.assetName,
         assetUrl: release.assetUrl,

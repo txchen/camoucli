@@ -15,8 +15,20 @@ function printInstalledVersions(data: Record<string, unknown>): void {
     const current = Boolean((install as Record<string, unknown>).current);
     const sourceRepo = String((install as Record<string, unknown>).sourceRepo ?? 'unknown');
     const installPath = String((install as Record<string, unknown>).path ?? '');
-    process.stdout.write(`${current ? '*' : ' '} ${version} ${sourceRepo}${installPath ? ` ${installPath}` : ''}\n`);
+    const versionNote = formatReleaseAssetNote(install as Record<string, unknown>, version);
+    process.stdout.write(`${current ? '*' : ' '} ${version}${versionNote} ${sourceRepo}${installPath ? ` ${installPath}` : ''}\n`);
   }
+}
+
+function formatReleaseAssetNote(record: Record<string, unknown>, version: string): string {
+  const releaseVersion = typeof record.releaseVersion === 'string' ? record.releaseVersion : undefined;
+  const assetVersion = typeof record.assetVersion === 'string' ? record.assetVersion : undefined;
+  const notes = [
+    releaseVersion && releaseVersion !== version ? `release ${releaseVersion}` : undefined,
+    assetVersion && assetVersion !== version ? `asset ${assetVersion}` : undefined,
+  ].filter((value): value is string => Boolean(value));
+
+  return notes.length > 0 ? ` (${notes.join(', ')})` : '';
 }
 
 function printRemoteVersions(data: Record<string, unknown>): void {
@@ -36,9 +48,10 @@ function printRemoteVersions(data: Record<string, unknown>): void {
     const version = String(record.version ?? 'unknown');
     const tag = String(record.tag ?? 'unknown');
     const repo = String(record.repo ?? 'unknown');
+    const versionNote = formatReleaseAssetNote(record, version);
     const flags = [record.prerelease === true ? 'prerelease' : undefined, record.installed === true ? 'installed' : undefined, record.current === true ? 'current' : undefined]
       .filter((value): value is string => Boolean(value));
-    process.stdout.write(` ${record.current === true ? '*' : ' '} ${version} ${tag} ${repo}${flags.length > 0 ? ` ${flags.join(' ')}` : ''}\n`);
+    process.stdout.write(` ${record.current === true ? '*' : ' '} ${version}${versionNote} ${tag} ${repo}${flags.length > 0 ? ` ${flags.join(' ')}` : ''}\n`);
   }
 }
 
@@ -977,7 +990,8 @@ function printDoctorSummary(data: Record<string, unknown>): void {
       const current = record.current === true;
       const launchable = record.launchable === true;
       const sourceRepo = typeof record.sourceRepo === 'string' ? ` ${record.sourceRepo}` : '';
-      process.stdout.write(` ${current ? '*' : ' '} ${version} ${launchable ? 'launches' : 'not launchable'}${sourceRepo}\n`);
+      const versionNote = formatReleaseAssetNote(record, version);
+      process.stdout.write(` ${current ? '*' : ' '} ${version}${versionNote} ${launchable ? 'launches' : 'not launchable'}${sourceRepo}\n`);
       if (typeof record.error === 'string' && record.error.length > 0) {
         process.stdout.write(`    reason: ${record.error}\n`);
       }
@@ -1033,7 +1047,8 @@ function printDoctorSummary(data: Record<string, unknown>): void {
 
 function printBrowserCompatibilityResult(prefix: string, data: Record<string, unknown>): void {
   const version = String(data.version ?? 'unknown');
-  process.stdout.write(`${prefix} Camoufox ${version}\n`);
+  const versionNote = formatReleaseAssetNote(data, version);
+  process.stdout.write(`${prefix} Camoufox ${version}${versionNote}\n`);
 
   const playwrightCoreVersion =
     typeof data.playwrightCoreVersion === 'string' ? data.playwrightCoreVersion : undefined;

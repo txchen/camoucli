@@ -26,6 +26,8 @@ export interface DoctorSharedLibraryCheck {
 export interface DoctorVersionCheck {
   version: string;
   current: boolean;
+  releaseVersion?: string | undefined;
+  assetVersion?: string | undefined;
   sourceRepo: string;
   path: string;
   launchable: boolean;
@@ -216,6 +218,8 @@ export function buildDoctorVersionChecks(input: {
     return {
       version: install.version,
       current: install.version === input.currentVersion,
+      releaseVersion: install.releaseVersion,
+      assetVersion: install.assetVersion,
       sourceRepo: install.sourceRepo,
       path: install.executablePath,
       launchable: probe?.success ?? false,

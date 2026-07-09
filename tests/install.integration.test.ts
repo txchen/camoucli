@@ -57,6 +57,7 @@ describe('installer integration', () => {
           JSON.stringify([
             {
               tag_name: 'v135.0.1-beta.24',
+              published_at: '2025-03-15T21:59:27Z',
               prerelease: false,
               assets: [
                 {
@@ -87,6 +88,113 @@ describe('installer integration', () => {
 
     expect(versionJson).toMatchObject({ version: '135.0.1', build: 'beta.24' });
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('installs a release when the platform asset version differs from the release tag', async () => {
+    const paths = createTestPaths(rootDir);
+    await ensureBasePaths(paths);
+    const target = getPlatformTarget();
+    const compatibleAsset = `camoufox-152.0.4-alpha.25-${target.assetSuffix}.zip`;
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/releases')) {
+        return new Response(
+          JSON.stringify([
+            {
+              tag_name: 'v152.0.2-alpha',
+              prerelease: false,
+              assets: [
+                {
+                  name: compatibleAsset,
+                  browser_download_url: `https://example.com/${compatibleAsset}`,
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        );
+      }
+
+      return new Response('archive-data', { status: 200 });
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const release = await installCamoufox(paths, { version: '152.0.2-alpha', force: true });
+    const installed = await resolveInstalledBrowser(paths, release.version);
+
+    expect(release).toMatchObject({
+      version: '152.0.2-alpha',
+      releaseVersion: '152.0.2-alpha',
+      assetVersion: '152.0.4-alpha.25',
+      assetName: compatibleAsset,
+    });
+    expect(installed).toMatchObject({
+      version: '152.0.2-alpha',
+      releaseVersion: '152.0.2-alpha',
+      assetVersion: '152.0.4-alpha.25',
+      assetName: compatibleAsset,
+    });
+
+    const versionJson = JSON.parse(
+      await readFile(path.join(paths.browsersDir, 'official', '152.0.2-alpha', 'version.json'), 'utf8'),
+    ) as { version?: string; build?: string; release_version?: string; release_tag?: string; asset_version?: string };
+
+    expect(versionJson).toMatchObject({
+      version: '152.0.2',
+      build: 'alpha',
+      release_version: '152.0.2-alpha',
+      release_tag: 'v152.0.2-alpha',
+      asset_version: '152.0.4-alpha.25',
+    });
+  });
+
+  it('installs by asset build version when the asset version differs from the release tag', async () => {
+    const paths = createTestPaths(rootDir);
+    await ensureBasePaths(paths);
+    const target = getPlatformTarget();
+    const compatibleAsset = `camoufox-152.0.4-alpha.25-${target.assetSuffix}.zip`;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/releases')) {
+          return new Response(
+            JSON.stringify([
+              {
+                tag_name: 'v152.0.2-alpha',
+                prerelease: false,
+                assets: [
+                  {
+                    name: compatibleAsset,
+                    browser_download_url: `https://example.com/${compatibleAsset}`,
+                  },
+                ],
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+
+        return new Response('archive-data', { status: 200 });
+      }),
+    );
+
+    const release = await installCamoufox(paths, { version: '152.0.4-alpha.25', force: true });
+    const installed = await resolveInstalledBrowser(paths, '152.0.4-alpha.25');
+
+    expect(release).toMatchObject({
+      version: '152.0.4-alpha.25',
+      releaseVersion: '152.0.2-alpha',
+      assetVersion: '152.0.4-alpha.25',
+      assetName: compatibleAsset,
+    });
+    expect(installed).toMatchObject({
+      version: '152.0.4-alpha.25',
+      releaseVersion: '152.0.2-alpha',
+      assetVersion: '152.0.4-alpha.25',
+      assetName: compatibleAsset,
+    });
   });
 
   it('installs the newest compatible release when the latest release lacks a platform asset', async () => {
@@ -131,6 +239,7 @@ describe('installer integration', () => {
             },
             {
               tag_name: 'v135.0.1-beta.24',
+              published_at: '2025-03-15T21:59:27Z',
               prerelease: false,
               assets: [
                 {
@@ -168,6 +277,7 @@ describe('installer integration', () => {
           JSON.stringify([
             {
               tag_name: 'v135.0.1-beta.24',
+              published_at: '2025-03-15T21:59:27Z',
               prerelease: false,
               assets: [
                 {
@@ -178,6 +288,7 @@ describe('installer integration', () => {
             },
             {
               tag_name: 'v135.0.1-beta.24-linux-x86_64',
+              published_at: '2025-03-16T21:59:27Z',
               prerelease: false,
               assets: [
                 {
@@ -188,6 +299,7 @@ describe('installer integration', () => {
             },
             {
               tag_name: 'v135.0.1-beta.25',
+              published_at: '2025-03-17T21:59:27Z',
               prerelease: true,
               assets: [
                 {
@@ -214,6 +326,41 @@ describe('installer integration', () => {
         version: '135.0.1-beta.24',
         tag: 'v135.0.1-beta.24',
         prerelease: false,
+      },
+    ]);
+  });
+
+  it('lists remote releases whose compatible asset version differs from the release tag', async () => {
+    const target = getPlatformTarget();
+    const compatibleAsset = `camoufox-152.0.4-alpha.25-${target.assetSuffix}.zip`;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify([
+            {
+              tag_name: 'v152.0.2-alpha',
+              prerelease: false,
+              assets: [
+                {
+                  name: compatibleAsset,
+                  browser_download_url: `https://example.com/${compatibleAsset}`,
+                },
+              ],
+            },
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    await expect(listRemoteCamoufoxReleases()).resolves.toMatchObject([
+      {
+        version: '152.0.2-alpha',
+        releaseVersion: '152.0.2-alpha',
+        assetVersion: '152.0.4-alpha.25',
+        assetName: compatibleAsset,
       },
     ]);
   });

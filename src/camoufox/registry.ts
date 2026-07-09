@@ -9,6 +9,8 @@ import { readJsonFile, writeJsonFile } from '../state/store.js';
 export interface BrowserInstallRecord {
   version: string;
   tag: string;
+  releaseVersion?: string | undefined;
+  assetVersion?: string | undefined;
   sourceRepo: string;
   assetName: string;
   assetUrl: string;
@@ -44,6 +46,8 @@ interface SharedVersionMetadata {
   build?: string;
   release?: string;
   tag?: string;
+  release_version?: string;
+  asset_version?: string;
 }
 
 export async function loadBrowserRegistry(paths: CamoucliPaths): Promise<BrowserRegistry> {
@@ -94,6 +98,8 @@ async function loadSharedBrowserInstalls(paths: CamoucliPaths): Promise<BrowserR
         installs[version] = {
           version,
           tag: build ? `v${version}` : version,
+          releaseVersion: metadata.release_version,
+          assetVersion: metadata.asset_version,
           sourceRepo: repoEntry.name,
           assetName: '',
           assetUrl: '',

@@ -45,6 +45,27 @@ describe('CLI output', () => {
     expect(output).toContain('Compatibility: launch check passed with Playwright 1.51.1');
   });
 
+  it('prints release and asset metadata for mismatched installs', () => {
+    const output = captureStdout(() => {
+      printOutput(
+        'install',
+        {
+          version: '152.0.4-alpha.25',
+          releaseVersion: '152.0.2-alpha',
+          assetVersion: '152.0.4-alpha.25',
+          playwrightCoreVersion: '1.51.1',
+          launchCheck: {
+            attempted: true,
+            success: true,
+          },
+        },
+        false,
+      );
+    });
+
+    expect(output).toContain('Installed Camoufox 152.0.4-alpha.25 (release 152.0.2-alpha)');
+  });
+
   it('prints install compatibility warnings', () => {
     const output = captureStdout(() => {
       printOutput(
@@ -840,8 +861,20 @@ describe('CLI output', () => {
             {
               version: '135.0.1-beta.23',
               tag: 'v135.0.1-beta.23',
+              releaseVersion: '135.0.1-beta.23',
+              assetVersion: '135.0.1-beta.23',
               repo: 'daijro/camoufox',
               prerelease: true,
+              installed: false,
+              current: false,
+            },
+            {
+              version: '152.0.2-alpha',
+              tag: 'v152.0.2-alpha',
+              releaseVersion: '152.0.2-alpha',
+              assetVersion: '152.0.4-alpha.25',
+              repo: 'daijro/camoufox',
+              prerelease: false,
               installed: false,
               current: false,
             },
@@ -854,6 +887,7 @@ describe('CLI output', () => {
     expect(output).toContain('Remote versions:');
     expect(output).toContain('* 135.0.1-beta.24 v135.0.1-beta.24 daijro/camoufox installed current');
     expect(output).toContain('135.0.1-beta.23 v135.0.1-beta.23 daijro/camoufox prerelease');
+    expect(output).toContain('152.0.2-alpha (asset 152.0.4-alpha.25) v152.0.2-alpha daijro/camoufox');
   });
 
   it('prints when no compatible remote versions are available', () => {

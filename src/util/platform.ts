@@ -10,6 +10,13 @@ export interface PlatformTarget {
   executableRelativePath: string;
 }
 
+export interface ParsedCamoufoxAssetName {
+  version: string;
+  os: PlatformOs;
+  arch: PlatformArch;
+  assetSuffix: `${PlatformOs}.${PlatformArch}`;
+}
+
 const OS_MAP: Record<string, PlatformOs | undefined> = {
   linux: 'lin',
   darwin: 'mac',
@@ -62,4 +69,23 @@ export function normalizeReleaseVersion(version: string): string {
 
 export function buildExpectedAssetName(version: string, target = getPlatformTarget()): string {
   return `camoufox-${normalizeReleaseVersion(version)}-${target.assetSuffix}.zip`;
+}
+
+export function parseCamoufoxAssetName(name: string): ParsedCamoufoxAssetName | undefined {
+  const match = /^camoufox-(.+)-(lin|mac|win)\.(x86_64|arm64|i686)\.zip$/.exec(name);
+  if (!match) {
+    return undefined;
+  }
+
+  const [, version, os, arch] = match;
+  if (!version || !os || !arch) {
+    return undefined;
+  }
+
+  return {
+    version,
+    os: os as PlatformOs,
+    arch: arch as PlatformArch,
+    assetSuffix: `${os}.${arch}` as `${PlatformOs}.${PlatformArch}`,
+  };
 }

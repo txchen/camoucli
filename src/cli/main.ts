@@ -143,6 +143,8 @@ export async function main(argv: string[] = process.argv): Promise<number> {
           {
             version: release.version,
             tag: release.tag,
+            releaseVersion: release.releaseVersion,
+            assetVersion: release.assetVersion,
             playwrightCoreVersion: inspection.playwrightCoreVersion,
             launchCheck: inspection.launchCheck,
           },
@@ -171,6 +173,8 @@ export async function main(argv: string[] = process.argv): Promise<number> {
           'use',
           {
             version: selected.version,
+            releaseVersion: selected.releaseVersion,
+            assetVersion: selected.assetVersion,
             path: selected.executablePath,
             playwrightCoreVersion: inspection.playwrightCoreVersion,
             launchCheck: inspection.launchCheck,
@@ -189,6 +193,8 @@ export async function main(argv: string[] = process.argv): Promise<number> {
             installedVersions: installedBrowsers.installs.map((install) => ({
               version: install.version,
               current: install.version === installedBrowsers.currentVersion,
+              releaseVersion: install.releaseVersion,
+              assetVersion: install.assetVersion,
               sourceRepo: install.sourceRepo,
               path: install.executablePath,
             })),
@@ -210,10 +216,14 @@ export async function main(argv: string[] = process.argv): Promise<number> {
             remoteVersions: remoteVersions.map((release) => ({
               version: release.version,
               tag: release.tag,
+              releaseVersion: release.releaseVersion,
+              assetVersion: release.assetVersion,
               repo: release.repo,
               prerelease: release.prerelease,
-              installed: installedVersions.has(release.version),
-              current: release.version === installedBrowsers.currentVersion,
+              installed: installedVersions.has(release.version) || installedVersions.has(release.assetVersion),
+              current:
+                release.version === installedBrowsers.currentVersion ||
+                release.assetVersion === installedBrowsers.currentVersion,
             })),
           },
           options.json ?? false,
